@@ -1,4 +1,7 @@
 //! Core types and traits for the Propaga constraint solver.
+//!
+//! This crate defines variables, domains, propagators, explanations, nogoods,
+//! and the propagation context used by the engine and search layers.
 
 mod context;
 mod domain;

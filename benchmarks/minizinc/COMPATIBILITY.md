@@ -48,8 +48,8 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `cumulative` variable duration/height arrays | Partial | Inline lists and int param arrays only; variable arrays error |
 | `solve :: int_search(...)` | Ignored | Annotation skipped; search uses model decision order |
 | `solve :: restart(...)` | Ignored | CLI `--restarts` applies instead |
-| `predicate` / `function` / `test` | Skipped | May drop model semantics |
-| Complex output expressions | Partial | Simple `show("text", var)` supported |
+| `predicate` / `function` / `test` | **Rejected** | Parse error: unsupported declaration |
+| Unknown top-level statements (`annotation`, etc.) | **Rejected** | Parse error: unsupported top-level statement |
 
 ## Solve directives
 

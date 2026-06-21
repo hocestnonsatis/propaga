@@ -1,4 +1,7 @@
 //! Domain implementations for Propaga.
+//!
+//! Provides [`IntervalDomain`], [`BitsetDomain`], and [`HybridDomain`] for
+//! representing integer variable domains with efficient intersection and pruning.
 
 mod bitset;
 mod hybrid;

@@ -101,3 +101,97 @@ impl Explanation {
         literals
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{ChangeReason, Explanation, VariableId};
+    use slotmap::SlotMap;
+
+    fn make_var() -> VariableId {
+        let mut sm: SlotMap<crate::VariableKey, ()> = SlotMap::with_key();
+        VariableId::from_key(sm.insert(()))
+    }
+
+    #[test]
+    fn nogood_satisfied_by_matching_assignment() {
+        let v0 = make_var();
+        let v1 = make_var();
+        let nogood = Nogood::new(vec![
+            NogoodLiteral {
+                variable: v0,
+                value: 1,
+            },
+            NogoodLiteral {
+                variable: v1,
+                value: 2,
+            },
+        ]);
+        assert!(nogood.is_satisfied_by(&[(v0, 1), (v1, 2)]));
+        assert!(!nogood.is_satisfied_by(&[(v0, 1), (v1, 3)]));
+    }
+
+    #[test]
+    fn nogood_would_be_satisfied_by_extension() {
+        let v0 = make_var();
+        let nogood = Nogood::new(vec![NogoodLiteral {
+            variable: v0,
+            value: 5,
+        }]);
+        assert!(nogood.would_be_satisfied_by(&[], v0, 5));
+        assert!(!nogood.would_be_satisfied_by(&[], v0, 4));
+    }
+
+    #[test]
+    fn branch_literals_skip_propagator_entries() {
+        let v0 = make_var();
+        let mut explanation = Explanation::new();
+        explanation.record(ChangeReason::Branch {
+            variable: v0,
+            value: 3,
+        });
+        explanation.record(ChangeReason::Propagator {
+            propagator: crate::PropagatorId::from_key({
+                let mut sm: SlotMap<crate::PropagatorKey, ()> = SlotMap::with_key();
+                sm.insert(())
+            }),
+            variable: v0,
+            removed_value: Some(2),
+            bound: None,
+        });
+        let literals: Vec<_> = explanation.branch_literals().collect();
+        assert_eq!(literals.len(), 1);
+        assert_eq!(literals[0].value, 3);
+    }
+
+    #[test]
+    fn unique_branch_literals_keep_latest_per_variable() {
+        let v0 = make_var();
+        let mut explanation = Explanation::new();
+        explanation.record(ChangeReason::Branch {
+            variable: v0,
+            value: 1,
+        });
+        explanation.record(ChangeReason::Branch {
+            variable: v0,
+            value: 2,
+        });
+        let literals = explanation.unique_branch_literals();
+        assert_eq!(literals.len(), 1);
+        assert_eq!(literals[0].value, 2);
+    }
+
+    #[test]
+    fn propagator_conflict_literals_from_latest_conflict() {
+        let v0 = make_var();
+        let v1 = make_var();
+        let mut explanation = Explanation::new();
+        explanation.record(ChangeReason::PropagatorConflict {
+            literals: vec![(v0, 1), (v1, 2)],
+        });
+        let literals = explanation
+            .propagator_conflict_literals()
+            .expect("conflict literals");
+        assert_eq!(literals.len(), 2);
+    }
+}

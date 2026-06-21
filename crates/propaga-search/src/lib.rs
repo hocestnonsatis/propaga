@@ -1,4 +1,8 @@
 //! Search strategies for Propaga.
+//!
+//! [`DepthFirstSearch`] provides MRV-based DFS with nogood learning, restarts,
+//! and phase saving. [`OptimizationSearch`] adds branch-and-bound for a single
+//! integer objective. Configure behavior via [`SearchConfig`].
 
 mod config;
 mod conflict;

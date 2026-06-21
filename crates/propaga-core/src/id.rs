@@ -55,3 +55,25 @@ impl fmt::Debug for PropagatorId {
         write!(f, "PropagatorId({:?})", self.0)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use slotmap::SlotMap;
+
+    #[test]
+    fn variable_id_roundtrips_key() {
+        let mut sm: SlotMap<VariableKey, ()> = SlotMap::with_key();
+        let key = sm.insert(());
+        let id = VariableId::from_key(key);
+        assert_eq!(id.key(), key);
+    }
+
+    #[test]
+    fn propagator_id_roundtrips_key() {
+        let mut sm: SlotMap<PropagatorKey, ()> = SlotMap::with_key();
+        let key = sm.insert(());
+        let id = PropagatorId::from_key(key);
+        assert_eq!(id.key(), key);
+    }
+}

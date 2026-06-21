@@ -13,5 +13,4 @@ Forward-looking ideas beyond Sprint 23. See [README.md](README.md) for shipped f
 
 - Set and float variable domains
 - Lazy clause generation integration
-- Published API docs on docs.rs
 - WASM / browser demo for small puzzles

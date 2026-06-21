@@ -64,3 +64,41 @@ impl Explanation {
         self.entries.truncate(len);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::VariableId;
+    use slotmap::SlotMap;
+
+    fn make_var() -> VariableId {
+        let mut sm: SlotMap<crate::VariableKey, ()> = SlotMap::with_key();
+        VariableId::from_key(sm.insert(()))
+    }
+
+    #[test]
+    fn records_and_resets_entries() {
+        let mut explanation = Explanation::new();
+        assert!(explanation.entries().is_empty());
+        explanation.record(ChangeReason::Branch {
+            variable: make_var(),
+            value: 1,
+        });
+        assert_eq!(explanation.entries().len(), 1);
+        explanation.reset();
+        assert!(explanation.entries().is_empty());
+    }
+
+    #[test]
+    fn truncates_to_prefix() {
+        let mut explanation = Explanation::new();
+        for value in 1..=3 {
+            explanation.record(ChangeReason::Branch {
+                variable: make_var(),
+                value,
+            });
+        }
+        explanation.truncate(2);
+        assert_eq!(explanation.entries().len(), 2);
+    }
+}

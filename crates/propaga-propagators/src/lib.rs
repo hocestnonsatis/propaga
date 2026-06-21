@@ -1,4 +1,8 @@
 //! Built-in propagators for Propaga.
+//!
+//! Constraint propagators implement bound consistency, GAC, and scheduling-specific
+//! inference for equality, linear, ordering, reified, all-different, GCC, table,
+//! element, cumulative, and disjunctive constraints.
 
 mod all_different;
 mod cumulative;

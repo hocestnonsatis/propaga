@@ -4,6 +4,26 @@ A modern, propagator-based constraint solver written in Rust.
 
 Propaga provides a clean propagation engine with typed variable handles, pluggable domains, and composable propagators. The goal is to make constraint propagation safe, extensible, and approachable — suitable for both learning and real problems.
 
+## Installation
+
+**CLI (crates.io):**
+
+```bash
+cargo install propaga-cli
+propaga --help
+```
+
+**Prebuilt binaries:** [GitHub Releases](https://github.com/hocestnonsatis/propaga/releases)
+
+**Library crates:** add to `Cargo.toml` (see [docs.rs](https://docs.rs/propaga-core)):
+
+```toml
+propaga-model = "0.1"
+propaga-flatzinc = "0.1"
+```
+
+**Known limitations:** Propaga implements a FlatZinc subset. See [benchmarks/minizinc/COMPATIBILITY.md](benchmarks/minizinc/COMPATIBILITY.md) before compiling MiniZinc models.
+
 ## Crates
 
 | Crate | Description |

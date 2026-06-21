@@ -387,8 +387,27 @@ impl Parser {
                 solve = Some(self.parse_solve()?);
             } else if self.peek_is_ident("output") {
                 outputs.push(self.parse_output()?);
+            } else if self.peek_is_ident("predicate") {
+                return Err(FlatZincError::Unsupported(
+                    "predicate declarations are not supported".to_string(),
+                ));
+            } else if self.peek_is_ident("function") {
+                return Err(FlatZincError::Unsupported(
+                    "function declarations are not supported".to_string(),
+                ));
+            } else if self.peek_is_ident("test") {
+                return Err(FlatZincError::Unsupported(
+                    "test declarations are not supported".to_string(),
+                ));
             } else {
-                self.skip_until_semicolon();
+                let found = match self.peek() {
+                    Some(Token::Ident(name)) => name.clone(),
+                    Some(other) => format!("{other:?}"),
+                    None => return Err(FlatZincError::UnexpectedEof),
+                };
+                return Err(FlatZincError::Unsupported(format!(
+                    "unsupported top-level statement starting with `{found}`"
+                )));
             }
             self.consume_optional_semicolon();
         }
@@ -1026,12 +1045,6 @@ impl Parser {
         })
     }
 
-    fn skip_until_semicolon(&mut self) {
-        while !self.is_eof() && !self.peek_is_symbol(";") {
-            self.pos += 1;
-        }
-    }
-
     fn consume_optional_semicolon(&mut self) {
         if self.peek_is_symbol(";") {
             self.pos += 1;
@@ -1184,5 +1197,27 @@ mod tests {
         "#;
         let err = parse(source).unwrap_err();
         assert!(err.to_string().contains("unknown_constraint"));
+    }
+
+    #[test]
+    fn rejects_predicate_declaration() {
+        let source = r#"
+            predicate foo(var int: x) = int_eq(x, 1);
+            var 1..3: y;
+            solve satisfy;
+        "#;
+        let err = parse(source).unwrap_err();
+        assert!(err.to_string().contains("predicate"));
+    }
+
+    #[test]
+    fn rejects_unknown_top_level_statement() {
+        let source = r#"
+            var 1..3: x;
+            annotation foo;
+            solve satisfy;
+        "#;
+        let err = parse(source).unwrap_err();
+        assert!(err.to_string().contains("unsupported top-level"));
     }
 }
