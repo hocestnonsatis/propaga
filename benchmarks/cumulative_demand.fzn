@@ -1,0 +1,9 @@
+% Cumulative with per-task heights (demand)
+array [1..2] of int: duration = [2, 2];
+array [1..2] of int: height = [2, 1];
+array [1..2] of var 0..10: s;
+array [1..2] of var 0..20: e;
+
+constraint cumulative(s, duration, e, height, 2);
+
+solve satisfy;

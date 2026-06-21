@@ -1,0 +1,10 @@
+{
+  "capacity": 2,
+  "horizon": 12,
+  "mode": "cumulative",
+  "tasks": [
+    { "duration": 3 },
+    { "duration": 3 },
+    { "duration": 3 }
+  ]
+}

@@ -1,0 +1,7 @@
+% Maximize x subject to x + y <= 10
+var 0..10: x;
+var 0..10: y;
+
+constraint int_lin_le([1, 1], [x, y], 10);
+
+solve maximize x;

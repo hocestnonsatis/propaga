@@ -1,0 +1,4 @@
+% Weighted sum lower bound
+array [1..3] of var 0..4: x;
+constraint int_lin_ge([2, 1, 1], [x[1], x[2], x[3]], 4);
+solve satisfy;

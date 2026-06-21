@@ -1,0 +1,19 @@
+% 3x3 magic square (FlatZinc subset demo)
+array [1..9] of var 1..9: x;
+
+constraint all_different(x);
+
+constraint int_lin_eq([1, 1, 1], [x[1], x[2], x[3]], 15);
+constraint int_lin_eq([1, 1, 1], [x[4], x[5], x[6]], 15);
+constraint int_lin_eq([1, 1, 1], [x[7], x[8], x[9]], 15);
+
+constraint int_lin_eq([1, 1, 1], [x[1], x[4], x[7]], 15);
+constraint int_lin_eq([1, 1, 1], [x[2], x[5], x[8]], 15);
+constraint int_lin_eq([1, 1, 1], [x[3], x[6], x[9]], 15);
+
+constraint int_lin_eq([1, 1, 1], [x[1], x[5], x[9]], 15);
+constraint int_lin_eq([1, 1, 1], [x[3], x[5], x[7]], 15);
+
+output [ show("magic square: "), show(x[1]), show(" "), show(x[2]), show(" "), show(x[3]) ];
+
+solve satisfy;

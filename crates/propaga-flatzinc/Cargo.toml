@@ -1,0 +1,12 @@
+[package]
+name = "propaga-flatzinc"
+description = "FlatZinc subset parser and compiler for Propaga"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+propaga-core.workspace = true
+propaga-model.workspace = true
+propaga-propagators.workspace = true
+thiserror.workspace = true

@@ -1,0 +1,6 @@
+% Disjunctive edge finding: fixed task blocks overlapping starts
+array [1..2] of int: duration = [4, 2];
+array [1..2] of var 0..10: s;
+constraint int_eq(s[1], 0);
+constraint disjunctive(s, duration);
+solve satisfy;

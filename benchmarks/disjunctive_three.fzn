@@ -1,0 +1,8 @@
+% Three-task disjunctive edge finding (satisfiable)
+array [1..3] of int: duration = [2, 2, 2];
+array [1..3] of var 0..6: s;
+constraint int_le(s[1], 2);
+constraint int_le(s[2], 2);
+constraint int_ge(s[3], 2);
+constraint disjunctive(s, duration);
+solve satisfy;

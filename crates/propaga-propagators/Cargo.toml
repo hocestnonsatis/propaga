@@ -1,0 +1,11 @@
+[package]
+name = "propaga-propagators"
+description = "Built-in propagators for the Propaga constraint solver"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+propaga-core.workspace = true
+propaga-domains.workspace = true
+propaga-engine.workspace = true

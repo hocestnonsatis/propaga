@@ -1,0 +1,7 @@
+% Two variables must take one of three allowed pairs
+var 1..5: x;
+var 1..5: y;
+
+constraint table([x, y], {1, 2, 3, 4, 5, 6});
+
+solve satisfy;

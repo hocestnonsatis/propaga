@@ -1,0 +1,12 @@
+[package]
+name = "propaga-engine"
+description = "Propagation engine for the Propaga constraint solver"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+priority-queue.workspace = true
+propaga-core.workspace = true
+propaga-domains.workspace = true
+slotmap.workspace = true

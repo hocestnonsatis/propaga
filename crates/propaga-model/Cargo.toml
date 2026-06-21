@@ -1,0 +1,13 @@
+[package]
+name = "propaga-model"
+description = "High-level modeling API for the Propaga constraint solver"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+propaga-core.workspace = true
+propaga-domains.workspace = true
+propaga-engine.workspace = true
+propaga-propagators.workspace = true
+propaga-search.workspace = true

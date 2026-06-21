@@ -1,0 +1,8 @@
+% Reified disequality: b == (x != y), x fixed to 2, b fixed to 1
+var 1..3: x;
+var 1..3: y;
+var 0..1: b;
+constraint int_ne_reif(x, y, b);
+constraint int_eq(x, 2);
+constraint int_eq(b, 1);
+solve satisfy;

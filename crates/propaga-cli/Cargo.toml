@@ -1,0 +1,21 @@
+[package]
+name = "propaga-cli"
+description = "Command-line interface for the Propaga constraint solver"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "propaga"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+propaga-core.workspace = true
+propaga-domains.workspace = true
+propaga-model.workspace = true
+propaga-flatzinc.workspace = true
+propaga-propagators.workspace = true
+propaga-search.workspace = true

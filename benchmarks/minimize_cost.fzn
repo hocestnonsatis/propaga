@@ -1,0 +1,6 @@
+% Minimize cost subject to cost >= 5
+var 0..20: cost;
+
+constraint int_ge(cost, 5);
+
+solve minimize cost;

@@ -1,0 +1,20 @@
+[package]
+name = "propaga-search"
+description = "Search strategies for the Propaga constraint solver"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+propaga-core.workspace = true
+propaga-domains.workspace = true
+propaga-engine.workspace = true
+propaga-propagators.workspace = true
+
+[[example]]
+name = "sudoku"
+path = "../../examples/sudoku.rs"
+
+[[example]]
+name = "n_queens"
+path = "../../examples/n_queens.rs"

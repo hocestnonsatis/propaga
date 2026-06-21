@@ -1,0 +1,8 @@
+% Reified strict less-than: b == (x < y), y fixed to 4, b fixed to 1
+var 1..10: x;
+var 1..10: y;
+var 0..1: b;
+constraint int_lt_reif(x, y, b);
+constraint int_eq(y, 4);
+constraint int_eq(b, 1);
+solve satisfy;

@@ -1,0 +1,8 @@
+% Two-task cumulative (capacity 1)
+array [1..2] of int: duration = [3, 2];
+array [1..2] of var 0..10: s;
+array [1..2] of var 0..20: e;
+
+constraint cumulative(s, duration, e, 1);
+
+solve satisfy;

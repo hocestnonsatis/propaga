@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace -- -D warnings
+      - run: cargo test --workspace
+      - run: cargo run --example sudoku
+      - run: cargo run --example n_queens
+      - run: cargo run -p propaga-cli -- sudoku
+      - run: cargo run -p propaga-cli -- n-queens --size 8
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/magic_square.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/cumulative.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/gcc_exact.fzn --quiet
+      - run: cargo run -p propaga-cli -- schedule --file benchmarks/schedule_three_tasks.json --quiet
+      - run: bash benchmarks/run.sh

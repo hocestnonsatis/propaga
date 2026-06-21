@@ -1,0 +1,4 @@
+% Bounded sum (unit coefficients)
+array [1..3] of var 1..4: x;
+constraint int_lin_le([1, 1, 1], [x[1], x[2], x[3]], 8);
+solve satisfy;
