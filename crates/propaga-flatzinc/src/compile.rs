@@ -719,7 +719,7 @@ fn post_table(
             "table constraint requires at least one variable".to_string(),
         ));
     }
-    if !flat_tuples.is_empty() && flat_tuples.len() % var_list.len() != 0 {
+    if !flat_tuples.is_empty() && !flat_tuples.len().is_multiple_of(var_list.len()) {
         return Err(FlatZincError::Unsupported(
             "table tuple length does not match variable count".to_string(),
         ));
