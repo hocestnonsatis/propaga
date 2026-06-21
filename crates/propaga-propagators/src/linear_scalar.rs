@@ -694,10 +694,7 @@ mod tests {
             5,
             reif,
         )));
-        assert_eq!(
-            engine.propagate_all().unwrap(),
-            PropagationStatus::Failure
-        );
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
     }
 
     #[test]

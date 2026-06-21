@@ -72,8 +72,13 @@ pub fn remove_unsupported_values(
                 continue;
             }
 
-            if regin_supports_value(value_idx, matched, &pair_right, matched_component, &components)
-            {
+            if regin_supports_value(
+                value_idx,
+                matched,
+                &pair_right,
+                matched_component,
+                &components,
+            ) {
                 continue;
             }
 
@@ -313,7 +318,7 @@ fn bfs(
 
     let mut found_free = false;
     while let Some(left) = queue.pop_front() {
-        if dist[left] >= INF {
+        if dist[left] == INF {
             continue;
         }
         for &right in &adj[left] {
@@ -413,9 +418,24 @@ mod tests {
         let b = engine.new_variable(IntervalDomain::new(1, 2));
         let c = engine.new_variable(IntervalDomain::new(1, 3));
         let vars = vec![a, b, c];
-        assert!(!value_in_some_matching(&ReadOnlyEngine(&engine), &vars, c, 1));
-        assert!(!value_in_some_matching(&ReadOnlyEngine(&engine), &vars, c, 2));
-        assert!(value_in_some_matching(&ReadOnlyEngine(&engine), &vars, c, 3));
+        assert!(!value_in_some_matching(
+            &ReadOnlyEngine(&engine),
+            &vars,
+            c,
+            1
+        ));
+        assert!(!value_in_some_matching(
+            &ReadOnlyEngine(&engine),
+            &vars,
+            c,
+            2
+        ));
+        assert!(value_in_some_matching(
+            &ReadOnlyEngine(&engine),
+            &vars,
+            c,
+            3
+        ));
     }
 
     #[test]
@@ -502,13 +522,7 @@ mod tests {
     #[test]
     fn regin_scc_agrees_with_value_support_on_random_small_domains() {
         let mut engine = Engine::new();
-        let domain_specs = [
-            (1, 4),
-            (1, 4),
-            (1, 5),
-            (2, 5),
-            (1, 3),
-        ];
+        let domain_specs = [(1, 4), (1, 4), (1, 5), (2, 5), (1, 3)];
         let vars: Vec<_> = domain_specs
             .iter()
             .map(|&(lo, hi)| engine.new_variable(IntervalDomain::new(lo, hi)))
@@ -563,10 +577,7 @@ mod tests {
             let mut vars: Vec<_> = (0..n.saturating_sub(1))
                 .map(|_| engine.new_variable(IntervalDomain::new(1, 4)))
                 .collect();
-            vars.push(engine.new_variable(IntervalDomain::new(
-                1,
-                if n == 2 { 4 } else { 5 },
-            )));
+            vars.push(engine.new_variable(IntervalDomain::new(1, if n == 2 { 4 } else { 5 })));
             assert_regin_agrees_with_hk(&ReadOnlyEngine(&engine), &vars);
         }
     }

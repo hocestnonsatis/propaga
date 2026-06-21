@@ -167,6 +167,9 @@ pub fn run(path: &Path, options: GlobalOptions) -> Result<(), Box<dyn std::error
     }
 
     if solution.is_none() {
+        if stats.timed_out {
+            return Err("timeout".into());
+        }
         return Err("unsatisfiable schedule".into());
     }
 
@@ -185,10 +188,7 @@ mod tests {
         let duration = model.int_var_fixed(4);
         let end = model.int_var(4, 24);
         model.linear_eq(start, duration, end);
-        model.cumulative(
-            vec![TaskSpec::new(start, 4, end)],
-            1,
-        );
+        model.cumulative(vec![TaskSpec::new(start, 4, end)], 1);
         let status = model.engine_mut().fix_variable(start, 0).unwrap();
         assert_ne!(status, propaga_core::PropagationStatus::Failure);
         assert_eq!(model.engine().domain(end).fixed_value(), Some(4));
@@ -359,14 +359,16 @@ mod tests {
         spec.sequential = true;
         let temp = std::env::temp_dir().join("propaga_schedule_conflict_test.json");
         fs::write(&temp, serde_json::to_string(&spec).unwrap()).unwrap();
-        assert!(run(
-            &temp,
-            GlobalOptions {
-                quiet: true,
-                ..GlobalOptions::default()
-            },
-        )
-        .is_err());
+        assert!(
+            run(
+                &temp,
+                GlobalOptions {
+                    quiet: true,
+                    ..GlobalOptions::default()
+                },
+            )
+            .is_err()
+        );
         let _ = fs::remove_file(temp);
     }
 

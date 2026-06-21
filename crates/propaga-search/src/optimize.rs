@@ -25,6 +25,8 @@ pub struct OptimizationResult {
     pub stats: SearchStats,
     /// Number of feasible solutions encountered.
     pub solutions_found: u32,
+    /// Whether search stopped because the time limit was reached.
+    pub timed_out: bool,
 }
 
 /// Branch-and-bound optimization over a single integer objective.
@@ -59,10 +61,18 @@ impl OptimizationSearch {
         let mut best_value = None;
         let mut total_stats = SearchStats::default();
         let mut solutions_found = 0;
+        let mut timed_out = false;
 
         loop {
+            if engine.trail_depth() > 0 {
+                engine.trail_backtrack(0);
+            }
+
             let solution = dfs.solve(engine);
             merge_stats(&mut total_stats, dfs.stats());
+            if dfs.stats().timed_out {
+                timed_out = true;
+            }
 
             let Some(solution) = solution else {
                 break;
@@ -87,16 +97,23 @@ impl OptimizationSearch {
                 best_solution = Some(solution);
             }
 
+            if engine.trail_depth() > 0 {
+                engine.trail_backtrack(0);
+            }
+
             if !self.post_pruning_bound(engine, best_value.unwrap()) {
                 break;
             }
         }
+
+        total_stats.timed_out = timed_out;
 
         OptimizationResult {
             solution: best_solution,
             objective_value: best_value,
             stats: total_stats,
             solutions_found,
+            timed_out,
         }
     }
 
@@ -147,6 +164,7 @@ fn merge_stats(total: &mut SearchStats, partial: SearchStats) {
     total.conflicts += partial.conflicts;
     total.nogoods_learned += partial.nogoods_learned;
     total.restarts += partial.restarts;
+    total.timed_out |= partial.timed_out;
 }
 
 #[cfg(test)]

@@ -36,9 +36,10 @@ Propaga provides a clean propagation engine with typed variable handles, pluggab
 - **Table**, **Element**, and **Cumulative** (overload + time-table edge finding) propagators
 - **Explanation-aware trail** with synchronized backtracking
 
-### FlatZinc (Sprint 2–5, 19–21)
-- Subset parser: `var`/`array` declarations, `int`/`int` array params, `all_different`, `int_eq`, `int_ne`, `int_le`, `int_lt`, `int_ge`, `int_gt`, `int_*_reif`, `int_lin_eq`, `int_lin_le`, `int_lin_ge`, `int_lin_*_reif`, `element`, `cumulative`, `disjunctive`, `global_cardinality`, `table`, `output`, `solve satisfy|minimize|maximize`
-- CLI: `propaga solve --file benchmarks/magic_square.fzn`
+### FlatZinc (Sprint 2–5, 19–21, 23)
+- Subset parser: `var`/`array` declarations, `int`/`bool` variables, `int`/`int` array params, `all_different`, `int_eq`, `int_ne`, `int_le`, `int_lt`, `int_ge`, `int_gt`, `int_*_reif`, `int_lin_eq`, `int_lin_le`, `int_lin_ge`, `int_lin_*_reif`, `bool_eq`, `bool2int`, `element`, `cumulative`, `disjunctive`, `global_cardinality`, `table`, `output`, `solve satisfy|minimize|maximize`
+- CLI: `propaga solve --file benchmarks/magic_square.fzn` or `propaga solve --dir benchmarks/`
+- Compatibility: [benchmarks/minizinc/COMPATIBILITY.md](benchmarks/minizinc/COMPATIBILITY.md)
 
 ### FlatZinc GCC and table (Sprint 19)
 - **`global_cardinality`**: two-arg `(cover, vars)` and four-arg `(vars, cover, lbound, ubound)` forms compiled to `Model::gcc`
@@ -96,7 +97,15 @@ Propaga provides a clean propagation engine with typed variable handles, pluggab
 - `--value-ordering` (`asc` or `lcv`)
 - `--var-ordering` (`mrv`, `dom`, or `dom-wdeg`)
 - `--solutions N` to cap enumeration with `--all`
+- `--time-limit SECS` to cap search wall-clock time
 - `--no-phase-saving` to disable phase saving
+
+### Sprint 23 (near-term roadmap)
+- **`--time-limit SECS`**: wall-clock cutoff during search; plain `TIMEOUT` / JSON `status: timeout`
+- **FlatZinc bool**: `var bool`, `array of var bool`, `bool_eq`, `bool2int` (modeled as 0..1 integers)
+- **Batch solve**: `propaga solve --dir benchmarks/` runs all `.fzn` files; JSON batch summary
+- **Criterion benches**: `cargo bench -p propaga-propagators` for all-different GAC and cumulative propagation
+- **Compatibility matrix**: [benchmarks/minizinc/COMPATIBILITY.md](benchmarks/minizinc/COMPATIBILITY.md)
 
 ### Heuristic comparison (Sprint 22)
 | Flag combo | Effect |
@@ -116,7 +125,9 @@ cargo run --example sudoku
 cargo run -p propaga-cli -- sudoku --stats
 cargo run -p propaga-cli -- n-queens --size 8 --visual --stats
 cargo run -p propaga-cli -- solve --file benchmarks/magic_square.fzn --stats
-cargo run -p propaga-cli -- solve --file benchmarks/maximize_x.fzn --stats
+cargo run -p propaga-cli -- solve --dir benchmarks --quiet
+cargo run -p propaga-cli -- solve --file benchmarks/bool_reify.fzn --stats
+cargo run -p propaga-cli -- solve --file benchmarks/maximize_x.fzn --time-limit 10 --stats
 cargo run -p propaga-cli -- solve --file benchmarks/gcc_exact.fzn --stats
 cargo run -p propaga-cli -- n-queens --size 12 --var-ordering dom --stats
 cargo run -p propaga-cli -- sudoku --all --solutions 3 --stats

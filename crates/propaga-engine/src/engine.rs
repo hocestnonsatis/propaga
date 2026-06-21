@@ -1,4 +1,4 @@
-use crate::context::EnginePropagationContext;
+use crate::context::{EnginePropagationContext, EnginePropagationParts};
 use crate::event_queue::EventQueue;
 use crate::trail::Trail;
 use propaga_core::id::{PropagatorKey, VariableKey};
@@ -140,7 +140,10 @@ impl Engine {
         self.trail.push(
             var,
             self.domain(var).clone(),
-            Some(ChangeReason::Branch { variable: var, value }),
+            Some(ChangeReason::Branch {
+                variable: var,
+                value,
+            }),
             &mut self.explanation,
         );
         self.set_domain(var, HybridDomain::fix(value));
@@ -239,12 +242,14 @@ impl Engine {
 
         let record_trail = self.trail.has_choice_point();
         let mut ctx = EnginePropagationContext::new(
-            &mut self.variables,
-            &self.subscriptions,
-            &self.priorities,
-            &mut self.queue,
-            &mut self.trail,
-            &mut self.explanation,
+            EnginePropagationParts {
+                variables: &mut self.variables,
+                subscriptions: &self.subscriptions,
+                priorities: &self.priorities,
+                queue: &mut self.queue,
+                trail: &mut self.trail,
+                explanation: &mut self.explanation,
+            },
             record_trail,
             Some(propagator_id),
         );

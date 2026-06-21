@@ -8,6 +8,16 @@ use propaga_domains::HybridDomain;
 use slotmap::SlotMap;
 use std::collections::HashMap;
 
+/// Borrowed engine state used while running a propagator.
+pub(crate) struct EnginePropagationParts<'a> {
+    pub variables: &'a mut SlotMap<VariableKey, HybridDomain>,
+    pub subscriptions: &'a HashMap<VariableKey, Vec<PropagatorKey>>,
+    pub priorities: &'a HashMap<PropagatorKey, u32>,
+    pub queue: &'a mut EventQueue,
+    pub trail: &'a mut Trail,
+    pub explanation: &'a mut Explanation,
+}
+
 /// Mutable propagation view over engine state.
 pub struct EnginePropagationContext<'a> {
     variables: &'a mut SlotMap<VariableKey, HybridDomain>,
@@ -23,22 +33,17 @@ pub struct EnginePropagationContext<'a> {
 
 impl<'a> EnginePropagationContext<'a> {
     pub(crate) fn new(
-        variables: &'a mut SlotMap<VariableKey, HybridDomain>,
-        subscriptions: &'a HashMap<VariableKey, Vec<PropagatorKey>>,
-        priorities: &'a HashMap<PropagatorKey, u32>,
-        queue: &'a mut EventQueue,
-        trail: &'a mut Trail,
-        explanation: &'a mut Explanation,
+        parts: EnginePropagationParts<'a>,
         record_trail: bool,
         current_propagator: Option<PropagatorId>,
     ) -> Self {
         Self {
-            variables,
-            subscriptions,
-            priorities,
-            queue,
-            trail,
-            explanation,
+            variables: parts.variables,
+            subscriptions: parts.subscriptions,
+            priorities: parts.priorities,
+            queue: parts.queue,
+            trail: parts.trail,
+            explanation: parts.explanation,
             changed: false,
             record_trail,
             current_propagator,
@@ -65,12 +70,7 @@ impl<'a> EnginePropagationContext<'a> {
         }
     }
 
-    fn mutate<F>(
-        &mut self,
-        var: VariableId,
-        reason: Option<ChangeReason>,
-        mutate: F,
-    ) -> bool
+    fn mutate<F>(&mut self, var: VariableId, reason: Option<ChangeReason>, mutate: F) -> bool
     where
         F: FnOnce(&HybridDomain) -> HybridDomain,
     {
@@ -81,8 +81,7 @@ impl<'a> EnginePropagationContext<'a> {
         }
 
         if self.record_trail {
-            self.trail
-                .push(var, current, reason, self.explanation);
+            self.trail.push(var, current, reason, self.explanation);
         }
 
         self.variables[var.key()] = updated;
@@ -97,12 +96,13 @@ impl<'a> EnginePropagationContext<'a> {
         removed_value: Option<i32>,
         bound: Option<(propaga_core::BoundKind, i32)>,
     ) -> Option<ChangeReason> {
-        self.current_propagator.map(|propagator| ChangeReason::Propagator {
-            propagator,
-            variable,
-            removed_value,
-            bound,
-        })
+        self.current_propagator
+            .map(|propagator| ChangeReason::Propagator {
+                propagator,
+                variable,
+                removed_value,
+                bound,
+            })
     }
 }
 
@@ -116,14 +116,14 @@ impl PropagationContext for EnginePropagationContext<'_> {
     }
 
     fn remove_below(&mut self, var: VariableId, bound: i32) -> bool {
-        let reason = self
-            .propagator_reason(var, None, Some((propaga_core::BoundKind::Below, bound)));
+        let reason =
+            self.propagator_reason(var, None, Some((propaga_core::BoundKind::Below, bound)));
         self.mutate(var, reason, |domain| domain.remove_below(bound))
     }
 
     fn remove_above(&mut self, var: VariableId, bound: i32) -> bool {
-        let reason = self
-            .propagator_reason(var, None, Some((propaga_core::BoundKind::Above, bound)));
+        let reason =
+            self.propagator_reason(var, None, Some((propaga_core::BoundKind::Above, bound)));
         self.mutate(var, reason, |domain| domain.remove_above(bound))
     }
 

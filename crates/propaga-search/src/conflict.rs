@@ -22,11 +22,7 @@ impl ConflictAnalyzer {
         let mut decision_levels: Vec<usize> = nogood
             .literals()
             .iter()
-            .filter_map(|literal| {
-                levels
-                    .get(&(literal.variable, literal.value))
-                    .copied()
-            })
+            .filter_map(|literal| levels.get(&(literal.variable, literal.value)).copied())
             .collect();
         decision_levels.sort_unstable();
         decision_levels.dedup();
@@ -46,7 +42,10 @@ fn build_level_map(branch_order: &[NogoodLiteral]) -> HashMap<(VariableId, i32),
         .collect()
 }
 
-fn backward_nogood(explanation: &Explanation, conflict_var: VariableId) -> HashSet<(VariableId, i32)> {
+fn backward_nogood(
+    explanation: &Explanation,
+    conflict_var: VariableId,
+) -> HashSet<(VariableId, i32)> {
     if let Some(literals) = explanation.propagator_conflict_literals() {
         return literals
             .into_iter()
@@ -135,7 +134,9 @@ impl NogoodStore {
     /// Creates an empty nogood store.
     #[must_use]
     pub fn new() -> Self {
-        Self { nogoods: Vec::new() }
+        Self {
+            nogoods: Vec::new(),
+        }
     }
 
     /// Returns the number of learned nogoods.
@@ -296,16 +297,18 @@ mod tests {
         engine.trail_mark();
         engine.fix_variable(start_a, 0).unwrap();
         engine.fix_variable(start_b, 0).unwrap();
-        engine.add_propagator(Box::new(propaga_propagators::DisjunctivePropagator::new(vec![
-            propaga_propagators::DisjunctiveTask {
-                start: start_a,
-                duration: 1,
-            },
-            propaga_propagators::DisjunctiveTask {
-                start: start_b,
-                duration: 1,
-            },
-        ])));
+        engine.add_propagator(Box::new(propaga_propagators::DisjunctivePropagator::new(
+            vec![
+                propaga_propagators::DisjunctiveTask {
+                    start: start_a,
+                    duration: 1,
+                },
+                propaga_propagators::DisjunctiveTask {
+                    start: start_b,
+                    duration: 1,
+                },
+            ],
+        )));
         let _ = engine.propagate_all();
 
         let conflict = engine.last_conflict().expect("conflict");
@@ -335,10 +338,12 @@ mod tests {
         let conflict = engine.last_conflict().expect("conflict");
         let nogood = ConflictAnalyzer::analyze(&conflict.explanation, conflict.variable);
         assert_eq!(nogood.literals().len(), 2);
-        assert!(!nogood
-            .literals()
-            .iter()
-            .any(|literal| literal.variable != start_a && literal.variable != start_b));
+        assert!(
+            !nogood
+                .literals()
+                .iter()
+                .any(|literal| literal.variable != start_a && literal.variable != start_b)
+        );
     }
 
     #[test]
@@ -346,7 +351,9 @@ mod tests {
         let mut engine = Engine::new();
         let a = engine.new_variable(IntervalDomain::new(1, 3));
         let b = engine.new_variable(IntervalDomain::new(1, 3));
-        engine.add_propagator(Box::new(propaga_propagators::LessEqualPropagator::new(a, b)));
+        engine.add_propagator(Box::new(propaga_propagators::LessEqualPropagator::new(
+            a, b,
+        )));
 
         engine.trail_mark();
         engine.fix_variable(a, 3).unwrap();
@@ -355,10 +362,12 @@ mod tests {
         let conflict = engine.last_conflict().expect("conflict");
         let nogood = ConflictAnalyzer::analyze(&conflict.explanation, conflict.variable);
         assert!(!nogood.literals().is_empty());
-        assert!(nogood
-            .literals()
-            .iter()
-            .any(|literal| literal.variable == b && literal.value == 1));
+        assert!(
+            nogood
+                .literals()
+                .iter()
+                .any(|literal| literal.variable == b && literal.value == 1)
+        );
     }
 
     #[test]

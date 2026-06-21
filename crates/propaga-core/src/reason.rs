@@ -13,10 +13,7 @@ pub enum BoundKind {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ChangeReason {
     /// Search assigned a value during branching.
-    Branch {
-        variable: VariableId,
-        value: i32,
-    },
+    Branch { variable: VariableId, value: i32 },
     /// A propagator removed values or tightened bounds.
     Propagator {
         propagator: PropagatorId,
@@ -34,7 +31,7 @@ pub enum ChangeReason {
 /// Collected explanation for the latest conflict or propagation round.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Explanation {
-  entries: Vec<ChangeReason>,
+    entries: Vec<ChangeReason>,
 }
 
 impl Explanation {

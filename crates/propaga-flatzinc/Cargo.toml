@@ -9,4 +9,5 @@ license.workspace = true
 propaga-core.workspace = true
 propaga-model.workspace = true
 propaga-propagators.workspace = true
+propaga-search.workspace = true
 thiserror.workspace = true

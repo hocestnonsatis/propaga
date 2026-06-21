@@ -1,5 +1,7 @@
 //! Search configuration and restart policies.
 
+use std::time::Duration;
+
 /// Restart strategy for the search loop.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RestartPolicy {
@@ -50,11 +52,7 @@ pub fn luby_sequence(index: u32) -> u64 {
         n -= size;
         size *= 2;
     }
-    if n > size / 2 {
-        2 * size - n
-    } else {
-        n
-    }
+    if n > size / 2 { 2 * size - n } else { n }
 }
 
 /// Value ordering strategy during branch selection.
@@ -117,6 +115,8 @@ pub struct SearchConfig {
     pub variable_ordering: VariableOrdering,
     /// Reuses the last assigned value as the first branch candidate after backtrack/restart.
     pub phase_saving: bool,
+    /// Wall-clock time limit for search; `None` means no limit.
+    pub time_limit: Option<Duration>,
 }
 
 impl Default for SearchConfig {
@@ -127,6 +127,7 @@ impl Default for SearchConfig {
             value_ordering: ValueOrdering::default(),
             variable_ordering: VariableOrdering::default(),
             phase_saving: true,
+            time_limit: None,
         }
     }
 }

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export PATH="${HOME}/.cargo/bin:${PATH}"
+
+if ! command -v cargo >/dev/null 2>&1; then
+    echo "pre-commit: cargo not found; skipping cargo fmt" >&2
+    exit 0
+fi
+
+cargo fmt --all
+
+if ! git diff --quiet; then
+    git add -u
+    echo "pre-commit: applied cargo fmt and re-staged formatted files" >&2
+fi
+
+exit 0

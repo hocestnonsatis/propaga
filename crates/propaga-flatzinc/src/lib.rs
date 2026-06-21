@@ -4,6 +4,6 @@ mod compile;
 mod error;
 mod parse;
 
-pub use compile::{compile, CompiledInstance, ObjectiveSpec};
+pub use compile::{CompiledInstance, ObjectiveSpec, compile};
 pub use error::FlatZincError;
-pub use parse::{parse, FlatZincProgram, OutputDirective, OutputSegment};
+pub use parse::{FlatZincProgram, OutputDirective, OutputSegment, parse};

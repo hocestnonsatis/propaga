@@ -219,14 +219,8 @@ mod tests {
     #[test]
     fn weighted_demand_detects_overload() {
         let intervals = vec![
-            (
-                MandatoryInterval { start: 0, end: 2 },
-                2,
-            ),
-            (
-                MandatoryInterval { start: 0, end: 2 },
-                2,
-            ),
+            (MandatoryInterval { start: 0, end: 2 }, 2),
+            (MandatoryInterval { start: 0, end: 2 }, 2),
         ];
         assert_eq!(find_overload_time(&intervals, 2, 0, 3), Some(0));
     }
@@ -243,20 +237,8 @@ mod tests {
     #[test]
     fn detects_mandatory_overload() {
         let intervals = vec![
-            (
-                MandatoryInterval {
-                    start: 0,
-                    end: 3,
-                },
-                1,
-            ),
-            (
-                MandatoryInterval {
-                    start: 1,
-                    end: 4,
-                },
-                1,
-            ),
+            (MandatoryInterval { start: 0, end: 3 }, 1),
+            (MandatoryInterval { start: 1, end: 4 }, 1),
         ];
         assert!(detect_overload(&intervals, 1, 0, 5));
         assert_eq!(find_overload_time(&intervals, 1, 0, 5), Some(1));

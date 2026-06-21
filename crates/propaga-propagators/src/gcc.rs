@@ -71,11 +71,7 @@ impl Propagator for GlobalCardinalityPropagator {
             }
         }
 
-        if self
-            .variables
-            .iter()
-            .any(|var| ctx.domain(*var).is_empty())
-        {
+        if self.variables.iter().any(|var| ctx.domain(*var).is_empty()) {
             PropagationStatus::Failure
         } else if changed {
             PropagationStatus::OkChanged
@@ -94,13 +90,10 @@ fn propagate_bounds(
     let values = collect_relevant_values(ctx, variables, cards);
 
     for value in values {
-        let bounds = cards
-            .get(&value)
-            .copied()
-            .unwrap_or(CardinalityBound {
-                min: 0,
-                max: variables.len() as i32,
-            });
+        let bounds = cards.get(&value).copied().unwrap_or(CardinalityBound {
+            min: 0,
+            max: variables.len() as i32,
+        });
 
         let mut fixed = Vec::new();
         let mut open = Vec::new();
@@ -140,14 +133,9 @@ fn propagate_bounds(
             if !ctx.domain(var).contains(value) {
                 continue;
             }
-            let others_open = open
-                .iter()
-                .filter(|&&candidate| candidate != var)
-                .count() as i32;
+            let others_open = open.iter().filter(|&&candidate| candidate != var).count() as i32;
             let others_fixed = fixed_count - i32::from(ctx.fixed_value(var) == Some(value));
-            if others_open + others_fixed < bounds.min - 1
-                && ctx.remove_value(var, value)
-            {
+            if others_open + others_fixed < bounds.min - 1 && ctx.remove_value(var, value) {
                 changed = true;
             }
             if others_fixed + 1 > bounds.max && ctx.remove_value(var, value) {

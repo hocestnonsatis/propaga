@@ -59,6 +59,22 @@ pub enum VarDecl {
         /// Domain upper bound.
         high: i32,
     },
+    /// Scalar boolean variable (modeled as 0..1 integer).
+    BoolVar {
+        /// Variable name.
+        name: String,
+        /// Fixed value when declared with `=`.
+        fixed: Option<i32>,
+    },
+    /// Array of boolean variables (modeled as 0..1 integers).
+    BoolArray {
+        /// Array name.
+        name: String,
+        /// Inclusive lower index.
+        index_low: i32,
+        /// Inclusive upper index.
+        index_high: i32,
+    },
 }
 
 /// A FlatZinc constraint call.
@@ -195,9 +211,13 @@ pub enum Constraint {
     Table {
         /// Variables in the constraint.
         vars: Expr,
-        /// Allowed tuples (each inner vec has `vars.len()` elements).
-        tuples: Vec<Vec<i32>>,
+        /// Flattened tuple values from `{a, b, c, d, ...}`.
+        tuples: Vec<i32>,
     },
+    /// `bool_eq(a, b)`
+    BoolEq(Expr, Expr),
+    /// `bool2int(b, i)`
+    Bool2Int(Expr, Expr),
 }
 
 /// Duration array in a cumulative constraint.
@@ -309,7 +329,7 @@ fn tokenize(source: &str) -> Result<Vec<Token>, FlatZincError> {
             }
             '"' => {
                 let mut text = String::new();
-                while let Some(next) = chars.next() {
+                for next in chars.by_ref() {
                     if next == '"' {
                         break;
                     }
@@ -367,11 +387,6 @@ impl Parser {
                 solve = Some(self.parse_solve()?);
             } else if self.peek_is_ident("output") {
                 outputs.push(self.parse_output()?);
-            } else if self.peek_is_ident("predicate")
-                || self.peek_is_ident("test")
-                || self.peek_is_ident("function")
-            {
-                self.skip_until_semicolon();
             } else {
                 self.skip_until_semicolon();
             }
@@ -453,6 +468,18 @@ impl Parser {
             };
             return Ok(VarDecl::IntVar { name, low, high });
         }
+        if self.peek_is_ident("bool") {
+            self.expect_ident("bool")?;
+            self.expect_symbol(":")?;
+            let name = self.expect_ident_token()?;
+            let fixed = if self.peek_is_symbol("=") {
+                self.expect_symbol("=")?;
+                Some(self.expect_int()?)
+            } else {
+                None
+            };
+            return Ok(VarDecl::BoolVar { name, fixed });
+        }
         let (low, high) = self.parse_domain()?;
         self.expect_symbol(":")?;
         let name = self.expect_ident_token()?;
@@ -472,6 +499,16 @@ impl Parser {
         self.expect_symbol("]")?;
         self.expect_ident("of")?;
         self.expect_ident("var")?;
+        if self.peek_is_ident("bool") {
+            self.expect_ident("bool")?;
+            self.expect_symbol(":")?;
+            let name = self.expect_ident_token()?;
+            return Ok(VarDecl::BoolArray {
+                name,
+                index_low,
+                index_high,
+            });
+        }
         let (low, high) = self.parse_domain()?;
         self.expect_symbol(":")?;
         let name = self.expect_ident_token()?;
@@ -704,17 +741,16 @@ impl Parser {
                 self.expect_symbol(",")?;
                 let ends = self.parse_expr()?;
                 self.expect_symbol(",")?;
-                let (heights, capacity) = if self.peek_is_symbol("[")
-                    || matches!(self.peek(), Some(Token::Ident(_)))
-                {
-                    let heights = self.parse_duration_spec()?;
-                    self.expect_symbol(",")?;
-                    let capacity = self.expect_int()?;
-                    (Some(heights), capacity)
-                } else {
-                    let capacity = self.expect_int()?;
-                    (None, capacity)
-                };
+                let (heights, capacity) =
+                    if self.peek_is_symbol("[") || matches!(self.peek(), Some(Token::Ident(_))) {
+                        let heights = self.parse_duration_spec()?;
+                        self.expect_symbol(",")?;
+                        let capacity = self.expect_int()?;
+                        (Some(heights), capacity)
+                    } else {
+                        let capacity = self.expect_int()?;
+                        (None, capacity)
+                    };
                 Constraint::Cumulative {
                     starts,
                     durations,
@@ -759,17 +795,27 @@ impl Parser {
                 let tuples = self.parse_tuple_set()?;
                 Constraint::Table { vars, tuples }
             }
+            "bool_eq" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                Constraint::BoolEq(left, right)
+            }
+            "bool2int" => {
+                let bool_var = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let int_var = self.parse_expr()?;
+                Constraint::Bool2Int(bool_var, int_var)
+            }
             other => {
-                return Err(FlatZincError::Unsupported(format!(
-                    "constraint `{other}`"
-                )));
+                return Err(FlatZincError::Unsupported(format!("constraint `{other}`")));
             }
         };
         self.expect_symbol(")")?;
         Ok(constraint)
     }
 
-    fn parse_tuple_set(&mut self) -> Result<Vec<Vec<i32>>, FlatZincError> {
+    fn parse_tuple_set(&mut self) -> Result<Vec<i32>, FlatZincError> {
         self.expect_symbol("{")?;
         let flat = self.parse_int_list_braced()?;
         self.expect_symbol("}")?;
@@ -842,7 +888,8 @@ impl Parser {
             self.expect_symbol(")")?;
             return Ok(parts);
         }
-        Ok(vec![self.expr_to_output_segment(self.parse_expr()?)?])
+        let expr = self.parse_expr()?;
+        Ok(vec![self.expr_to_output_segment(expr)?])
     }
 
     fn parse_output_arg(&mut self) -> Result<OutputSegment, FlatZincError> {
@@ -854,7 +901,8 @@ impl Parser {
             self.pos += 1;
             return Ok(OutputSegment::Text(text));
         }
-        self.expr_to_output_segment(self.parse_expr()?)
+        let expr = self.parse_expr()?;
+        self.expr_to_output_segment(expr)
     }
 
     fn expr_to_output_segment(&self, expr: Expr) -> Result<OutputSegment, FlatZincError> {
@@ -1108,6 +1156,23 @@ mod tests {
         let program = parse(source).unwrap();
         assert_eq!(program.outputs.len(), 1);
         assert_eq!(program.outputs[0].segments.len(), 2);
+    }
+
+    #[test]
+    fn parses_bool_variables_and_constraints() {
+        let source = r#"
+            var bool: b;
+            array [1..2] of var bool: flags;
+            var 0..5: x;
+            constraint bool_eq(b, flags[1]);
+            constraint bool2int(b, x);
+            solve satisfy;
+        "#;
+        let program = parse(source).unwrap();
+        assert_eq!(program.variables.len(), 3);
+        assert_eq!(program.constraints.len(), 2);
+        assert!(matches!(program.constraints[0], Constraint::BoolEq(_, _)));
+        assert!(matches!(program.constraints[1], Constraint::Bool2Int(_, _)));
     }
 
     #[test]

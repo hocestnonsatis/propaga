@@ -57,11 +57,7 @@ impl Propagator for TablePropagator {
             }
         }
 
-        if self
-            .variables
-            .iter()
-            .any(|var| ctx.domain(*var).is_empty())
-        {
+        if self.variables.iter().any(|var| ctx.domain(*var).is_empty()) {
             PropagationStatus::Failure
         } else if changed {
             PropagationStatus::OkChanged
@@ -72,12 +68,7 @@ impl Propagator for TablePropagator {
 }
 
 impl TablePropagator {
-    fn has_support(
-        &self,
-        ctx: &dyn PropagationContext,
-        var_index: usize,
-        value: i32,
-    ) -> bool {
+    fn has_support(&self, ctx: &dyn PropagationContext, var_index: usize, value: i32) -> bool {
         self.tuples.iter().any(|tuple| {
             if tuple.get(var_index).copied() != Some(value) {
                 return false;
@@ -131,7 +122,10 @@ mod tests {
     fn empty_table_is_inconsistent() {
         let mut engine = Engine::new();
         let x = engine.new_variable(IntervalDomain::new(1, 2));
-        engine.add_propagator(Box::new(TablePropagator::new(vec![x], Vec::<Vec<i32>>::new())));
+        engine.add_propagator(Box::new(TablePropagator::new(
+            vec![x],
+            Vec::<Vec<i32>>::new(),
+        )));
 
         let status = engine.propagate_all().unwrap();
         assert_eq!(status, PropagationStatus::Failure);

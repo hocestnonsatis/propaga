@@ -10,7 +10,9 @@ use propaga_propagators::{
     ReifiedScalarEqPropagator, ReifiedScalarGePropagator, ReifiedScalarLePropagator,
     TablePropagator, TaskSpec,
 };
-use propaga_search::{DepthFirstSearch, ObjectiveDirection, OptimizationSearch, SearchConfig, SearchStats, Solution};
+use propaga_search::{
+    DepthFirstSearch, ObjectiveDirection, OptimizationSearch, SearchConfig, SearchStats, Solution,
+};
 
 /// High-level modeling facade over the Propaga engine.
 pub struct Model {
@@ -87,9 +89,8 @@ impl Model {
 
     /// Posts `left + right == result`.
     pub fn linear_eq(&mut self, left: VariableId, right: VariableId, result: VariableId) {
-        self.engine.add_propagator(Box::new(LinearEqPropagator::new(
-            left, right, result,
-        )));
+        self.engine
+            .add_propagator(Box::new(LinearEqPropagator::new(left, right, result)));
     }
 
     /// Posts `left <= right`.
@@ -116,37 +117,32 @@ impl Model {
 
     /// Posts `left != right + offset`.
     pub fn not_equal_offset(&mut self, left: VariableId, right: VariableId, offset: i32) {
-        self.engine.add_propagator(Box::new(NotEqualOffsetPropagator::new(
-            left, right, offset,
-        )));
+        self.engine
+            .add_propagator(Box::new(NotEqualOffsetPropagator::new(left, right, offset)));
     }
 
     /// Posts `reif == 1 <=> left == right`.
     pub fn reified_equal(&mut self, left: VariableId, right: VariableId, reif: VariableId) {
-        self.engine.add_propagator(Box::new(ReifiedEqualityPropagator::new(
-            left, right, reif,
-        )));
+        self.engine
+            .add_propagator(Box::new(ReifiedEqualityPropagator::new(left, right, reif)));
     }
 
     /// Posts `reif == 1 <=> left != right`.
     pub fn reified_not_equal(&mut self, left: VariableId, right: VariableId, reif: VariableId) {
-        self.engine.add_propagator(Box::new(ReifiedNotEqualPropagator::new(
-            left, right, reif,
-        )));
+        self.engine
+            .add_propagator(Box::new(ReifiedNotEqualPropagator::new(left, right, reif)));
     }
 
     /// Posts `reif == 1 <=> left <= right`.
     pub fn reified_less_equal(&mut self, left: VariableId, right: VariableId, reif: VariableId) {
-        self.engine.add_propagator(Box::new(ReifiedLessEqualPropagator::new(
-            left, right, reif,
-        )));
+        self.engine
+            .add_propagator(Box::new(ReifiedLessEqualPropagator::new(left, right, reif)));
     }
 
     /// Posts `reif == 1 <=> left < right`.
     pub fn reified_less_than(&mut self, left: VariableId, right: VariableId, reif: VariableId) {
-        self.engine.add_propagator(Box::new(ReifiedLessThanPropagator::new(
-            left, right, reif,
-        )));
+        self.engine
+            .add_propagator(Box::new(ReifiedLessThanPropagator::new(left, right, reif)));
     }
 
     /// Posts `sum(coeffs[i] * vars[i]) <= rhs`.
@@ -156,11 +152,8 @@ impl Model {
         vars: impl Into<Vec<VariableId>>,
         rhs: i32,
     ) {
-        self.engine.add_propagator(Box::new(LinearScalarLePropagator::new(
-            coeffs,
-            vars,
-            rhs,
-        )));
+        self.engine
+            .add_propagator(Box::new(LinearScalarLePropagator::new(coeffs, vars, rhs)));
     }
 
     /// Posts `sum(coeffs[i] * vars[i]) >= rhs`.
@@ -170,11 +163,8 @@ impl Model {
         vars: impl Into<Vec<VariableId>>,
         rhs: i32,
     ) {
-        self.engine.add_propagator(Box::new(LinearScalarGePropagator::new(
-            coeffs,
-            vars,
-            rhs,
-        )));
+        self.engine
+            .add_propagator(Box::new(LinearScalarGePropagator::new(coeffs, vars, rhs)));
     }
 
     /// Posts `sum(coeffs[i] * vars[i]) == rhs`.
@@ -186,14 +176,14 @@ impl Model {
     ) {
         let coeffs = coeffs.into();
         let vars = vars.into();
-        self.engine.add_propagator(Box::new(LinearScalarLePropagator::new(
-            coeffs.clone(),
-            vars.clone(),
-            rhs,
-        )));
-        self.engine.add_propagator(Box::new(LinearScalarGePropagator::new(
-            coeffs, vars, rhs,
-        )));
+        self.engine
+            .add_propagator(Box::new(LinearScalarLePropagator::new(
+                coeffs.clone(),
+                vars.clone(),
+                rhs,
+            )));
+        self.engine
+            .add_propagator(Box::new(LinearScalarGePropagator::new(coeffs, vars, rhs)));
     }
 
     /// Posts `reif == 1 <=> sum(coeffs[i] * vars[i]) <= rhs`.
@@ -204,12 +194,10 @@ impl Model {
         rhs: i32,
         reif: VariableId,
     ) {
-        self.engine.add_propagator(Box::new(ReifiedScalarLePropagator::new(
-            coeffs,
-            vars,
-            rhs,
-            reif,
-        )));
+        self.engine
+            .add_propagator(Box::new(ReifiedScalarLePropagator::new(
+                coeffs, vars, rhs, reif,
+            )));
     }
 
     /// Posts `reif == 1 <=> sum(coeffs[i] * vars[i]) >= rhs`.
@@ -220,12 +208,10 @@ impl Model {
         rhs: i32,
         reif: VariableId,
     ) {
-        self.engine.add_propagator(Box::new(ReifiedScalarGePropagator::new(
-            coeffs,
-            vars,
-            rhs,
-            reif,
-        )));
+        self.engine
+            .add_propagator(Box::new(ReifiedScalarGePropagator::new(
+                coeffs, vars, rhs, reif,
+            )));
     }
 
     /// Posts `reif == 1 <=> sum(coeffs[i] * vars[i]) == rhs`.
@@ -236,12 +222,10 @@ impl Model {
         rhs: i32,
         reif: VariableId,
     ) {
-        self.engine.add_propagator(Box::new(ReifiedScalarEqPropagator::new(
-            coeffs,
-            vars,
-            rhs,
-            reif,
-        )));
+        self.engine
+            .add_propagator(Box::new(ReifiedScalarEqPropagator::new(
+                coeffs, vars, rhs, reif,
+            )));
     }
 
     /// Posts an all-different constraint over `variables`.
@@ -296,8 +280,7 @@ impl Model {
 
     /// Solves the model using depth-first search with MRV.
     pub fn solve(&mut self) -> Option<Solution> {
-        let mut search =
-            DepthFirstSearch::with_config(self.variables.clone(), self.search_config);
+        let mut search = DepthFirstSearch::with_config(self.variables.clone(), self.search_config);
         search.solve(&mut self.engine)
     }
 
@@ -309,8 +292,7 @@ impl Model {
 
     /// Solves and returns search statistics.
     pub fn solve_with_stats(&mut self) -> (Option<Solution>, SearchStats) {
-        let mut search =
-            DepthFirstSearch::with_config(self.variables.clone(), self.search_config);
+        let mut search = DepthFirstSearch::with_config(self.variables.clone(), self.search_config);
         let solution = search.solve(&mut self.engine);
         (solution, search.stats())
     }
@@ -378,7 +360,8 @@ impl Model {
         objective: VariableId,
         direction: ObjectiveDirection,
     ) -> (Option<Solution>, Option<i32>, SearchStats, u32) {
-        let mut search = OptimizationSearch::new(variables, objective, direction, self.search_config);
+        let mut search =
+            OptimizationSearch::new(variables, objective, direction, self.search_config);
         let result = search.optimize(&mut self.engine);
         (
             result.solution,

@@ -24,16 +24,16 @@ impl Propagator for EqualityPropagator {
         let [left, right] = self.watched;
         let mut changed = false;
 
-        if let Some(value) = ctx.fixed_value(left) {
-            if tighten_to_point(ctx, right, value) {
-                changed = true;
-            }
+        if let Some(value) = ctx.fixed_value(left)
+            && tighten_to_point(ctx, right, value)
+        {
+            changed = true;
         }
 
-        if let Some(value) = ctx.fixed_value(right) {
-            if tighten_to_point(ctx, left, value) {
-                changed = true;
-            }
+        if let Some(value) = ctx.fixed_value(right)
+            && tighten_to_point(ctx, left, value)
+        {
+            changed = true;
         }
 
         if sync_bounds(ctx, left, right) {
@@ -50,11 +50,7 @@ impl Propagator for EqualityPropagator {
     }
 }
 
-fn tighten_to_point(
-    ctx: &mut dyn PropagationContext,
-    var: VariableId,
-    value: i32,
-) -> bool {
+fn tighten_to_point(ctx: &mut dyn PropagationContext, var: VariableId, value: i32) -> bool {
     let mut changed = false;
     if ctx.remove_below(var, value) {
         changed = true;
@@ -65,11 +61,7 @@ fn tighten_to_point(
     changed
 }
 
-fn sync_bounds(
-    ctx: &mut dyn PropagationContext,
-    left: VariableId,
-    right: VariableId,
-) -> bool {
+fn sync_bounds(ctx: &mut dyn PropagationContext, left: VariableId, right: VariableId) -> bool {
     let mut changed = false;
 
     if let (Some(min), Some(max)) = (ctx.domain(left).min(), ctx.domain(left).max()) {

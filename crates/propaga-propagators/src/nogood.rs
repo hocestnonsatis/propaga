@@ -51,15 +51,14 @@ impl Propagator for NogoodPropagator {
             return PropagationStatus::Failure;
         }
 
-        if matched + 1 == self.literals.len() {
-            if let Some(literal) = pending {
-                if ctx.remove_value(literal.variable, literal.value) {
-                    if ctx.domain(literal.variable).is_empty() {
-                        return PropagationStatus::Failure;
-                    }
-                    return PropagationStatus::OkChanged;
-                }
+        if matched + 1 == self.literals.len()
+            && let Some(literal) = pending
+            && ctx.remove_value(literal.variable, literal.value)
+        {
+            if ctx.domain(literal.variable).is_empty() {
+                return PropagationStatus::Failure;
             }
+            return PropagationStatus::OkChanged;
         }
 
         PropagationStatus::OkNoChange

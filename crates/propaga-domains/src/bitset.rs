@@ -125,16 +125,19 @@ impl BitsetDomain {
     /// Returns an iterator over values present in the domain.
     pub fn values(&self) -> impl Iterator<Item = i32> + '_ {
         let offset = self.offset;
-        self.bits.iter().enumerate().flat_map(move |(word_index, &word)| {
-            let base = word_index * 64;
-            (0..64).filter_map(move |bit| {
-                if word & (1_u64 << bit) != 0 {
-                    Some(offset + (base + bit) as i32)
-                } else {
-                    None
-                }
+        self.bits
+            .iter()
+            .enumerate()
+            .flat_map(move |(word_index, &word)| {
+                let base = word_index * 64;
+                (0..64).filter_map(move |bit| {
+                    if word & (1_u64 << bit) != 0 {
+                        Some(offset + (base + bit) as i32)
+                    } else {
+                        None
+                    }
+                })
             })
-        })
     }
 
     fn empty_range(min: i32, max: i32) -> Self {
@@ -172,7 +175,10 @@ impl DomainView for BitsetDomain {
     }
 
     fn size(&self) -> usize {
-        self.bits.iter().map(|word| word.count_ones() as usize).sum()
+        self.bits
+            .iter()
+            .map(|word| word.count_ones() as usize)
+            .sum()
     }
 
     fn min(&self) -> Option<Self::Value> {
@@ -198,7 +204,9 @@ impl DomainView for BitsetDomain {
         let index = index as usize;
         let word = index / 64;
         let bit = index % 64;
-        self.bits.get(word).is_some_and(|bits| bits & (1_u64 << bit) != 0)
+        self.bits
+            .get(word)
+            .is_some_and(|bits| bits & (1_u64 << bit) != 0)
     }
 }
 

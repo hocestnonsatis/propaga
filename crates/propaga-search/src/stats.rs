@@ -13,6 +13,8 @@ pub struct SearchStats {
     pub nogoods_learned: u64,
     /// Number of restarts performed.
     pub restarts: u64,
+    /// Whether search stopped because the time limit was reached.
+    pub timed_out: bool,
 }
 
 impl SearchStats {

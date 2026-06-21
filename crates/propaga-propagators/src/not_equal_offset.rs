@@ -26,16 +26,16 @@ impl Propagator for NotEqualOffsetPropagator {
         let [left, right] = self.watched;
         let mut changed = false;
 
-        if let Some(value) = ctx.fixed_value(right) {
-            if ctx.remove_value(left, value + self.offset) {
-                changed = true;
-            }
+        if let Some(value) = ctx.fixed_value(right)
+            && ctx.remove_value(left, value + self.offset)
+        {
+            changed = true;
         }
 
-        if let Some(value) = ctx.fixed_value(left) {
-            if ctx.remove_value(right, value - self.offset) {
-                changed = true;
-            }
+        if let Some(value) = ctx.fixed_value(left)
+            && ctx.remove_value(right, value - self.offset)
+        {
+            changed = true;
         }
 
         if ctx.domain(left).is_empty() || ctx.domain(right).is_empty() {

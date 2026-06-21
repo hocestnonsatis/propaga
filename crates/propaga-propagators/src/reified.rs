@@ -308,16 +308,16 @@ fn propagate_not_equal(
 ) -> bool {
     let mut changed = false;
 
-    if let Some(value) = ctx.fixed_value(right) {
-        if ctx.remove_value(left, value) {
-            changed = true;
-        }
+    if let Some(value) = ctx.fixed_value(right)
+        && ctx.remove_value(left, value)
+    {
+        changed = true;
     }
 
-    if let Some(value) = ctx.fixed_value(left) {
-        if ctx.remove_value(right, value) {
-            changed = true;
-        }
+    if let Some(value) = ctx.fixed_value(left)
+        && ctx.remove_value(right, value)
+    {
+        changed = true;
     }
 
     changed
@@ -330,16 +330,16 @@ fn propagate_less_equal(
 ) -> bool {
     let mut changed = false;
 
-    if let Some(max) = ctx.domain(left).max() {
-        if ctx.remove_below(right, max) {
-            changed = true;
-        }
+    if let Some(max) = ctx.domain(left).max()
+        && ctx.remove_below(right, max)
+    {
+        changed = true;
     }
 
-    if let Some(min) = ctx.domain(right).min() {
-        if ctx.remove_above(left, min) {
-            changed = true;
-        }
+    if let Some(min) = ctx.domain(right).min()
+        && ctx.remove_above(left, min)
+    {
+        changed = true;
     }
 
     changed
@@ -352,16 +352,16 @@ fn propagate_greater_than(
 ) -> bool {
     let mut changed = false;
 
-    if let Some(min) = ctx.domain(left).min() {
-        if ctx.remove_above(right, min - 1) {
-            changed = true;
-        }
+    if let Some(min) = ctx.domain(left).min()
+        && ctx.remove_above(right, min - 1)
+    {
+        changed = true;
     }
 
-    if let Some(max) = ctx.domain(right).max() {
-        if ctx.remove_below(left, max + 1) {
-            changed = true;
-        }
+    if let Some(max) = ctx.domain(right).max()
+        && ctx.remove_below(left, max + 1)
+    {
+        changed = true;
     }
 
     changed
@@ -374,28 +374,28 @@ fn propagate_less_than(
 ) -> bool {
     let mut changed = false;
 
-    if let Some(max) = ctx.domain(right).max() {
-        if ctx.remove_above(left, max - 1) {
-            changed = true;
-        }
+    if let Some(max) = ctx.domain(right).max()
+        && ctx.remove_above(left, max - 1)
+    {
+        changed = true;
     }
 
-    if let Some(min) = ctx.domain(left).min() {
-        if ctx.remove_below(right, min + 1) {
-            changed = true;
-        }
+    if let Some(min) = ctx.domain(left).min()
+        && ctx.remove_below(right, min + 1)
+    {
+        changed = true;
     }
 
-    if let Some(value) = ctx.fixed_value(left) {
-        if ctx.remove_below(right, value + 1) {
-            changed = true;
-        }
+    if let Some(value) = ctx.fixed_value(left)
+        && ctx.remove_below(right, value + 1)
+    {
+        changed = true;
     }
 
-    if let Some(value) = ctx.fixed_value(right) {
-        if ctx.remove_above(left, value - 1) {
-            changed = true;
-        }
+    if let Some(value) = ctx.fixed_value(right)
+        && ctx.remove_above(left, value - 1)
+    {
+        changed = true;
     }
 
     changed
@@ -408,16 +408,16 @@ fn propagate_greater_equal(
 ) -> bool {
     let mut changed = false;
 
-    if let Some(min) = ctx.domain(right).min() {
-        if ctx.remove_below(left, min) {
-            changed = true;
-        }
+    if let Some(min) = ctx.domain(right).min()
+        && ctx.remove_below(left, min)
+    {
+        changed = true;
     }
 
-    if let Some(max) = ctx.domain(left).max() {
-        if ctx.remove_above(right, max) {
-            changed = true;
-        }
+    if let Some(max) = ctx.domain(left).max()
+        && ctx.remove_above(right, max)
+    {
+        changed = true;
     }
 
     changed

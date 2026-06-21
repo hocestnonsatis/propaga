@@ -28,6 +28,9 @@ pub fn run(size: usize, options: GlobalOptions) -> Result<(), Box<dyn std::error
         let (solutions, stats) =
             model.solve_all_with_stats_limited(queens.clone(), options.effective_solutions_limit());
         if solutions.is_empty() {
+            if stats.timed_out {
+                return Err("timeout".into());
+            }
             return Err(format!("{size}-queens has no solution").into());
         }
         solutions
@@ -48,17 +51,15 @@ pub fn run(size: usize, options: GlobalOptions) -> Result<(), Box<dyn std::error
         let solve_started = Instant::now();
         let (solution, stats) = model.solve_subset_with_stats(queens.clone());
         let Some(solution) = solution else {
+            if stats.timed_out {
+                return Err("timeout".into());
+            }
             return Err(format!("{size}-queens has no solution").into());
         };
         let ordered: Vec<(VariableId, i32)> = queens
             .iter()
             .enumerate()
-            .map(|(row, var)| {
-                (
-                    *var,
-                    order_solution(&queens, &solution)[row],
-                )
-            })
+            .map(|(row, var)| (*var, order_solution(&queens, &solution)[row]))
             .collect();
         vec![(ordered, stats, solve_started.elapsed())]
     };

@@ -9,3 +9,10 @@ license.workspace = true
 propaga-core.workspace = true
 propaga-domains.workspace = true
 propaga-engine.workspace = true
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "propagation"
+harness = false

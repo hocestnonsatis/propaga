@@ -17,14 +17,10 @@ fn main() {
         for j in (i + 1)..n {
             let offset = (j - i) as i32;
             engine.add_propagator(Box::new(NotEqualOffsetPropagator::new(
-                queens[i],
-                queens[j],
-                offset,
+                queens[i], queens[j], offset,
             )));
             engine.add_propagator(Box::new(NotEqualOffsetPropagator::new(
-                queens[i],
-                queens[j],
-                -offset,
+                queens[i], queens[j], -offset,
             )));
         }
     }

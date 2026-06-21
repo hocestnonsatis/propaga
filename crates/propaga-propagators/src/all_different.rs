@@ -68,7 +68,10 @@ fn remove_fixed_values(ctx: &mut dyn PropagationContext, variables: &[VariableId
     changed
 }
 
-fn propagate_matching(ctx: &mut dyn PropagationContext, variables: &[VariableId]) -> Result<bool, ()> {
+fn propagate_matching(
+    ctx: &mut dyn PropagationContext,
+    variables: &[VariableId],
+) -> Result<bool, ()> {
     if variables.len() <= 1 {
         return Ok(false);
     }

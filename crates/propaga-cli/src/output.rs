@@ -90,11 +90,13 @@ pub fn sudoku_result_json(
     }
 }
 
+type NQueensSolutionEntry = (Vec<(propaga_core::VariableId, i32)>, SearchStats, Duration);
+
 /// Prints N-Queens solutions according to `options`.
 pub fn print_n_queens_results(
     options: crate::puzzle_io::GlobalOptions,
     size: usize,
-    solutions: &[(Vec<(propaga_core::VariableId, i32)>, SearchStats, Duration)],
+    solutions: &[NQueensSolutionEntry],
 ) {
     match options.format {
         OutputFormat::Plain => {
@@ -184,13 +186,18 @@ pub(crate) fn print_flatzinc_result(
     order: &[propaga_core::VariableId],
     solution: Option<&propaga_search::Solution>,
     outputs: &[propaga_flatzinc::OutputDirective],
+    timed_out: bool,
     quiet: bool,
 ) {
     if quiet {
         return;
     }
     let Some(solution) = solution else {
-        println!("UNSATISFIABLE");
+        if timed_out {
+            println!("TIMEOUT");
+        } else {
+            println!("UNSATISFIABLE");
+        }
         return;
     };
 
@@ -221,18 +228,20 @@ pub(crate) fn format_output_directive(
     use propaga_flatzinc::OutputSegment;
 
     let values: std::collections::HashMap<_, _> = solution.iter().copied().collect();
-    let name_to_var: std::collections::HashMap<_, _> =
-        names.iter().map(|(var, name)| (name.as_str(), *var)).collect();
+    let name_to_var: std::collections::HashMap<_, _> = names
+        .iter()
+        .map(|(var, name)| (name.as_str(), *var))
+        .collect();
 
     let mut rendered = String::new();
     for segment in &directive.segments {
         match segment {
             OutputSegment::Text(text) => rendered.push_str(text),
             OutputSegment::Variable(name) => {
-                if let Some(&var) = name_to_var.get(name.as_str()) {
-                    if let Some(value) = values.get(&var) {
-                        rendered.push_str(&value.to_string());
-                    }
+                if let Some(&var) = name_to_var.get(name.as_str())
+                    && let Some(value) = values.get(&var)
+                {
+                    rendered.push_str(&value.to_string());
                 }
             }
         }
@@ -253,7 +262,12 @@ pub(crate) fn print_flatzinc_json(
     use serde_json::json;
 
     let Some(solution) = solution else {
-        println!("{}", json!({ "status": "unsatisfiable" }));
+        let status = if stats.map(|(s, _, _)| s.timed_out).unwrap_or(false) {
+            "timeout"
+        } else {
+            "unsatisfiable"
+        };
+        println!("{}", json!({ "status": status }));
         return;
     };
 
@@ -273,7 +287,11 @@ pub(crate) fn print_flatzinc_json(
         .collect();
 
     let mut payload = json!({
-        "status": "sat",
+        "status": if stats.map(|(s, _, _)| s.timed_out).unwrap_or(false) {
+            "timeout"
+        } else {
+            "sat"
+        },
         "variables": variables,
     });
     if !formatted.is_empty() {
@@ -297,6 +315,7 @@ pub(crate) fn print_flatzinc_json(
             "restarts": stats.restarts,
             "elapsed_ms": elapsed.as_millis(),
             "solutions_found": solutions_found,
+            "timed_out": stats.timed_out,
         });
     }
     println!("{}", payload);
@@ -340,11 +359,8 @@ pub(crate) fn print_schedule_result(
     };
     let values: std::collections::HashMap<_, _> = solution.iter().copied().collect();
     let engine = model.engine();
-    for (index, ((start, end), task)) in starts
-        .iter()
-        .zip(ends.iter())
-        .zip(tasks.iter())
-        .enumerate()
+    for (index, ((start, end), task)) in
+        starts.iter().zip(ends.iter()).zip(tasks.iter()).enumerate()
     {
         let start_time = values
             .get(start)
@@ -371,6 +387,9 @@ pub(crate) fn print_schedule_result(
 }
 
 pub(crate) fn print_stats_plain(stats: SearchStats, elapsed: Duration) {
+    if stats.timed_out {
+        println!("TIMEOUT");
+    }
     println!(
         "stats: nodes={} backtracks={} conflicts={} nogoods={} restarts={} time={}ms",
         stats.nodes,
@@ -394,10 +413,7 @@ fn stats_json(stats: SearchStats, elapsed: Duration) -> StatsJson {
 }
 
 fn to_grid(values: &[i32]) -> Vec<Vec<i32>> {
-    values
-        .chunks(9)
-        .map(<[i32]>::to_vec)
-        .collect()
+    values.chunks(9).map(<[i32]>::to_vec).collect()
 }
 
 fn extract_columns(solution: &[(propaga_core::VariableId, i32)]) -> Vec<i32> {

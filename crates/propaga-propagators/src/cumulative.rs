@@ -1,6 +1,6 @@
 use crate::scheduling::{
-    build_time_table, ect, est, find_excess_time, find_overload_time, lct, mandatory_interval,
-    mandatory_literals_at_time, MandatoryContribution, MandatoryInterval, TaskSpec,
+    MandatoryContribution, MandatoryInterval, TaskSpec, build_time_table, ect, est,
+    find_excess_time, find_overload_time, lct, mandatory_interval, mandatory_literals_at_time,
 };
 use propaga_core::{PropagationContext, PropagationStatus, Propagator, VariableId};
 
@@ -55,9 +55,11 @@ impl Propagator for CumulativePropagator {
             }
         }
 
-        if self.tasks.iter().any(|task| {
-            ctx.domain(task.start).is_empty() || ctx.domain(task.end).is_empty()
-        }) {
+        if self
+            .tasks
+            .iter()
+            .any(|task| ctx.domain(task.start).is_empty() || ctx.domain(task.end).is_empty())
+        {
             if let Some(literals) = cumulative_conflict_literals(ctx, &self.tasks, self.capacity) {
                 ctx.record_propagator_conflict(&literals);
             }
@@ -73,10 +75,9 @@ impl Propagator for CumulativePropagator {
 fn propagate_precedence(ctx: &mut dyn PropagationContext, tasks: &[TaskSpec]) -> bool {
     let mut changed = false;
     for task in tasks {
-        if let (Some(start_min), Some(end_max)) = (
-            ctx.domain(task.start).min(),
-            ctx.domain(task.end).max(),
-        ) {
+        if let (Some(start_min), Some(end_max)) =
+            (ctx.domain(task.start).min(), ctx.domain(task.end).max())
+        {
             let min_end = start_min + task.duration;
             if ctx.remove_below(task.end, min_end) {
                 changed = true;
@@ -130,8 +131,7 @@ fn mandatory_overload_literals(
     let intervals = mandatory_intervals(&contributions);
     let (horizon_start, horizon_end) = interval_horizon(&intervals);
 
-    let overload_time =
-        find_overload_time(&intervals, capacity, horizon_start, horizon_end)?;
+    let overload_time = find_overload_time(&intervals, capacity, horizon_start, horizon_end)?;
     Some(mandatory_literals_at_time(&contributions, overload_time))
 }
 
@@ -270,26 +270,23 @@ fn propagate_time_table(
             continue;
         }
 
-        if let Some(mandatory) = mandatory_interval(
-            est(start_min),
-            ect(start_min, task.duration),
-            lct(end_max),
-        ) {
-            if mandatory.end - mandatory.start >= task.duration {
-                let fixed_start = mandatory.start;
-                let fixed_end = mandatory.start + task.duration;
-                if ctx.remove_below(task.start, fixed_start) {
-                    changed = true;
-                }
-                if ctx.remove_above(task.start, fixed_start) {
-                    changed = true;
-                }
-                if ctx.remove_below(task.end, fixed_end) {
-                    changed = true;
-                }
-                if ctx.remove_above(task.end, fixed_end) {
-                    changed = true;
-                }
+        if let Some(mandatory) =
+            mandatory_interval(est(start_min), ect(start_min, task.duration), lct(end_max))
+            && mandatory.end - mandatory.start >= task.duration
+        {
+            let fixed_start = mandatory.start;
+            let fixed_end = mandatory.start + task.duration;
+            if ctx.remove_below(task.start, fixed_start) {
+                changed = true;
+            }
+            if ctx.remove_above(task.start, fixed_start) {
+                changed = true;
+            }
+            if ctx.remove_below(task.end, fixed_end) {
+                changed = true;
+            }
+            if ctx.remove_above(task.end, fixed_end) {
+                changed = true;
             }
         }
     }
@@ -379,12 +376,16 @@ mod tests {
             .propagator_conflict_literals()
             .expect("propagator conflict");
         assert_eq!(literals.len(), 2);
-        assert!(literals
-            .iter()
-            .any(|literal| literal.variable == start_a && literal.value == 0));
-        assert!(literals
-            .iter()
-            .any(|literal| literal.variable == start_b && literal.value == 0));
+        assert!(
+            literals
+                .iter()
+                .any(|literal| literal.variable == start_a && literal.value == 0)
+        );
+        assert!(
+            literals
+                .iter()
+                .any(|literal| literal.variable == start_b && literal.value == 0)
+        );
     }
 
     #[test]

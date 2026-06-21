@@ -73,18 +73,15 @@ impl Explanation {
     /// Returns literals from the most recent propagator-recorded conflict, if any.
     #[must_use]
     pub fn propagator_conflict_literals(&self) -> Option<Vec<NogoodLiteral>> {
-        self.entries()
-            .iter()
-            .rev()
-            .find_map(|entry| match entry {
-                ChangeReason::PropagatorConflict { literals } => Some(
-                    literals
-                        .iter()
-                        .map(|&(variable, value)| NogoodLiteral { variable, value })
-                        .collect(),
-                ),
-                _ => None,
-            })
+        self.entries().iter().rev().find_map(|entry| match entry {
+            ChangeReason::PropagatorConflict { literals } => Some(
+                literals
+                    .iter()
+                    .map(|&(variable, value)| NogoodLiteral { variable, value })
+                    .collect(),
+            ),
+            _ => None,
+        })
     }
 
     /// Returns unique branch literals, keeping the latest assignment per variable.
@@ -92,9 +89,10 @@ impl Explanation {
     pub fn unique_branch_literals(&self) -> Vec<NogoodLiteral> {
         let mut literals = Vec::new();
         for literal in self.branch_literals() {
-            if let Some(existing) = literals.iter_mut().find(|l: &&mut NogoodLiteral| {
-                l.variable == literal.variable
-            }) {
+            if let Some(existing) = literals
+                .iter_mut()
+                .find(|l: &&mut NogoodLiteral| l.variable == literal.variable)
+            {
                 *existing = literal;
             } else {
                 literals.push(literal);

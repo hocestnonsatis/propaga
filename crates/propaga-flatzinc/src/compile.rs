@@ -1,5 +1,7 @@
 use crate::error::FlatZincError;
-use crate::parse::{Constraint, DurationSpec, Expr, FlatZincProgram, OutputDirective, ParamDecl, SolveGoal, VarDecl};
+use crate::parse::{
+    Constraint, DurationSpec, Expr, FlatZincProgram, OutputDirective, ParamDecl, SolveGoal, VarDecl,
+};
 use propaga_core::VariableId;
 use propaga_model::Model;
 use propaga_propagators::{CardinalityBound, DisjunctiveTask, TaskSpec};
@@ -73,6 +75,27 @@ pub fn compile(program: FlatZincProgram) -> Result<CompiledInstance, FlatZincErr
                 }
                 env.insert(name, Binding::Array(elements));
             }
+            VarDecl::BoolVar { name, fixed } => {
+                let var = match fixed {
+                    Some(value) => model.int_var_fixed(value),
+                    None => model.int_var(0, 1),
+                };
+                names.insert(var, name.clone());
+                env.insert(name, Binding::Var(var));
+            }
+            VarDecl::BoolArray {
+                name,
+                index_low,
+                index_high,
+            } => {
+                let mut elements = HashMap::new();
+                for index in index_low..=index_high {
+                    let var = model.int_var(0, 1);
+                    names.insert(var, format!("{name}[{index}]"));
+                    elements.insert(index, var);
+                }
+                env.insert(name, Binding::Array(elements));
+            }
         }
     }
 
@@ -84,17 +107,23 @@ pub fn compile(program: FlatZincProgram) -> Result<CompiledInstance, FlatZincErr
         SolveGoal::Satisfy => (model.decision_variables().to_vec(), None),
         SolveGoal::Minimize(expr) => {
             let var = resolve_var(&env, expr)?;
-            (model.decision_variables().to_vec(), Some(ObjectiveSpec {
-                var,
-                direction: ObjectiveDirection::Minimize,
-            }))
+            (
+                model.decision_variables().to_vec(),
+                Some(ObjectiveSpec {
+                    var,
+                    direction: ObjectiveDirection::Minimize,
+                }),
+            )
         }
         SolveGoal::Maximize(expr) => {
             let var = resolve_var(&env, expr)?;
-            (model.decision_variables().to_vec(), Some(ObjectiveSpec {
-                var,
-                direction: ObjectiveDirection::Maximize,
-            }))
+            (
+                model.decision_variables().to_vec(),
+                Some(ObjectiveSpec {
+                    var,
+                    direction: ObjectiveDirection::Maximize,
+                }),
+            )
         }
     };
 
@@ -128,9 +157,12 @@ fn post_constraint(
             let left_var = resolve_var(env, left)?;
             match right {
                 Expr::Int(value) => {
-                    model.engine_mut().fix_variable(left_var, value).map_err(|_| {
-                        FlatZincError::Unsupported("failed to fix variable".to_string())
-                    })?;
+                    model
+                        .engine_mut()
+                        .fix_variable(left_var, value)
+                        .map_err(|_| {
+                            FlatZincError::Unsupported("failed to fix variable".to_string())
+                        })?;
                 }
                 other => {
                     let right_var = resolve_var(env, other)?;
@@ -257,6 +289,28 @@ fn post_constraint(
         Constraint::Table { vars, tuples } => {
             post_table(model, env, vars, tuples)?;
         }
+        Constraint::BoolEq(left, right) => {
+            let left_var = resolve_var(env, left)?;
+            match right {
+                Expr::Int(value) => {
+                    model
+                        .engine_mut()
+                        .fix_variable(left_var, value)
+                        .map_err(|_| {
+                            FlatZincError::Unsupported("failed to fix variable".to_string())
+                        })?;
+                }
+                other => {
+                    let right_var = resolve_var(env, other)?;
+                    model.equal(left_var, right_var);
+                }
+            }
+        }
+        Constraint::Bool2Int(bool_expr, int_expr) => {
+            let bool_var = resolve_var(env, bool_expr)?;
+            let int_var = resolve_var(env, int_expr)?;
+            model.equal(bool_var, int_var);
+        }
     }
     Ok(())
 }
@@ -300,7 +354,9 @@ fn post_cumulative(
         .zip(end_vars)
         .zip(duration_values)
         .zip(height_values)
-        .map(|(((start, end), duration), demand)| TaskSpec::with_demand(start, duration, end, demand))
+        .map(|(((start, end), duration), demand)| {
+            TaskSpec::with_demand(start, duration, end, demand)
+        })
         .collect();
     model.cumulative(tasks, capacity);
     Ok(())
@@ -329,9 +385,10 @@ fn post_linear_eq(
         let right = resolve_var(env, vars[1].clone())?;
         let sum = model.int_var(i32::MIN / 4, i32::MAX / 4);
         model.linear_eq(left, right, sum);
-        model.engine_mut().fix_variable(sum, rhs).map_err(|_| {
-            FlatZincError::Unsupported("failed to fix sum variable".to_string())
-        })?;
+        model
+            .engine_mut()
+            .fix_variable(sum, rhs)
+            .map_err(|_| FlatZincError::Unsupported("failed to fix sum variable".to_string()))?;
         return Ok(());
     }
 
@@ -662,7 +719,7 @@ fn post_table(
             "table constraint requires at least one variable".to_string(),
         ));
     }
-    if !flat_tuples.is_empty() && flat_tuples.len() % var_list.len() != 0 {
+    if !flat_tuples.is_empty() && !flat_tuples.len().is_multiple_of(var_list.len()) {
         return Err(FlatZincError::Unsupported(
             "table tuple length does not match variable count".to_string(),
         ));
@@ -677,7 +734,10 @@ fn post_table(
     Ok(())
 }
 
-fn resolve_int_array(env: &HashMap<String, Binding>, expr: Expr) -> Result<Vec<i32>, FlatZincError> {
+fn resolve_int_array(
+    env: &HashMap<String, Binding>,
+    expr: Expr,
+) -> Result<Vec<i32>, FlatZincError> {
     match expr {
         Expr::List(items) => {
             let mut values = Vec::new();
@@ -746,7 +806,10 @@ fn post_int_le(
     Ok(())
 }
 
-fn resolve_var_list(env: &HashMap<String, Binding>, expr: Expr) -> Result<Vec<VariableId>, FlatZincError> {
+fn resolve_var_list(
+    env: &HashMap<String, Binding>,
+    expr: Expr,
+) -> Result<Vec<VariableId>, FlatZincError> {
     match expr {
         Expr::List(items) => {
             let mut vars = Vec::new();
@@ -762,11 +825,9 @@ fn resolve_var_list(env: &HashMap<String, Binding>, expr: Expr) -> Result<Vec<Va
                 Ok(indices.into_iter().map(|index| elements[&index]).collect())
             }
             Some(Binding::Var(var)) => Ok(vec![*var]),
-            Some(Binding::Param(_)) | Some(Binding::ParamArray(_)) => {
-                Err(FlatZincError::Unsupported(format!(
-                    "parameter `{name}` used as decision variable"
-                )))
-            }
+            Some(Binding::Param(_)) | Some(Binding::ParamArray(_)) => Err(
+                FlatZincError::Unsupported(format!("parameter `{name}` used as decision variable")),
+            ),
             None => Err(FlatZincError::UnknownIdentifier(name)),
         },
         other => resolve_var(env, other).map(|var| vec![var]),
@@ -789,18 +850,18 @@ fn resolve_var(env: &HashMap<String, Binding>, expr: Expr) -> Result<VariableId,
             None => Err(FlatZincError::UnknownIdentifier(name)),
         },
         Expr::Index { name, index } => {
-            let Binding::Array(elements) = env.get(&name).ok_or_else(|| {
-                FlatZincError::UnknownIdentifier(name.clone())
-            })? else {
+            let Binding::Array(elements) = env
+                .get(&name)
+                .ok_or_else(|| FlatZincError::UnknownIdentifier(name.clone()))?
+            else {
                 return Err(FlatZincError::Unsupported(format!(
                     "`{name}` is not an array"
                 )));
             };
             let index_value = resolve_int(env, *index)?;
-            elements
-                .get(&index_value)
-                .copied()
-                .ok_or_else(|| FlatZincError::Unsupported(format!("index {index_value} out of range")))
+            elements.get(&index_value).copied().ok_or_else(|| {
+                FlatZincError::Unsupported(format!("index {index_value} out of range"))
+            })
         }
         Expr::Int(value) => Err(FlatZincError::Unsupported(format!(
             "integer literal `{value}` used as variable"
@@ -1022,5 +1083,20 @@ mod tests {
             solve maximize x;
         "#;
         compile(parse(maximize).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn compiles_bool_constraints() {
+        let source = r#"
+            var bool: b;
+            var 0..5: x;
+            constraint bool2int(b, x);
+            constraint int_eq(x, 1);
+            solve satisfy;
+        "#;
+        let program = parse(source).unwrap();
+        let mut instance = compile(program).unwrap();
+        let (solution, _) = instance.model.solve_subset_with_stats(instance.solve_vars);
+        assert!(solution.is_some());
     }
 }

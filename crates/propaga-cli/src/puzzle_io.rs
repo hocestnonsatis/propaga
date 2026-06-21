@@ -36,6 +36,7 @@ pub struct GlobalOptions {
     pub variable_ordering: propaga_search::VariableOrdering,
     pub phase_saving: bool,
     pub solutions_limit: Option<usize>,
+    pub time_limit: Option<std::time::Duration>,
 }
 
 impl Default for GlobalOptions {
@@ -52,6 +53,7 @@ impl Default for GlobalOptions {
             variable_ordering: propaga_search::VariableOrdering::default(),
             phase_saving: true,
             solutions_limit: None,
+            time_limit: None,
         }
     }
 }
@@ -70,17 +72,14 @@ impl GlobalOptions {
             value_ordering: self.value_ordering,
             variable_ordering: self.variable_ordering,
             phase_saving: self.phase_saving,
+            time_limit: self.time_limit,
         }
     }
 
     /// Effective solution limit when enumerating with `--all`.
     #[must_use]
     pub fn effective_solutions_limit(&self) -> Option<usize> {
-        if self.all {
-            self.solutions_limit
-        } else {
-            None
-        }
+        if self.all { self.solutions_limit } else { None }
     }
 }
 

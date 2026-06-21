@@ -13,7 +13,13 @@ minizinc --compile-only -o benchmarks/minizinc/my_model.fzn benchmarks/minizinc/
 
 ```bash
 cargo run -p propaga-cli -- solve --file benchmarks/minizinc/my_model.fzn --stats
+# or batch all .fzn in a folder:
+cargo run -p propaga-cli -- solve --dir benchmarks --quiet
 ```
+
+## Compatibility matrix
+
+See [COMPATIBILITY.md](COMPATIBILITY.md) for supported FlatZinc constraints, partial features, and CLI flags.
 
 ## Hand-maintained FlatZinc in this repo
 
@@ -27,4 +33,4 @@ The root `benchmarks/` folder contains curated `.fzn` files (no MiniZinc toolcha
 | `disjunctive_two.fzn` | Two-task disjunctive |
 | `cumulative.fzn` | Two-task cumulative |
 
-When adding MiniZinc sources here, prefer small models that use supported constraints only (`all_different`, `int_*`, `int_lin_eq`, `int_lin_le`, `int_lin_ge`, `int_lin_*_reif`, `element`, `cumulative`, `disjunctive`, `global_cardinality`, `table`, `solve minimize|maximize`).
+When adding MiniZinc sources here, prefer small models that use supported constraints only. See [COMPATIBILITY.md](COMPATIBILITY.md) for the full list.

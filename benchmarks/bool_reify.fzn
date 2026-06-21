@@ -1,0 +1,8 @@
+% Bool variables with bool2int and bool_eq
+var bool: b1;
+var bool: b2;
+var 0..5: x;
+constraint bool_eq(b1, b2);
+constraint bool2int(b1, x);
+constraint int_eq(x, 1);
+solve satisfy;

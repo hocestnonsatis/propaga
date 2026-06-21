@@ -13,7 +13,11 @@ use std::path::PathBuf;
 
 /// Propaga constraint solver command-line interface.
 #[derive(Parser)]
-#[command(name = "propaga", version, about = "Propagator-based constraint solver")]
+#[command(
+    name = "propaga",
+    version,
+    about = "Propagator-based constraint solver"
+)]
 struct Cli {
     /// Output format: plain or json.
     #[arg(long, global = true, default_value = "plain")]
@@ -55,6 +59,10 @@ struct Cli {
     #[arg(long, global = true)]
     solutions: Option<usize>,
 
+    /// Wall-clock time limit in seconds for search.
+    #[arg(long, global = true, value_name = "SECS")]
+    time_limit: Option<f64>,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -90,10 +98,15 @@ enum Commands {
         format: Option<String>,
     },
     /// Solve a FlatZinc instance (subset).
+    #[command(group(clap::ArgGroup::new("solve_input").required(true).multiple(false)))]
     Solve {
         /// Path to a `.fzn` FlatZinc file.
-        #[arg(long)]
-        file: PathBuf,
+        #[arg(long, group = "solve_input")]
+        file: Option<PathBuf>,
+
+        /// Directory of `.fzn` files to solve in batch.
+        #[arg(long, group = "solve_input")]
+        dir: Option<PathBuf>,
 
         /// Output format override for this command.
         #[arg(long)]
@@ -149,6 +162,9 @@ fn main() {
         variable_ordering,
         phase_saving: !cli.no_phase_saving,
         solutions_limit: cli.solutions,
+        time_limit: cli
+            .time_limit
+            .map(|secs| std::time::Duration::from_secs_f64(secs.max(0.0))),
         ..GlobalOptions::default()
     };
 
@@ -182,7 +198,7 @@ fn main() {
             };
             n_queens::run(size, options)
         }
-        Commands::Solve { file, format } => {
+        Commands::Solve { file, dir, format } => {
             let options = GlobalOptions {
                 format: format
                     .as_deref()
@@ -190,7 +206,11 @@ fn main() {
                     .unwrap_or(global_format),
                 ..base_options
             };
-            flatzinc::run(&file, options)
+            match (file, dir) {
+                (Some(file), None) => flatzinc::run(&file, options),
+                (None, Some(dir)) => flatzinc::run_dir(&dir, options),
+                _ => Err("exactly one of --file or --dir is required".into()),
+            }
         }
         Commands::Schedule { file, format } => {
             let options = GlobalOptions {

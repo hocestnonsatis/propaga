@@ -1,5 +1,5 @@
 use crate::output::{print_sudoku_batch_json, print_sudoku_results, sudoku_result_json};
-use crate::puzzle_io::{load_sudoku_file, parse_sudoku_input, GlobalOptions};
+use crate::puzzle_io::{GlobalOptions, load_sudoku_file, parse_sudoku_input};
 use propaga_core::VariableId;
 use propaga_domains::IntervalDomain;
 use propaga_model::Model;
@@ -75,12 +75,18 @@ fn solve_one(
         let (solutions, stats) =
             model.solve_all_with_stats_limited(cells.clone(), options.effective_solutions_limit());
         let Some(first) = solutions.first() else {
+            if stats.timed_out {
+                return Err("timeout".into());
+            }
             return Err("sudoku puzzle is unsatisfiable".into());
         };
         Ok((solution_to_grid(first, &cells), stats))
     } else {
         let (solution, stats) = model.solve_subset_with_stats(cells.clone());
         let Some(solution) = solution else {
+            if stats.timed_out {
+                return Err("timeout".into());
+            }
             return Err("sudoku puzzle is unsatisfiable".into());
         };
         Ok((solution_to_grid(&solution, &cells), stats))

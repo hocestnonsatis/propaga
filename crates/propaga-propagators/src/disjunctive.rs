@@ -74,16 +74,10 @@ impl Propagator for DisjunctivePropagator {
                         return PropagationStatus::Failure;
                     }
                     round_changed |= propagate_pair(ctx, self.tasks[left], self.tasks[right]);
-                    round_changed |= forbid_overlap_with_known_start(
-                        ctx,
-                        self.tasks[left],
-                        self.tasks[right],
-                    );
-                    round_changed |= forbid_overlap_with_known_start(
-                        ctx,
-                        self.tasks[right],
-                        self.tasks[left],
-                    );
+                    round_changed |=
+                        forbid_overlap_with_known_start(ctx, self.tasks[left], self.tasks[right]);
+                    round_changed |=
+                        forbid_overlap_with_known_start(ctx, self.tasks[right], self.tasks[left]);
                 }
             }
             changed |= round_changed;
@@ -126,14 +120,8 @@ fn overlap_conflict_literals(
     left: DisjunctiveTask,
     right: DisjunctiveTask,
 ) -> Option<Vec<(VariableId, i32)>> {
-    let (left_start, right_start) = (
-        ctx.fixed_value(left.start)?,
-        ctx.fixed_value(right.start)?,
-    );
-    Some(vec![
-        (left.start, left_start),
-        (right.start, right_start),
-    ])
+    let (left_start, right_start) = (ctx.fixed_value(left.start)?, ctx.fixed_value(right.start)?);
+    Some(vec![(left.start, left_start), (right.start, right_start)])
 }
 
 fn propagate_pair(
@@ -289,10 +277,8 @@ fn theta_tree_ect(entries: &[(i32, i32)]) -> i32 {
 }
 
 fn propagate_edge_finding(ctx: &mut dyn PropagationContext, tasks: &[DisjunctiveTask]) -> bool {
-    let bounds: Vec<Option<TaskBounds>> = tasks
-        .iter()
-        .map(|&task| task_bounds(ctx, task))
-        .collect();
+    let bounds: Vec<Option<TaskBounds>> =
+        tasks.iter().map(|&task| task_bounds(ctx, task)).collect();
     let mut changed = false;
 
     for (origin, origin_bounds) in bounds.iter().enumerate() {
@@ -383,12 +369,16 @@ mod tests {
             .propagator_conflict_literals()
             .expect("propagator conflict");
         assert_eq!(literals.len(), 2);
-        assert!(literals
-            .iter()
-            .any(|literal| literal.variable == start_a && literal.value == 0));
-        assert!(literals
-            .iter()
-            .any(|literal| literal.variable == start_b && literal.value == 0));
+        assert!(
+            literals
+                .iter()
+                .any(|literal| literal.variable == start_a && literal.value == 0)
+        );
+        assert!(
+            literals
+                .iter()
+                .any(|literal| literal.variable == start_b && literal.value == 0)
+        );
     }
 
     #[test]
@@ -451,9 +441,6 @@ mod tests {
                 duration: 2,
             },
         ])));
-        assert_eq!(
-            engine.propagate_all().unwrap(),
-            PropagationStatus::Failure
-        );
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
     }
 }

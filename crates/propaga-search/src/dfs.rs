@@ -1,10 +1,11 @@
-use crate::conflict::{ConflictAnalyzer, NogoodStore};
 use crate::config::SearchConfig;
-use crate::stats::{branch_assignments_from_explanation, SearchStats};
+use crate::conflict::{ConflictAnalyzer, NogoodStore};
+use crate::stats::{SearchStats, branch_assignments_from_explanation};
 use propaga_core::{DomainView, NogoodLiteral, PropagationStatus, VariableId};
 use propaga_engine::Engine;
 use propaga_propagators::NogoodPropagator;
 use std::collections::HashMap;
+use std::time::Instant;
 
 /// Assignment mapping variables to their chosen values.
 pub type Solution = Vec<(VariableId, i32)>;
@@ -19,6 +20,7 @@ pub struct DepthFirstSearch {
     restart_index: u32,
     phases: HashMap<VariableId, i32>,
     weights: HashMap<VariableId, u32>,
+    deadline: Option<Instant>,
 }
 
 impl DepthFirstSearch {
@@ -40,6 +42,7 @@ impl DepthFirstSearch {
             restart_index: 0,
             phases: HashMap::new(),
             weights: HashMap::new(),
+            deadline: None,
         }
     }
 
@@ -70,20 +73,22 @@ impl DepthFirstSearch {
 
     /// Searches for a solution, returning the first one found.
     pub fn solve(&mut self, engine: &mut Engine) -> Option<Solution> {
-        self.stats = SearchStats::default();
-        self.nodes_since_restart = 0;
-        self.restart_index = 0;
+        self.begin_search();
 
         if !self.propagate_root(engine) {
             return None;
         }
 
         loop {
+            if self.check_timeout() {
+                return None;
+            }
+
             if let Some(solution) = self.search(engine) {
                 return Some(solution);
             }
 
-            if !self.should_restart() {
+            if self.stats.timed_out || !self.should_restart() {
                 return None;
             }
 
@@ -105,14 +110,34 @@ impl DepthFirstSearch {
         engine: &mut Engine,
         limit: Option<usize>,
     ) -> Vec<Solution> {
-        self.stats = SearchStats::default();
-        self.nodes_since_restart = 0;
-        self.restart_index = 0;
+        self.begin_search();
         let mut solutions = Vec::new();
         if self.propagate_root(engine) {
             self.collect_all(engine, &mut solutions, limit);
         }
         solutions
+    }
+
+    fn begin_search(&mut self) {
+        self.stats = SearchStats::default();
+        self.nodes_since_restart = 0;
+        self.restart_index = 0;
+        self.deadline = self.config.time_limit.map(|limit| Instant::now() + limit);
+    }
+
+    fn check_timeout(&mut self) -> bool {
+        if self.stats.timed_out {
+            return true;
+        }
+        if self
+            .deadline
+            .is_some_and(|deadline| Instant::now() >= deadline)
+        {
+            self.stats.timed_out = true;
+            true
+        } else {
+            false
+        }
     }
 
     fn propagate_root(&mut self, engine: &mut Engine) -> bool {
@@ -128,6 +153,10 @@ impl DepthFirstSearch {
     }
 
     fn search(&mut self, engine: &mut Engine) -> Option<Solution> {
+        if self.check_timeout() {
+            return None;
+        }
+
         if engine.is_solved() {
             return Some(self.collect_solution(engine));
         }
@@ -141,11 +170,7 @@ impl DepthFirstSearch {
         let values = self.ordered_values(engine, var);
 
         for value in values {
-            if self.config.learning
-                && self
-                    .nogoods
-                    .would_violate(&assignment, var, value)
-            {
+            if self.config.learning && self.nogoods.would_violate(&assignment, var, value) {
                 continue;
             }
 
@@ -182,6 +207,10 @@ impl DepthFirstSearch {
         solutions: &mut Vec<Solution>,
         limit: Option<usize>,
     ) {
+        if self.check_timeout() {
+            return;
+        }
+
         if limit.is_some_and(|max| solutions.len() >= max) {
             return;
         }
@@ -203,11 +232,7 @@ impl DepthFirstSearch {
         let values = self.ordered_values(engine, var);
 
         for value in values {
-            if self.config.learning
-                && self
-                    .nogoods
-                    .would_violate(&assignment, var, value)
-            {
+            if self.config.learning && self.nogoods.would_violate(&assignment, var, value) {
                 continue;
             }
 
@@ -243,27 +268,22 @@ impl DepthFirstSearch {
         self.stats.record_backtrack();
         self.stats.record_conflict();
 
-        if self.config.learning {
-            if let Some(conflict) = engine.last_conflict() {
-                self.bump_weights(&conflict.explanation.unique_branch_literals());
-                let nogood = ConflictAnalyzer::analyze(&conflict.explanation, conflict.variable);
-                let branch_order: Vec<NogoodLiteral> =
-                    conflict.explanation.unique_branch_literals();
-                let learned = self.nogoods.learn(nogood.clone());
-                if learned {
-                    engine.add_propagator(Box::new(NogoodPropagator::new(
-                        nogood.literals().to_vec(),
-                    )));
-                    self.stats.record_nogood();
-                }
-                if learned {
-                    if let Some(learned_nogood) = self.nogoods.last() {
-                        let backjump = ConflictAnalyzer::backjump_level(learned_nogood, &branch_order);
-                        let target = backjump.min(level);
-                        engine.trail_backtrack(target);
-                        return target < level;
-                    }
-                }
+        if self.config.learning
+            && let Some(conflict) = engine.last_conflict()
+        {
+            self.bump_weights(&conflict.explanation.unique_branch_literals());
+            let nogood = ConflictAnalyzer::analyze(&conflict.explanation, conflict.variable);
+            let branch_order: Vec<NogoodLiteral> = conflict.explanation.unique_branch_literals();
+            let learned = self.nogoods.learn(nogood.clone());
+            if learned {
+                engine.add_propagator(Box::new(NogoodPropagator::new(nogood.literals().to_vec())));
+                self.stats.record_nogood();
+            }
+            if learned && let Some(learned_nogood) = self.nogoods.last() {
+                let backjump = ConflictAnalyzer::backjump_level(learned_nogood, &branch_order);
+                let target = backjump.min(level);
+                engine.trail_backtrack(target);
+                return target < level;
             }
         }
 
@@ -322,20 +342,27 @@ impl DepthFirstSearch {
             crate::config::VariableOrdering::Mrv => candidates
                 .into_iter()
                 .min_by_key(|&var| engine.domain(var).size()),
-            crate::config::VariableOrdering::Dom => candidates.into_iter().min_by(|&left, &right| {
-                let left_size = engine.domain(left).size();
-                let right_size = engine.domain(right).size();
-                left_size
-                    .cmp(&right_size)
-                    .then_with(|| variable_index(&self.variables, left).cmp(&variable_index(&self.variables, right)))
-            }),
-            crate::config::VariableOrdering::DomWdeg => candidates.into_iter().min_by(|&left, &right| {
-                let left_score = weighted_score(engine, left, self.weights.get(&left).copied());
-                let right_score = weighted_score(engine, right, self.weights.get(&right).copied());
-                left_score
-                    .cmp(&right_score)
-                    .then_with(|| variable_index(&self.variables, left).cmp(&variable_index(&self.variables, right)))
-            }),
+            crate::config::VariableOrdering::Dom => {
+                candidates.into_iter().min_by(|&left, &right| {
+                    let left_size = engine.domain(left).size();
+                    let right_size = engine.domain(right).size();
+                    left_size.cmp(&right_size).then_with(|| {
+                        variable_index(&self.variables, left)
+                            .cmp(&variable_index(&self.variables, right))
+                    })
+                })
+            }
+            crate::config::VariableOrdering::DomWdeg => {
+                candidates.into_iter().min_by(|&left, &right| {
+                    let left_score = weighted_score(engine, left, self.weights.get(&left).copied());
+                    let right_score =
+                        weighted_score(engine, right, self.weights.get(&right).copied());
+                    left_score.cmp(&right_score).then_with(|| {
+                        variable_index(&self.variables, left)
+                            .cmp(&variable_index(&self.variables, right))
+                    })
+                })
+            }
         }
     }
 
@@ -357,21 +384,18 @@ impl DepthFirstSearch {
                 values.sort_by_key(|value| {
                     self.variables
                         .iter()
-                        .filter(|&&other| {
-                            other != var && engine.domain(other).contains(*value)
-                        })
+                        .filter(|&&other| other != var && engine.domain(other).contains(*value))
                         .count()
                 });
             }
         }
 
-        if self.config.phase_saving {
-            if let Some(&phase) = self.phases.get(&var) {
-                if let Some(pos) = values.iter().position(|&value| value == phase) {
-                    values.remove(pos);
-                    values.insert(0, phase);
-                }
-            }
+        if self.config.phase_saving
+            && let Some(&phase) = self.phases.get(&var)
+            && let Some(pos) = values.iter().position(|&value| value == phase)
+        {
+            values.remove(pos);
+            values.insert(0, phase);
         }
 
         values
@@ -391,7 +415,10 @@ impl DepthFirstSearch {
 }
 
 fn variable_index(order: &[VariableId], var: VariableId) -> usize {
-    order.iter().position(|&candidate| candidate == var).unwrap_or(usize::MAX)
+    order
+        .iter()
+        .position(|&candidate| candidate == var)
+        .unwrap_or(usize::MAX)
 }
 
 fn weighted_score(engine: &Engine, var: VariableId, weight: Option<u32>) -> u64 {
@@ -406,6 +433,7 @@ mod tests {
     use crate::config::RestartPolicy;
     use propaga_domains::IntervalDomain;
     use propaga_propagators::{AllDifferentPropagator, DisjunctivePropagator, DisjunctiveTask};
+    use std::time::Duration;
 
     #[test]
     fn root_propagation_prunes_domains_before_branching() {
@@ -478,7 +506,11 @@ mod tests {
         engine.add_propagator(Box::new(AllDifferentPropagator::new(vars.clone())));
 
         let mut search = DepthFirstSearch::new(vars);
-        assert!(search.solve_without_initial_propagation(&mut engine).is_none());
+        assert!(
+            search
+                .solve_without_initial_propagation(&mut engine)
+                .is_none()
+        );
         assert!(search.stats().conflicts > 0);
         assert!(search.nogood_count() > 0);
     }
@@ -539,8 +571,33 @@ mod tests {
                 ..SearchConfig::default()
             },
         );
-        assert!(search.solve_without_initial_propagation(&mut engine).is_none());
+        assert!(
+            search
+                .solve_without_initial_propagation(&mut engine)
+                .is_none()
+        );
         assert!(search.nogood_count() > 0);
         assert!(search.stats().nogoods_learned > 0);
+    }
+
+    #[test]
+    fn respects_time_limit() {
+        let mut engine = Engine::new();
+        let vars: Vec<_> = (0..20)
+            .map(|_| engine.new_variable(IntervalDomain::new(1, 20)))
+            .collect();
+        engine.add_propagator(Box::new(AllDifferentPropagator::new(vars.clone())));
+
+        let mut search = DepthFirstSearch::with_config(
+            vars,
+            SearchConfig {
+                learning: false,
+                restart_policy: RestartPolicy::None,
+                time_limit: Some(Duration::from_millis(1)),
+                ..SearchConfig::default()
+            },
+        );
+        assert!(search.solve(&mut engine).is_none());
+        assert!(search.stats().timed_out);
     }
 }

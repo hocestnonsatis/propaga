@@ -63,7 +63,8 @@ impl HybridDomain {
     /// Returns the fixed value when the domain is a singleton.
     #[must_use]
     pub fn fixed_value(&self) -> Option<i32> {
-        self.is_fixed().then(|| self.min().expect("fixed domain must have min"))
+        self.is_fixed()
+            .then(|| self.min().expect("fixed domain must have min"))
     }
 
     /// Invokes `f` for each value in the domain.
