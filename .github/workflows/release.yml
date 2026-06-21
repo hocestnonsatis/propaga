@@ -80,6 +80,7 @@ jobs:
   publish-crates:
     needs: test
     runs-on: ubuntu-latest
+    continue-on-error: true
     env:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
     steps:
