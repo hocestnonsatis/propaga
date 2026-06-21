@@ -11,7 +11,7 @@ repository = "https://github.com/hocestnonsatis/propaga"
 homepage = "https://github.com/hocestnonsatis/propaga"
 documentation = "https://docs.rs/propaga-core"
 readme = "README.md"
-keywords = ["constraint-programming", "solver", "propagation", "flatzinc", "cp"]
+keywords = ["constraints", "solver", "propagation", "flatzinc", "cp"]
 categories = ["algorithms", "science"]
 rust-version = "1.87"
 
