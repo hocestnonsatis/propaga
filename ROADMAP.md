@@ -1,6 +1,6 @@
 # Propaga Roadmap
 
-Forward-looking ideas beyond Sprint 23. See [README.md](README.md) for shipped features.
+Forward-looking ideas beyond v0.1.0. See [README.md](README.md) for what ships today.
 
 ## Medium term
 
