@@ -3,10 +3,14 @@
 use std::time::Duration;
 
 /// Restart strategy for the search loop.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RestartPolicy {
     /// Never restart.
     None,
+    /// Restart after a fixed number of nodes.
+    Constant { scale: u64 },
+    /// Geometric restarts: scale * base^k.
+    Geometric { base: f64, scale: u64 },
     /// Luby restarts with the given base node limit multiplier.
     Luby { base: u64 },
 }
@@ -24,6 +28,20 @@ impl RestartPolicy {
         let text = value.to_ascii_lowercase();
         match text.as_str() {
             "none" | "off" => Some(Self::None),
+            _ if text.starts_with("constant:") => text
+                .strip_prefix("constant:")
+                .and_then(|scale| scale.parse().ok())
+                .map(|scale| Self::Constant { scale }),
+            _ if text.starts_with("geometric:") => {
+                let params = text.strip_prefix("geometric:")?;
+                let (base, scale) = params.split_once(':')?;
+                let base = base.parse().ok()?;
+                let scale = scale.parse().ok()?;
+                if base <= 0.0 {
+                    return None;
+                }
+                Some(Self::Geometric { base, scale })
+            }
             "luby" => Some(Self::Luby { base: 512 }),
             _ if text.starts_with("luby:") => text
                 .strip_prefix("luby:")
@@ -38,8 +56,23 @@ impl RestartPolicy {
     pub fn node_limit(&self, restart_index: u32) -> Option<u64> {
         match self {
             Self::None => None,
+            Self::Constant { scale } => Some(*scale),
+            Self::Geometric { base, scale } => {
+                let limit = (*scale as f64) * base.powi(restart_index as i32);
+                Some(float_node_limit(limit))
+            }
             Self::Luby { base } => Some(base.saturating_mul(luby_sequence(restart_index))),
         }
+    }
+}
+
+fn float_node_limit(limit: f64) -> u64 {
+    if !limit.is_finite() || limit >= u64::MAX as f64 {
+        u64::MAX
+    } else if limit <= 0.0 {
+        0
+    } else {
+        limit.floor() as u64
     }
 }
 
@@ -61,6 +94,8 @@ pub enum ValueOrdering {
     /// Try values from smallest to largest.
     #[default]
     Ascending,
+    /// Try values from largest to smallest.
+    Descending,
     /// Least constraining value: prefer values that appear in fewer other domains.
     Lcv,
 }
@@ -71,6 +106,7 @@ impl ValueOrdering {
     pub fn parse(value: &str) -> Option<Self> {
         match value.to_ascii_lowercase().as_str() {
             "asc" | "ascending" | "min" => Some(Self::Ascending),
+            "desc" | "descending" | "max" => Some(Self::Descending),
             "lcv" => Some(Self::Lcv),
             _ => None,
         }
@@ -87,6 +123,8 @@ pub enum VariableOrdering {
     Dom,
     /// Domain size divided by conflict weight (W-DEG style).
     DomWdeg,
+    /// First unfixed variable in the configured search order.
+    InputOrder,
 }
 
 impl VariableOrdering {
@@ -97,13 +135,14 @@ impl VariableOrdering {
             "mrv" | "size" => Some(Self::Mrv),
             "dom" => Some(Self::Dom),
             "dom-wdeg" | "wdeg" | "domwdeg" => Some(Self::DomWdeg),
+            "input" | "input-order" | "input_order" => Some(Self::InputOrder),
             _ => None,
         }
     }
 }
 
 /// Configuration for depth-first search.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SearchConfig {
     /// Enables nogood learning and backjumping.
     pub learning: bool,
@@ -162,6 +201,25 @@ mod tests {
         assert_eq!(
             RestartPolicy::parse("luby:256"),
             Some(RestartPolicy::Luby { base: 256 })
+        );
+        assert_eq!(
+            RestartPolicy::parse("constant:100"),
+            Some(RestartPolicy::Constant { scale: 100 })
+        );
+        assert_eq!(
+            RestartPolicy::parse("geometric:1.5:100"),
+            Some(RestartPolicy::Geometric {
+                base: 1.5,
+                scale: 100
+            })
+        );
+        assert_eq!(
+            RestartPolicy::Geometric {
+                base: 2.0,
+                scale: 10
+            }
+            .node_limit(3),
+            Some(80)
         );
     }
 

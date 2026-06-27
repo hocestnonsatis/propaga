@@ -32,5 +32,7 @@ The root `benchmarks/` folder contains curated `.fzn` files (no MiniZinc toolcha
 | `bounded_sum.fzn` | `int_lin_le` unit sum |
 | `disjunctive_two.fzn` | Two-task disjunctive |
 | `cumulative.fzn` | Two-task cumulative |
+| `int_search_order.fzn` | `int_search` variable order |
+| `int_search_restart.fzn` | `restart_luby` + minimize |
 
 When adding MiniZinc sources here, prefer small models that use supported constraints only. See [COMPATIBILITY.md](COMPATIBILITY.md) for the full list.

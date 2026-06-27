@@ -1,0 +1,2 @@
+var 0..10: x;
+solve :: restart_luby(128) :: int_search([x], first_fail, indomain_min, complete) minimize x;

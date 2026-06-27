@@ -48,11 +48,11 @@ Equality, disequality, linear constraints, ordering (`<=`, `<`), reified compari
 
 ### Search
 
-MRV, DOM, and DOM/W-DEG variable ordering; ascending or LCV value ordering; first-UIP nogood learning; Luby restarts; phase saving; branch-and-bound for single-objective optimization. Configurable via CLI flags or `Model::set_search_config()`.
+MRV, DOM, DOM/W-DEG, and input-order variable ordering; ascending, descending, or LCV value ordering; first-UIP nogood learning; Luby, constant, and geometric restarts; phase saving; branch-and-bound for single-objective optimization. Configurable via CLI flags or `Model::set_search_config()`.
 
 ### FlatZinc
 
-Parses a practical subset of FlatZinc: integer and bool variables, common globals, linear constraints, reified forms, `output` directives, and `solve satisfy | minimize | maximize`. Batch solving with `propaga solve --dir`. Search annotations in `.fzn` files are ignored — use CLI flags instead.
+Parses a practical subset of FlatZinc: integer and bool variables, common globals, linear constraints, reified forms, `output` directives, `solve satisfy | minimize | maximize`, and a subset of search annotations (`int_search`, `restart_luby`, `restart_constant`, `restart_geometric`, `restart_none`). Batch solving with `propaga solve --dir`. CLI flags override annotation defaults when explicitly set.
 
 Full constraint matrix: [COMPATIBILITY.md](benchmarks/minizinc/COMPATIBILITY.md). MiniZinc workflow: [benchmarks/minizinc/README.md](benchmarks/minizinc/README.md).
 
@@ -79,9 +79,9 @@ Global options:
 | `--solutions N` | — | Cap enumeration with `--all` |
 | `--time-limit SECS` | — | Wall-clock cutoff (`TIMEOUT` / `status: timeout`) |
 | `--no-learning` | off | Disable nogood learning |
-| `--restarts` | `luby` | `none`, `luby`, or `luby:N` |
-| `--var-ordering` | `mrv` | `mrv`, `dom`, `dom-wdeg` |
-| `--value-ordering` | `asc` | `asc` or `lcv` |
+| `--restarts` | (from annotation or `luby`) | `none`, `luby`, `luby:N`, `constant:N`, or `geometric:B:N` |
+| `--var-ordering` | (from annotation or `mrv`) | `mrv`, `dom`, `dom-wdeg`, `input-order` |
+| `--value-ordering` | (from annotation or `asc`) | `asc`, `desc`, or `lcv` |
 | `--no-phase-saving` | off | Disable phase saving |
 
 ## Quick start

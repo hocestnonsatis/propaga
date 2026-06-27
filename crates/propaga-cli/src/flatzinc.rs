@@ -107,7 +107,9 @@ fn solve_source(source: &str, options: GlobalOptions) -> Result<SolveOutcome, St
     let program = parse(source).map_err(|error| error.to_string())?;
     let mut instance = compile(program).map_err(|error| error.to_string())?;
 
-    instance.model.set_search_config(options.search_config());
+    instance
+        .model
+        .set_search_config(options.merge_flatzinc_search_config(instance.annotation_search));
 
     let started = Instant::now();
     let (solution, stats, objective_value, solutions_found, objective_direction) =
@@ -320,6 +322,60 @@ mod tests {
         solves_minimize_cost_flatzinc,
         "../../benchmarks/minimize_cost.fzn"
     );
+    flatzinc_test!(
+        solves_int_search_order_flatzinc,
+        "../../benchmarks/int_search_order.fzn"
+    );
+    flatzinc_test!(
+        solves_int_search_restart_flatzinc,
+        "../../benchmarks/int_search_restart.fzn"
+    );
+
+    #[test]
+    fn flatzinc_annotation_overrides_default_search() {
+        let source = r#"
+            var 1..3: x;
+            solve :: restart_none :: int_search([x], input_order, indomain_max, complete) satisfy;
+        "#;
+        let program = propaga_flatzinc::parse(source).unwrap();
+        let instance = propaga_flatzinc::compile(program).unwrap();
+        let config =
+            GlobalOptions::default().merge_flatzinc_search_config(instance.annotation_search);
+        assert_eq!(
+            config.variable_ordering,
+            propaga_search::VariableOrdering::InputOrder
+        );
+        assert_eq!(
+            config.value_ordering,
+            propaga_search::ValueOrdering::Descending
+        );
+        assert_eq!(config.restart_policy, propaga_search::RestartPolicy::None);
+    }
+
+    #[test]
+    fn flatzinc_cli_flag_overrides_annotation() {
+        let source = r#"
+            var 1..3: x;
+            solve :: restart_none :: int_search([x], input_order, indomain_max, complete) satisfy;
+        "#;
+        let program = propaga_flatzinc::parse(source).unwrap();
+        let instance = propaga_flatzinc::compile(program).unwrap();
+        let config = GlobalOptions {
+            variable_ordering: propaga_search::VariableOrdering::Mrv,
+            variable_ordering_explicit: true,
+            ..GlobalOptions::default()
+        }
+        .merge_flatzinc_search_config(instance.annotation_search);
+        assert_eq!(
+            config.variable_ordering,
+            propaga_search::VariableOrdering::Mrv
+        );
+        assert_eq!(
+            config.value_ordering,
+            propaga_search::ValueOrdering::Descending
+        );
+        assert_eq!(config.restart_policy, propaga_search::RestartPolicy::None);
+    }
 
     #[test]
     fn batch_dir_solves_benchmarks() {

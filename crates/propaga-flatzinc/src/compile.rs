@@ -1,13 +1,26 @@
 use crate::error::FlatZincError;
 use crate::parse::{
-    Constraint, DurationSpec, Expr, FlatZincProgram, OutputDirective, ParamDecl, SolveGoal, VarDecl,
+    Constraint, DurationSpec, Expr, FlatZincProgram, IntSearchAnnotation, OutputDirective,
+    ParamDecl, RestartKind, SearchAnnotations, SolveGoal, VarDecl,
 };
 use propaga_core::VariableId;
 use propaga_model::Model;
 use propaga_propagators::{CardinalityBound, DisjunctiveTask, TaskSpec};
+use propaga_search::{RestartPolicy, ValueOrdering, VariableOrdering};
 use std::collections::HashMap;
 
 use propaga_search::ObjectiveDirection;
+
+/// Search configuration extracted from FlatZinc annotations.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AnnotationSearchConfig {
+    /// Variable ordering from `int_search`.
+    pub variable_ordering: VariableOrdering,
+    /// Value ordering from `int_search`.
+    pub value_ordering: ValueOrdering,
+    /// Restart policy from `restart_*`.
+    pub restart_policy: RestartPolicy,
+}
 
 /// Objective specification extracted from a FlatZinc solve directive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,6 +43,8 @@ pub struct CompiledInstance {
     pub outputs: Vec<OutputDirective>,
     /// Optional optimization objective.
     pub objective: Option<ObjectiveSpec>,
+    /// Optional search configuration from FlatZinc annotations.
+    pub annotation_search: Option<AnnotationSearchConfig>,
 }
 
 /// Compiles a parsed FlatZinc program into a Propaga model.
@@ -103,27 +118,25 @@ pub fn compile(program: FlatZincProgram) -> Result<CompiledInstance, FlatZincErr
         post_constraint(&mut model, &env, constraint)?;
     }
 
-    let (solve_vars, objective) = match program.solve {
-        SolveGoal::Satisfy => (model.decision_variables().to_vec(), None),
+    let annotation_search = compile_search_config(&program.solve.annotations)?;
+    let solve_vars =
+        resolve_search_vars(&env, program.solve.annotations.int_search.as_ref(), &model)?;
+
+    let objective = match program.solve.goal {
+        SolveGoal::Satisfy => None,
         SolveGoal::Minimize(expr) => {
             let var = resolve_var(&env, expr)?;
-            (
-                model.decision_variables().to_vec(),
-                Some(ObjectiveSpec {
-                    var,
-                    direction: ObjectiveDirection::Minimize,
-                }),
-            )
+            Some(ObjectiveSpec {
+                var,
+                direction: ObjectiveDirection::Minimize,
+            })
         }
         SolveGoal::Maximize(expr) => {
             let var = resolve_var(&env, expr)?;
-            (
-                model.decision_variables().to_vec(),
-                Some(ObjectiveSpec {
-                    var,
-                    direction: ObjectiveDirection::Maximize,
-                }),
-            )
+            Some(ObjectiveSpec {
+                var,
+                direction: ObjectiveDirection::Maximize,
+            })
         }
     };
 
@@ -133,6 +146,7 @@ pub fn compile(program: FlatZincProgram) -> Result<CompiledInstance, FlatZincErr
         names,
         outputs: program.outputs,
         objective,
+        annotation_search,
     })
 }
 
@@ -141,6 +155,98 @@ enum Binding {
     ParamArray(Vec<i32>),
     Var(VariableId),
     Array(HashMap<i32, VariableId>),
+}
+
+fn compile_search_config(
+    annotations: &SearchAnnotations,
+) -> Result<Option<AnnotationSearchConfig>, FlatZincError> {
+    if annotations.int_search.is_none() && annotations.restart.is_none() {
+        return Ok(None);
+    }
+
+    let (variable_ordering, value_ordering) = if let Some(int_search) = &annotations.int_search {
+        if !int_search.complete {
+            return Err(FlatZincError::Unsupported(
+                "incomplete int_search is not supported".to_string(),
+            ));
+        }
+        (
+            map_var_choice(&int_search.var_choice)?,
+            map_value_choice(&int_search.value_choice)?,
+        )
+    } else {
+        (VariableOrdering::default(), ValueOrdering::default())
+    };
+
+    let restart_policy = match annotations.restart.as_ref().map(|restart| &restart.kind) {
+        Some(RestartKind::Constant { scale }) => RestartPolicy::Constant { scale: *scale },
+        Some(RestartKind::Geometric { base, scale }) => RestartPolicy::Geometric {
+            base: parse_geometric_restart_base(base)?,
+            scale: *scale,
+        },
+        Some(RestartKind::Luby { base }) => RestartPolicy::Luby { base: *base },
+        Some(RestartKind::None) => RestartPolicy::None,
+        None => RestartPolicy::default(),
+    };
+
+    Ok(Some(AnnotationSearchConfig {
+        variable_ordering,
+        value_ordering,
+        restart_policy,
+    }))
+}
+
+fn parse_geometric_restart_base(base: &str) -> Result<f64, FlatZincError> {
+    let parsed = base.parse::<f64>().map_err(|_| {
+        FlatZincError::Unsupported(format!("invalid restart_geometric base `{base}`"))
+    })?;
+    if parsed <= 0.0 {
+        return Err(FlatZincError::Unsupported(
+            "restart_geometric base must be positive".to_string(),
+        ));
+    }
+    Ok(parsed)
+}
+
+fn map_var_choice(choice: &str) -> Result<VariableOrdering, FlatZincError> {
+    match choice {
+        "input_order" => Ok(VariableOrdering::InputOrder),
+        "first_fail" => Ok(VariableOrdering::Mrv),
+        "smallest" | "occurrence" | "degree" | "anti_first_fail" => Ok(VariableOrdering::Dom),
+        "largest" => Ok(VariableOrdering::DomWdeg),
+        other => Err(FlatZincError::Unsupported(format!(
+            "unsupported variable selection `{other}`"
+        ))),
+    }
+}
+
+fn map_value_choice(choice: &str) -> Result<ValueOrdering, FlatZincError> {
+    match choice {
+        "indomain_min" => Ok(ValueOrdering::Ascending),
+        "indomain_max" => Ok(ValueOrdering::Descending),
+        "indomain_split" | "indomain_median" => Ok(ValueOrdering::Ascending),
+        other => Err(FlatZincError::Unsupported(format!(
+            "unsupported value selection `{other}`"
+        ))),
+    }
+}
+
+fn resolve_search_vars(
+    env: &HashMap<String, Binding>,
+    int_search: Option<&IntSearchAnnotation>,
+    model: &Model,
+) -> Result<Vec<VariableId>, FlatZincError> {
+    if let Some(int_search) = int_search {
+        let vars = resolve_var_list(env, Expr::List(int_search.vars.clone()))?;
+        if vars.is_empty() {
+            return Err(FlatZincError::Unsupported(
+                "int_search has no variables".to_string(),
+            ));
+        }
+        Ok(vars)
+    } else {
+        Ok(model.decision_variables().to_vec())
+    }
 }
 
 fn post_constraint(
@@ -1098,5 +1204,81 @@ mod tests {
         let mut instance = compile(program).unwrap();
         let (solution, _) = instance.model.solve_subset_with_stats(instance.solve_vars);
         assert!(solution.is_some());
+    }
+
+    #[test]
+    fn compiles_int_search_variable_order() {
+        let source = r#"
+            array [1..3] of var 1..3: x;
+            constraint all_different(x);
+            solve :: int_search([x[3], x[1], x[2]], input_order, indomain_min, complete) satisfy;
+        "#;
+        let program = parse(source).unwrap();
+        let instance = compile(program).unwrap();
+        assert_eq!(instance.solve_vars.len(), 3);
+        assert_eq!(
+            instance
+                .names
+                .get(&instance.solve_vars[0])
+                .map(String::as_str),
+            Some("x[3]")
+        );
+        assert_eq!(
+            instance
+                .names
+                .get(&instance.solve_vars[1])
+                .map(String::as_str),
+            Some("x[1]")
+        );
+        assert_eq!(
+            instance.annotation_search,
+            Some(AnnotationSearchConfig {
+                variable_ordering: VariableOrdering::InputOrder,
+                value_ordering: ValueOrdering::Ascending,
+                restart_policy: RestartPolicy::default(),
+            })
+        );
+    }
+
+    #[test]
+    fn compiles_restart_none_annotation() {
+        let source = r#"
+            var 1..3: x;
+            solve :: restart_none :: int_search([x], first_fail, indomain_min, complete) satisfy;
+        "#;
+        let program = parse(source).unwrap();
+        let instance = compile(program).unwrap();
+        assert_eq!(
+            instance.annotation_search.unwrap().restart_policy,
+            RestartPolicy::None
+        );
+    }
+
+    #[test]
+    fn compiles_constant_and_geometric_restart_annotations() {
+        let constant = r#"
+            var 1..3: x;
+            solve :: restart_constant(100) satisfy;
+        "#;
+        let program = parse(constant).unwrap();
+        let instance = compile(program).unwrap();
+        assert_eq!(
+            instance.annotation_search.unwrap().restart_policy,
+            RestartPolicy::Constant { scale: 100 }
+        );
+
+        let geometric = r#"
+            var 1..3: x;
+            solve :: restart_geometric(1.5, 100) satisfy;
+        "#;
+        let program = parse(geometric).unwrap();
+        let instance = compile(program).unwrap();
+        assert_eq!(
+            instance.annotation_search.unwrap().restart_policy,
+            RestartPolicy::Geometric {
+                base: 1.5,
+                scale: 100
+            }
+        );
     }
 }

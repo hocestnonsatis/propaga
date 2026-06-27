@@ -20,9 +20,10 @@ mod compile;
 mod error;
 mod parse;
 
-pub use compile::{CompiledInstance, ObjectiveSpec, compile};
+pub use compile::{AnnotationSearchConfig, CompiledInstance, ObjectiveSpec, compile};
 pub use error::FlatZincError;
 pub use parse::{
-    Constraint, DurationSpec, Expr, FlatZincProgram, OutputDirective, OutputSegment, ParamDecl,
+    Constraint, DurationSpec, Expr, FlatZincProgram, IntSearchAnnotation, OutputDirective,
+    OutputSegment, ParamDecl, RestartAnnotation, RestartKind, SearchAnnotations, SolveDirective,
     SolveGoal, VarDecl, parse,
 };

@@ -363,6 +363,11 @@ impl DepthFirstSearch {
                     })
                 })
             }
+            crate::config::VariableOrdering::InputOrder => self
+                .variables
+                .iter()
+                .copied()
+                .find(|&var| !engine.domain(var).is_fixed()),
         }
     }
 
@@ -380,6 +385,7 @@ impl DepthFirstSearch {
 
         match self.config.value_ordering {
             crate::config::ValueOrdering::Ascending => {}
+            crate::config::ValueOrdering::Descending => values.reverse(),
             crate::config::ValueOrdering::Lcv => {
                 values.sort_by_key(|value| {
                     self.variables

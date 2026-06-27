@@ -46,8 +46,11 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | Feature | Status | Notes |
 |---------|--------|-------|
 | `cumulative` variable duration/height arrays | Partial | Inline lists and int param arrays only; variable arrays error |
-| `solve :: int_search(...)` | Ignored | Annotation skipped; search uses model decision order |
-| `solve :: restart(...)` | Ignored | CLI `--restarts` applies instead |
+| `solve :: int_search(...)` | Supported subset | Variable list, `first_fail`/`input_order`/…, `indomain_min`/`indomain_max`, `complete` |
+| `solve :: restart_luby(base)` | Supported | Optional second scale argument is parsed and ignored |
+| `solve :: restart_constant(scale)` | Supported | Constant node budget between restarts |
+| `solve :: restart_geometric(base, scale)` | Supported | Geometric node budget; `base` may be a FlatZinc float literal |
+| `solve :: restart_none` | Supported | With or without `()` |
 | `predicate` / `function` / `test` | **Rejected** | Parse error: unsupported declaration |
 | Unknown top-level statements (`annotation`, etc.) | **Rejected** | Parse error: unsupported top-level statement |
 
@@ -87,6 +90,22 @@ cargo run -p propaga-cli -- solve --file benchmarks/magic_square.fzn --time-limi
 ```
 
 When a compiled model fails with `Unsupported constraint`, check this matrix and simplify the model or extend Propaga.
+
+## Search annotation mapping
+
+FlatZinc search annotations are applied when solving with `propaga solve`. CLI flags override annotation defaults when explicitly provided:
+
+| CLI flag | Overrides annotation |
+|----------|----------------------|
+| `--var-ordering` | `int_search` variable selection |
+| `--value-ordering` | `int_search` value selection |
+| `--restarts` | `restart_*` policy |
+
+Supported `int_search` variable selectors: `input_order`, `first_fail`, `smallest`, `largest`, `occurrence`, `degree`, `anti_first_fail`.
+
+Supported `int_search` value selectors: `indomain_min`, `indomain_max`. `indomain_split` and `indomain_median` fall back to ascending order.
+
+`incomplete` search is not supported. Other restart policies (`restart_linear`, `restart_on_solution`, …) are rejected at parse time.
 
 ## Performance benchmarks
 

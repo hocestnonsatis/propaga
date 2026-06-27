@@ -11,8 +11,8 @@ pub struct FlatZincProgram {
     pub constraints: Vec<Constraint>,
     /// Output directives for solution formatting.
     pub outputs: Vec<OutputDirective>,
-    /// Variables to search when solving.
-    pub solve: SolveGoal,
+    /// Solve directive with optional search annotations.
+    pub solve: SolveDirective,
 }
 
 /// A FlatZinc parameter declaration.
@@ -263,6 +263,68 @@ pub enum OutputSegment {
     Variable(String),
 }
 
+/// Solve directive with optional FlatZinc search annotations.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SolveDirective {
+    /// Parsed search annotations before the goal.
+    pub annotations: SearchAnnotations,
+    /// Optimization or satisfaction goal.
+    pub goal: SolveGoal,
+}
+
+/// Search annotations attached to a `solve` directive.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct SearchAnnotations {
+    /// `int_search(...)` annotation, when present.
+    pub int_search: Option<IntSearchAnnotation>,
+    /// `restart_*` annotation, when present.
+    pub restart: Option<RestartAnnotation>,
+}
+
+/// Parsed `int_search(vars, var_choice, value_choice, complete)` annotation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IntSearchAnnotation {
+    /// Decision variables in search order.
+    pub vars: Vec<Expr>,
+    /// FlatZinc variable selection method (e.g. `first_fail`).
+    pub var_choice: String,
+    /// FlatZinc value selection method (e.g. `indomain_min`).
+    pub value_choice: String,
+    /// Whether search is complete (`complete` vs `incomplete`).
+    pub complete: bool,
+}
+
+/// Parsed restart annotation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RestartAnnotation {
+    /// Restart policy kind.
+    pub kind: RestartKind,
+}
+
+/// Supported FlatZinc restart policies.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RestartKind {
+    /// `restart_constant(scale)`.
+    Constant {
+        /// Fixed node limit before each restart.
+        scale: u64,
+    },
+    /// `restart_geometric(base, scale)`.
+    Geometric {
+        /// Geometric multiplier, kept textual to avoid lossy AST equality.
+        base: String,
+        /// Initial node limit multiplier.
+        scale: u64,
+    },
+    /// `restart_luby(base)` or `restart_luby(base, scale)`.
+    Luby {
+        /// Luby base multiplier.
+        base: u64,
+    },
+    /// `restart_none`.
+    None,
+}
+
 /// Solve directive.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SolveGoal {
@@ -299,6 +361,7 @@ fn strip_comments(source: &str) -> String {
 enum Token {
     Ident(String),
     Int(i32),
+    Float(String),
     String(String),
     Symbol(String),
 }
@@ -322,6 +385,22 @@ fn tokenize(source: &str) -> Result<Vec<Token>, FlatZincError> {
                 while matches!(chars.peek(), Some('0'..='9')) {
                     number.push(chars.next().expect("peeked"));
                 }
+                let mut is_float = false;
+                if matches!(chars.peek(), Some('.')) {
+                    let mut lookahead = chars.clone();
+                    lookahead.next();
+                    if matches!(lookahead.peek(), Some('0'..='9')) {
+                        is_float = true;
+                        number.push(chars.next().expect("peeked"));
+                        while matches!(chars.peek(), Some('0'..='9')) {
+                            number.push(chars.next().expect("peeked"));
+                        }
+                    }
+                }
+                if is_float {
+                    tokens.push(Token::Float(number));
+                    continue;
+                }
                 let value = number
                     .parse::<i32>()
                     .map_err(|_| FlatZincError::InvalidInteger(number))?;
@@ -340,6 +419,10 @@ fn tokenize(source: &str) -> Result<Vec<Token>, FlatZincError> {
             '.' if matches!(chars.peek(), Some('.')) => {
                 chars.next();
                 tokens.push(Token::Symbol("..".to_string()));
+            }
+            ':' if matches!(chars.peek(), Some(':')) => {
+                chars.next();
+                tokens.push(Token::Symbol("::".to_string()));
             }
             other => tokens.push(Token::Symbol(other.to_string())),
         }
@@ -941,33 +1024,134 @@ impl Parser {
         }
     }
 
-    fn parse_solve(&mut self) -> Result<SolveGoal, FlatZincError> {
+    fn parse_solve(&mut self) -> Result<SolveDirective, FlatZincError> {
         self.expect_ident("solve")?;
-        if self.peek_is_symbol("::") {
-            self.skip_search_annotation();
+        let mut annotations = SearchAnnotations::default();
+        while self.peek_is_symbol("::") {
+            self.expect_symbol("::")?;
+            self.parse_search_annotation(&mut annotations)?;
         }
-        if self.peek_is_ident("minimize") {
+        let goal = if self.peek_is_ident("minimize") {
             self.expect_ident("minimize")?;
             let expr = self.parse_expr()?;
-            return Ok(SolveGoal::Minimize(expr));
-        }
-        if self.peek_is_ident("maximize") {
+            SolveGoal::Minimize(expr)
+        } else if self.peek_is_ident("maximize") {
             self.expect_ident("maximize")?;
             let expr = self.parse_expr()?;
-            return Ok(SolveGoal::Maximize(expr));
-        }
-        self.expect_ident("satisfy")?;
-        Ok(SolveGoal::Satisfy)
+            SolveGoal::Maximize(expr)
+        } else {
+            self.expect_ident("satisfy")?;
+            SolveGoal::Satisfy
+        };
+        Ok(SolveDirective { annotations, goal })
     }
 
-    fn skip_search_annotation(&mut self) {
-        while !self.is_eof()
-            && !self.peek_is_ident("satisfy")
-            && !self.peek_is_ident("minimize")
-            && !self.peek_is_ident("maximize")
-        {
-            self.pos += 1;
+    fn parse_search_annotation(
+        &mut self,
+        annotations: &mut SearchAnnotations,
+    ) -> Result<(), FlatZincError> {
+        let name = self.expect_ident_token()?;
+        match name.as_str() {
+            "int_search" => {
+                if annotations.int_search.is_some() {
+                    return Err(FlatZincError::Unsupported(
+                        "multiple int_search annotations".to_string(),
+                    ));
+                }
+                self.expect_symbol("(")?;
+                let vars_expr = self.parse_expr()?;
+                let vars = match vars_expr {
+                    Expr::List(items) => items,
+                    other => vec![other],
+                };
+                self.expect_symbol(",")?;
+                let var_choice = self.expect_ident_token()?;
+                self.expect_symbol(",")?;
+                let value_choice = self.expect_ident_token()?;
+                self.expect_symbol(",")?;
+                let complete = match self.expect_ident_token()?.as_str() {
+                    "complete" => true,
+                    "incomplete" => false,
+                    other => {
+                        return Err(FlatZincError::Unsupported(format!(
+                            "unsupported int_search completeness `{other}`"
+                        )));
+                    }
+                };
+                self.expect_symbol(")")?;
+                annotations.int_search = Some(IntSearchAnnotation {
+                    vars,
+                    var_choice,
+                    value_choice,
+                    complete,
+                });
+            }
+            "restart_constant" => {
+                if annotations.restart.is_some() {
+                    return Err(FlatZincError::Unsupported(
+                        "multiple restart annotations".to_string(),
+                    ));
+                }
+                self.expect_symbol("(")?;
+                let scale = self.expect_non_negative_u64("restart_constant scale")?;
+                self.expect_symbol(")")?;
+                annotations.restart = Some(RestartAnnotation {
+                    kind: RestartKind::Constant { scale },
+                });
+            }
+            "restart_geometric" => {
+                if annotations.restart.is_some() {
+                    return Err(FlatZincError::Unsupported(
+                        "multiple restart annotations".to_string(),
+                    ));
+                }
+                self.expect_symbol("(")?;
+                let base = self.expect_float_text()?;
+                self.expect_symbol(",")?;
+                let scale = self.expect_non_negative_u64("restart_geometric scale")?;
+                self.expect_symbol(")")?;
+                annotations.restart = Some(RestartAnnotation {
+                    kind: RestartKind::Geometric { base, scale },
+                });
+            }
+            "restart_luby" => {
+                if annotations.restart.is_some() {
+                    return Err(FlatZincError::Unsupported(
+                        "multiple restart annotations".to_string(),
+                    ));
+                }
+                self.expect_symbol("(")?;
+                let base = self.expect_non_negative_u64("restart_luby base")?;
+                if self.peek_is_symbol(",") {
+                    self.expect_symbol(",")?;
+                    self.expect_non_negative_u64("restart_luby scale")?;
+                }
+                self.expect_symbol(")")?;
+                annotations.restart = Some(RestartAnnotation {
+                    kind: RestartKind::Luby { base },
+                });
+            }
+            "restart_none" => {
+                if annotations.restart.is_some() {
+                    return Err(FlatZincError::Unsupported(
+                        "multiple restart annotations".to_string(),
+                    ));
+                }
+                if self.peek_is_symbol("(") {
+                    self.expect_symbol("(")?;
+                    self.expect_symbol(")")?;
+                }
+                annotations.restart = Some(RestartAnnotation {
+                    kind: RestartKind::None,
+                });
+            }
+            other => {
+                return Err(FlatZincError::Unsupported(format!(
+                    "unsupported search annotation `{other}`"
+                )));
+            }
         }
+        Ok(())
     }
 
     fn parse_expr_list(&mut self) -> Result<Vec<Expr>, FlatZincError> {
@@ -1118,6 +1302,34 @@ impl Parser {
             })
         }
     }
+
+    fn expect_float_text(&mut self) -> Result<String, FlatZincError> {
+        match self.peek().cloned() {
+            Some(Token::Float(value)) => {
+                self.pos += 1;
+                Ok(value)
+            }
+            Some(Token::Int(value)) => {
+                self.pos += 1;
+                Ok(value.to_string())
+            }
+            _ => Err(FlatZincError::UnexpectedToken {
+                found: format!("{:?}", self.peek()),
+                expected: "float".to_string(),
+            }),
+        }
+    }
+
+    fn expect_non_negative_u64(&mut self, label: &str) -> Result<u64, FlatZincError> {
+        let value = self.expect_int()?;
+        if value < 0 {
+            return Err(FlatZincError::Unsupported(format!(
+                "{label} must be non-negative"
+            )));
+        }
+        u64::try_from(value)
+            .map_err(|_| FlatZincError::Unsupported(format!("{label} is too large")))
+    }
 }
 
 #[cfg(test)]
@@ -1219,5 +1431,119 @@ mod tests {
         "#;
         let err = parse(source).unwrap_err();
         assert!(err.to_string().contains("unsupported top-level"));
+    }
+
+    #[test]
+    fn parses_int_search_annotation() {
+        let source = r#"
+            array [1..3] of var 1..3: x;
+            solve :: int_search([x[1], x[2], x[3]], first_fail, indomain_min, complete) satisfy;
+        "#;
+        let program = parse(source).unwrap();
+        let int_search = program
+            .solve
+            .annotations
+            .int_search
+            .as_ref()
+            .expect("int_search");
+        assert_eq!(int_search.vars.len(), 3);
+        assert_eq!(int_search.var_choice, "first_fail");
+        assert_eq!(int_search.value_choice, "indomain_min");
+        assert!(int_search.complete);
+        assert!(matches!(program.solve.goal, SolveGoal::Satisfy));
+    }
+
+    #[test]
+    fn parses_restart_and_int_search_annotations() {
+        let source = r#"
+            var 1..3: x;
+            solve :: restart_luby(256) :: int_search([x], input_order, indomain_max, complete) satisfy;
+        "#;
+        let program = parse(source).unwrap();
+        assert!(matches!(
+            program.solve.annotations.restart,
+            Some(RestartAnnotation {
+                kind: RestartKind::Luby { base: 256 }
+            })
+        ));
+        assert!(program.solve.annotations.int_search.is_some());
+    }
+
+    #[test]
+    fn parses_constant_and_geometric_restart_annotations() {
+        let constant = r#"
+            var 1..3: x;
+            solve :: restart_constant(100) satisfy;
+        "#;
+        let program = parse(constant).unwrap();
+        assert!(matches!(
+            program.solve.annotations.restart,
+            Some(RestartAnnotation {
+                kind: RestartKind::Constant { scale: 100 }
+            })
+        ));
+
+        let geometric = r#"
+            var 1..3: x;
+            solve :: restart_geometric(1.5, 100) satisfy;
+        "#;
+        let program = parse(geometric).unwrap();
+        assert!(matches!(
+            program.solve.annotations.restart,
+            Some(RestartAnnotation {
+                kind: RestartKind::Geometric {
+                    ref base,
+                    scale: 100
+                }
+            }) if base == "1.5"
+        ));
+    }
+
+    #[test]
+    fn parses_int_search_with_array_name() {
+        let source = r#"
+            array [1..2] of var 1..2: x;
+            solve :: int_search(x, first_fail, indomain_min, complete) satisfy;
+        "#;
+        let program = parse(source).unwrap();
+        let int_search = program.solve.annotations.int_search.unwrap();
+        assert_eq!(int_search.vars.len(), 1);
+        assert!(matches!(int_search.vars[0], Expr::Name(ref name) if name == "x"));
+    }
+
+    #[test]
+    fn parses_minimize_with_int_search() {
+        let source = r#"
+            var 0..10: x;
+            solve :: int_search([x], first_fail, indomain_min, complete) minimize x;
+        "#;
+        let program = parse(source).unwrap();
+        assert!(matches!(program.solve.goal, SolveGoal::Minimize(_)));
+        assert!(program.solve.annotations.int_search.is_some());
+    }
+
+    #[test]
+    fn parses_restart_none_without_parens() {
+        let source = r#"
+            var 1..3: x;
+            solve :: restart_none :: int_search([x], first_fail, indomain_min, complete) satisfy;
+        "#;
+        let program = parse(source).unwrap();
+        assert!(matches!(
+            program.solve.annotations.restart,
+            Some(RestartAnnotation {
+                kind: RestartKind::None
+            })
+        ));
+    }
+
+    #[test]
+    fn rejects_unsupported_search_annotation() {
+        let source = r#"
+            var 1..3: x;
+            solve :: restart_linear(100) satisfy;
+        "#;
+        let err = parse(source).unwrap_err();
+        assert!(err.to_string().contains("restart_linear"));
     }
 }

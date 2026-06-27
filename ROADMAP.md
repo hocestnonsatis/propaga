@@ -6,7 +6,7 @@ Forward-looking ideas beyond v0.1.0. See [README.md](README.md) for what ships t
 
 - Activity-based variable ordering (VSIDS-style)
 - Parallel portfolio search (rayon worker pool)
-- FlatZinc search annotations (`:: int_search`, `:: restart`) — parsing and application
+- Broader FlatZinc search annotations (`restart_linear`, bool search)
 - Multi-objective optimization (lexicographic or Pareto front)
 
 ## Long term

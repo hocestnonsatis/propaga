@@ -37,6 +37,16 @@ pub struct GlobalOptions {
     pub phase_saving: bool,
     pub solutions_limit: Option<usize>,
     pub time_limit: Option<std::time::Duration>,
+    /// `true` when `--restarts` was explicitly passed on the command line.
+    pub restarts_explicit: bool,
+    /// `true` when `--var-ordering` was explicitly passed on the command line.
+    pub variable_ordering_explicit: bool,
+    /// `true` when `--value-ordering` was explicitly passed on the command line.
+    pub value_ordering_explicit: bool,
+    /// `true` when `--no-learning` was explicitly passed on the command line.
+    pub _no_learning_explicit: bool,
+    /// `true` when `--no-phase-saving` was explicitly passed on the command line.
+    pub _no_phase_saving_explicit: bool,
 }
 
 impl Default for GlobalOptions {
@@ -54,6 +64,11 @@ impl Default for GlobalOptions {
             phase_saving: true,
             solutions_limit: None,
             time_limit: None,
+            restarts_explicit: false,
+            variable_ordering_explicit: false,
+            value_ordering_explicit: false,
+            _no_learning_explicit: false,
+            _no_phase_saving_explicit: false,
         }
     }
 }
@@ -74,6 +89,31 @@ impl GlobalOptions {
             phase_saving: self.phase_saving,
             time_limit: self.time_limit,
         }
+    }
+
+    /// Merges FlatZinc annotation search settings with CLI options.
+    ///
+    /// Annotation values are used as defaults; explicitly provided CLI flags override them.
+    #[must_use]
+    pub fn merge_flatzinc_search_config(
+        &self,
+        annotation: Option<propaga_flatzinc::AnnotationSearchConfig>,
+    ) -> propaga_search::SearchConfig {
+        let mut config = self.search_config();
+        let Some(annotation) = annotation else {
+            return config;
+        };
+
+        if !self.variable_ordering_explicit {
+            config.variable_ordering = annotation.variable_ordering;
+        }
+        if !self.value_ordering_explicit {
+            config.value_ordering = annotation.value_ordering;
+        }
+        if !self.restarts_explicit && !self.all {
+            config.restart_policy = annotation.restart_policy;
+        }
+        config
     }
 
     /// Effective solution limit when enumerating with `--all`.

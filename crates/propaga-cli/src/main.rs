@@ -39,21 +39,21 @@ struct Cli {
     #[arg(long, global = true)]
     no_learning: bool,
 
-    /// Restart policy: none, luby, or luby:N (e.g. luby:256).
-    #[arg(long, global = true, default_value = "luby")]
-    restarts: String,
+    /// Restart policy: none, luby, luby:N, constant:N, or geometric:B:N.
+    #[arg(long, global = true)]
+    restarts: Option<String>,
 
-    /// Value ordering during search: asc or lcv.
-    #[arg(long, global = true, default_value = "asc")]
-    value_ordering: String,
+    /// Value ordering during search: asc, desc, or lcv.
+    #[arg(long, global = true)]
+    value_ordering: Option<String>,
 
     /// Disable phase saving (reuse last assigned value as first branch candidate).
     #[arg(long, global = true)]
     no_phase_saving: bool,
 
-    /// Variable ordering during search: mrv, dom, or dom-wdeg.
-    #[arg(long, global = true, default_value = "mrv")]
-    var_ordering: String,
+    /// Variable ordering during search: mrv, dom, dom-wdeg, or input-order.
+    #[arg(long, global = true)]
+    var_ordering: Option<String>,
 
     /// Maximum number of solutions to emit with `--all`.
     #[arg(long, global = true)]
@@ -131,26 +131,47 @@ fn main() {
         OutputFormat::Plain
     });
 
-    let restart_policy = RestartPolicy::parse(&cli.restarts).unwrap_or_else(|| {
-        eprintln!("unknown restart policy `{}`, using luby", cli.restarts);
-        RestartPolicy::default()
-    });
+    let restart_policy = cli
+        .restarts
+        .as_deref()
+        .and_then(RestartPolicy::parse)
+        .unwrap_or_else(|| {
+            if cli.restarts.is_some() {
+                eprintln!(
+                    "unknown restart policy `{}`, using luby",
+                    cli.restarts.as_deref().unwrap_or_default()
+                );
+            }
+            RestartPolicy::default()
+        });
 
-    let value_ordering = ValueOrdering::parse(&cli.value_ordering).unwrap_or_else(|| {
-        eprintln!(
-            "unknown value ordering `{}`, using ascending",
-            cli.value_ordering
-        );
-        ValueOrdering::default()
-    });
+    let value_ordering = cli
+        .value_ordering
+        .as_deref()
+        .and_then(ValueOrdering::parse)
+        .unwrap_or_else(|| {
+            if cli.value_ordering.is_some() {
+                eprintln!(
+                    "unknown value ordering `{}`, using ascending",
+                    cli.value_ordering.as_deref().unwrap_or_default()
+                );
+            }
+            ValueOrdering::default()
+        });
 
-    let variable_ordering = VariableOrdering::parse(&cli.var_ordering).unwrap_or_else(|| {
-        eprintln!(
-            "unknown variable ordering `{}`, using mrv",
-            cli.var_ordering
-        );
-        VariableOrdering::default()
-    });
+    let variable_ordering = cli
+        .var_ordering
+        .as_deref()
+        .and_then(VariableOrdering::parse)
+        .unwrap_or_else(|| {
+            if cli.var_ordering.is_some() {
+                eprintln!(
+                    "unknown variable ordering `{}`, using mrv",
+                    cli.var_ordering.as_deref().unwrap_or_default()
+                );
+            }
+            VariableOrdering::default()
+        });
 
     let base_options = GlobalOptions {
         stats: cli.stats,
@@ -165,6 +186,11 @@ fn main() {
         time_limit: cli
             .time_limit
             .map(|secs| std::time::Duration::from_secs_f64(secs.max(0.0))),
+        restarts_explicit: cli.restarts.is_some(),
+        variable_ordering_explicit: cli.var_ordering.is_some(),
+        value_ordering_explicit: cli.value_ordering.is_some(),
+        _no_learning_explicit: cli.no_learning,
+        _no_phase_saving_explicit: cli.no_phase_saving,
         ..GlobalOptions::default()
     };
 
