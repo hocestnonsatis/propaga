@@ -75,20 +75,21 @@ impl Propagator for CumulativePropagator {
 fn propagate_precedence(ctx: &mut dyn PropagationContext, tasks: &[TaskSpec]) -> bool {
     let mut changed = false;
     for task in tasks {
+        let duration = effective_duration(ctx, task);
         if let (Some(start_min), Some(end_max)) =
             (ctx.domain(task.start).min(), ctx.domain(task.end).max())
         {
-            let min_end = start_min + task.duration;
+            let min_end = start_min + duration;
             if ctx.remove_below(task.end, min_end) {
                 changed = true;
             }
-            let max_start = end_max - task.duration;
+            let max_start = end_max - duration;
             if ctx.remove_above(task.start, max_start) {
                 changed = true;
             }
         }
         if let Some(start) = ctx.fixed_value(task.start) {
-            let end = start + task.duration;
+            let end = start + duration;
             if ctx.remove_below(task.end, end) {
                 changed = true;
             }
@@ -97,7 +98,7 @@ fn propagate_precedence(ctx: &mut dyn PropagationContext, tasks: &[TaskSpec]) ->
             }
         }
         if let Some(end) = ctx.fixed_value(task.end) {
-            let start = end - task.duration;
+            let start = end - duration;
             if ctx.remove_below(task.start, start) {
                 changed = true;
             }
@@ -107,6 +108,18 @@ fn propagate_precedence(ctx: &mut dyn PropagationContext, tasks: &[TaskSpec]) ->
         }
     }
     changed
+}
+
+fn effective_duration(ctx: &dyn PropagationContext, task: &TaskSpec) -> i32 {
+    task.duration_var
+        .and_then(|var| ctx.fixed_value(var))
+        .unwrap_or(task.duration)
+}
+
+fn effective_demand(ctx: &dyn PropagationContext, task: &TaskSpec) -> i32 {
+    task.demand_var
+        .and_then(|var| ctx.fixed_value(var))
+        .unwrap_or(task.demand)
 }
 
 fn cumulative_conflict_literals(
@@ -185,7 +198,7 @@ fn collect_mandatory_contributions(
                     start,
                     end: start + task.duration,
                 },
-                demand: task.demand,
+                demand: effective_demand(ctx, task),
                 start_var: task.start,
                 start_value: start,
             });
@@ -196,7 +209,7 @@ fn collect_mandatory_contributions(
             let start = end - task.duration;
             contributions.push(MandatoryContribution {
                 interval: MandatoryInterval { start, end },
-                demand: task.demand,
+                demand: effective_demand(ctx, task),
                 start_var: task.start,
                 start_value: start,
             });
@@ -210,7 +223,7 @@ fn collect_mandatory_contributions(
                     start,
                     end: start + task.duration,
                 },
-                demand: task.demand,
+                demand: effective_demand(ctx, task),
                 start_var: task.start,
                 start_value: start,
             });
@@ -222,7 +235,7 @@ fn collect_mandatory_contributions(
             let start = end - task.duration;
             contributions.push(MandatoryContribution {
                 interval: MandatoryInterval { start, end },
-                demand: task.demand,
+                demand: effective_demand(ctx, task),
                 start_var: task.start,
                 start_value: start,
             });

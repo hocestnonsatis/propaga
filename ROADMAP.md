@@ -1,16 +1,15 @@
 # Propaga Roadmap
 
-Forward-looking ideas beyond v0.1.0. See [README.md](README.md) for what ships today.
+Forward-looking ideas beyond v0.2.0. See [README.md](README.md) for what ships today.
 
 ## Medium term
 
-- Activity-based variable ordering (VSIDS-style)
-- Parallel portfolio search (rayon worker pool)
-- Broader FlatZinc search annotations (`restart_linear`, bool search)
-- Multi-objective optimization (lexicographic or Pareto front)
+- Parallel portfolio search with engine snapshots (rayon worker pool)
+- Broader FlatZinc predicate bodies (multi-constraint and reified forms)
+- Pareto-front multi-objective optimization
 
 ## Long term
 
-- Set and float variable domains
-- Lazy clause generation integration
-- WASM / browser demo for small puzzles
+- Full engine integration for set and float variable domains
+- Deeper lazy clause generation integration with search
+- WASM demo packaging and hosted deployment

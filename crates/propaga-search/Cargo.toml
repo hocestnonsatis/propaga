@@ -17,6 +17,10 @@ propaga-core.workspace = true
 propaga-domains.workspace = true
 propaga-engine.workspace = true
 propaga-propagators.workspace = true
+slotmap.workspace = true
+
+[dev-dependencies]
+slotmap.workspace = true
 
 [[example]]
 name = "sudoku"

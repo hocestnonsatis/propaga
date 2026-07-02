@@ -1,0 +1,24 @@
+[package]
+name = "propaga-wasm"
+description = "WebAssembly bindings for Propaga puzzle solving"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+propaga-core.workspace = true
+propaga-model.workspace = true
+propaga-search.workspace = true
+wasm-bindgen = "0.2"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"

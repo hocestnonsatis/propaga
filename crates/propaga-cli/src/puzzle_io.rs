@@ -37,6 +37,10 @@ pub struct GlobalOptions {
     pub phase_saving: bool,
     pub solutions_limit: Option<usize>,
     pub time_limit: Option<std::time::Duration>,
+    /// Portfolio worker count (`1` uses plain DFS).
+    pub workers: usize,
+    /// When `true`, portfolio uses only the base search configuration.
+    pub deterministic: bool,
     /// `true` when `--restarts` was explicitly passed on the command line.
     pub restarts_explicit: bool,
     /// `true` when `--var-ordering` was explicitly passed on the command line.
@@ -64,6 +68,8 @@ impl Default for GlobalOptions {
             phase_saving: true,
             solutions_limit: None,
             time_limit: None,
+            workers: 1,
+            deterministic: false,
             restarts_explicit: false,
             variable_ordering_explicit: false,
             value_ordering_explicit: false,

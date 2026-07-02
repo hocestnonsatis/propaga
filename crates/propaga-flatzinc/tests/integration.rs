@@ -34,12 +34,16 @@ fn bool_reify_is_satisfiable() {
 }
 
 #[test]
-fn rejects_predicate_declaration() {
+fn compiles_inline_predicate() {
     let source = r#"
-        predicate p(var int: x) = int_eq(x, 1);
+        predicate p(var int: a, var int: b) = int_eq(a, b);
+        var 1..3: x;
         var 1..3: y;
+        constraint p(x, y);
         solve satisfy;
     "#;
-    let err = parse(source).unwrap_err();
-    assert!(err.to_string().contains("predicate"));
+    let program = parse(source).expect("parse predicate program");
+    let mut instance = compile(program).expect("compile predicate program");
+    let (solution, _) = instance.model.solve_subset_with_stats(instance.solve_vars);
+    assert!(solution.is_some());
 }

@@ -2,16 +2,17 @@ use propaga_core::{PropagationStatus, VariableId};
 use propaga_domains::{HybridDomain, IntervalDomain};
 use propaga_engine::Engine;
 use propaga_propagators::{
-    AllDifferentPropagator, CardinalityBound, CumulativePropagator, DisjunctivePropagator,
-    DisjunctiveTask, ElementPropagator, EqualityPropagator, GlobalCardinalityPropagator,
-    LessEqualPropagator, LessThanPropagator, LinearEqPropagator, LinearScalarGePropagator,
-    LinearScalarLePropagator, NotEqualOffsetPropagator, ReifiedEqualityPropagator,
-    ReifiedLessEqualPropagator, ReifiedLessThanPropagator, ReifiedNotEqualPropagator,
-    ReifiedScalarEqPropagator, ReifiedScalarGePropagator, ReifiedScalarLePropagator,
-    TablePropagator, TaskSpec,
+    AllDifferentPropagator, CardinalityBound, CircuitPropagator, CumulativePropagator,
+    DiffnPropagator, DisjunctivePropagator, DisjunctiveTask, ElementPropagator, EqualityPropagator,
+    GlobalCardinalityPropagator, InversePropagator, LessEqualPropagator, LessThanPropagator,
+    LinearEqPropagator, LinearScalarGePropagator, LinearScalarLePropagator,
+    NotEqualOffsetPropagator, RectangleSpec, ReifiedEqualityPropagator, ReifiedLessEqualPropagator,
+    ReifiedLessThanPropagator, ReifiedNotEqualPropagator, ReifiedScalarEqPropagator,
+    ReifiedScalarGePropagator, ReifiedScalarLePropagator, TablePropagator, TaskSpec,
 };
 use propaga_search::{
-    DepthFirstSearch, ObjectiveDirection, OptimizationSearch, SearchConfig, SearchStats, Solution,
+    DepthFirstSearch, LexicographicOptimization, LexicographicResult, Objective, PortfolioConfig,
+    PortfolioSearch, SearchConfig, SearchStats, Solution,
 };
 
 /// High-level modeling facade over the Propaga engine.
@@ -273,6 +274,30 @@ impl Model {
             .add_propagator(Box::new(DisjunctivePropagator::new(tasks)));
     }
 
+    /// Posts a Hamiltonian circuit over successor variables.
+    pub fn circuit(&mut self, successors: impl Into<Vec<VariableId>>) {
+        self.engine
+            .add_propagator(Box::new(CircuitPropagator::new(successors.into())));
+    }
+
+    /// Posts `inverse(forward, backward)`.
+    pub fn inverse(
+        &mut self,
+        forward: impl Into<Vec<VariableId>>,
+        backward: impl Into<Vec<VariableId>>,
+    ) {
+        self.engine.add_propagator(Box::new(InversePropagator::new(
+            forward.into(),
+            backward.into(),
+        )));
+    }
+
+    /// Posts a `diffn` non-overlap constraint over rectangles.
+    pub fn diffn(&mut self, rectangles: impl Into<Vec<RectangleSpec>>) {
+        self.engine
+            .add_propagator(Box::new(DiffnPropagator::new(rectangles.into())));
+    }
+
     /// Runs propagation to fixpoint.
     pub fn propagate(&mut self) -> Result<PropagationStatus, propaga_core::PropagaError> {
         self.engine.propagate_all()
@@ -358,10 +383,14 @@ impl Model {
         &mut self,
         variables: impl Into<Vec<VariableId>>,
         objective: VariableId,
-        direction: ObjectiveDirection,
+        direction: propaga_search::ObjectiveDirection,
     ) -> (Option<Solution>, Option<i32>, SearchStats, u32) {
-        let mut search =
-            OptimizationSearch::new(variables, objective, direction, self.search_config);
+        let mut search = propaga_search::OptimizationSearch::new(
+            variables,
+            objective,
+            direction,
+            self.search_config,
+        );
         let result = search.optimize(&mut self.engine);
         (
             result.solution,
@@ -369,6 +398,26 @@ impl Model {
             result.stats,
             result.solutions_found,
         )
+    }
+
+    /// Solves using a portfolio of search configurations.
+    pub fn solve_portfolio(
+        &mut self,
+        variables: impl Into<Vec<VariableId>>,
+        portfolio: PortfolioConfig,
+    ) -> (Option<Solution>, SearchStats) {
+        let search = PortfolioSearch::new(variables, self.search_config, portfolio);
+        search.solve(&mut self.engine)
+    }
+
+    /// Optimizes multiple objectives lexicographically.
+    pub fn optimize_lexicographic(
+        &mut self,
+        variables: impl Into<Vec<VariableId>>,
+        objectives: Vec<Objective>,
+    ) -> LexicographicResult {
+        let mut search = LexicographicOptimization::new(variables, objectives, self.search_config);
+        search.optimize(&mut self.engine)
     }
 }
 

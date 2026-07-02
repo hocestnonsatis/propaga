@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Propaga WASM Demo</title>
+    <style>
+      body { font-family: sans-serif; max-width: 40rem; margin: 2rem auto; }
+      textarea { width: 100%; font-family: monospace; }
+      pre { background: #f4f4f4; padding: 1rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Propaga WASM Demo</h1>
+    <p>Enter 81 Sudoku digits (`0` for empty cells).</p>
+    <textarea id="puzzle" rows="4">530070000600195000098000060000060008006000030200080000040000000017000000806000000080</textarea>
+    <p><button id="solve">Solve Sudoku</button></p>
+    <pre id="output"></pre>
+    <script type="module">
+      import init, { solve_sudoku } from "./pkg/propaga_wasm.js";
+      await init();
+      document.getElementById("solve").addEventListener("click", () => {
+        const puzzle = document.getElementById("puzzle").value.replace(/\D/g, "");
+        document.getElementById("output").textContent = solve_sudoku(puzzle) || "UNSAT";
+      });
+    </script>
+  </body>
+</html>

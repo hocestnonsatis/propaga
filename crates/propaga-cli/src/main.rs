@@ -63,6 +63,14 @@ struct Cli {
     #[arg(long, global = true, value_name = "SECS")]
     time_limit: Option<f64>,
 
+    /// Portfolio worker count for search (`1` disables portfolio).
+    #[arg(long, global = true, default_value = "1")]
+    workers: usize,
+
+    /// Use a single deterministic search configuration.
+    #[arg(long, global = true)]
+    deterministic: bool,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -191,6 +199,8 @@ fn main() {
         value_ordering_explicit: cli.value_ordering.is_some(),
         _no_learning_explicit: cli.no_learning,
         _no_phase_saving_explicit: cli.no_phase_saving,
+        workers: cli.workers,
+        deterministic: cli.deterministic,
         ..GlobalOptions::default()
     };
 

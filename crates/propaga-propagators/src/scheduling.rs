@@ -11,6 +11,10 @@ pub struct TaskSpec {
     pub end: propaga_core::VariableId,
     /// Resource demand while the task runs.
     pub demand: i32,
+    /// Optional variable duration.
+    pub duration_var: Option<propaga_core::VariableId>,
+    /// Optional variable demand/height.
+    pub demand_var: Option<propaga_core::VariableId>,
 }
 
 impl TaskSpec {
@@ -26,6 +30,8 @@ impl TaskSpec {
             duration,
             end,
             demand: 1,
+            duration_var: None,
+            demand_var: None,
         }
     }
 
@@ -42,6 +48,28 @@ impl TaskSpec {
             duration,
             end,
             demand,
+            duration_var: None,
+            demand_var: None,
+        }
+    }
+
+    /// Creates a task with optional variable duration and demand.
+    #[must_use]
+    pub fn with_variable_spec(
+        start: propaga_core::VariableId,
+        end: propaga_core::VariableId,
+        duration: i32,
+        duration_var: Option<propaga_core::VariableId>,
+        demand: i32,
+        demand_var: Option<propaga_core::VariableId>,
+    ) -> Self {
+        Self {
+            start,
+            duration,
+            end,
+            demand,
+            duration_var,
+            demand_var,
         }
     }
 }

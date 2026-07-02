@@ -20,6 +20,8 @@ pub struct DepthFirstSearch {
     restart_index: u32,
     phases: HashMap<VariableId, i32>,
     weights: HashMap<VariableId, u32>,
+    activities: HashMap<VariableId, u32>,
+    pending_solution_restart: bool,
     deadline: Option<Instant>,
 }
 
@@ -42,6 +44,8 @@ impl DepthFirstSearch {
             restart_index: 0,
             phases: HashMap::new(),
             weights: HashMap::new(),
+            activities: HashMap::new(),
+            pending_solution_restart: false,
             deadline: None,
         }
     }
@@ -92,6 +96,13 @@ impl DepthFirstSearch {
                 return None;
             }
 
+            if matches!(
+                self.config.restart_policy,
+                crate::config::RestartPolicy::OnSolution
+            ) {
+                return None;
+            }
+
             self.perform_restart(engine);
             if !self.propagate_root(engine) {
                 return None;
@@ -122,6 +133,7 @@ impl DepthFirstSearch {
         self.stats = SearchStats::default();
         self.nodes_since_restart = 0;
         self.restart_index = 0;
+        self.pending_solution_restart = false;
         self.deadline = self.config.time_limit.map(|limit| Instant::now() + limit);
     }
 
@@ -158,6 +170,12 @@ impl DepthFirstSearch {
         }
 
         if engine.is_solved() {
+            if matches!(
+                self.config.restart_policy,
+                crate::config::RestartPolicy::OnSolution
+            ) {
+                self.pending_solution_restart = true;
+            }
             return Some(self.collect_solution(engine));
         }
 
@@ -217,6 +235,12 @@ impl DepthFirstSearch {
 
         if engine.is_solved() {
             solutions.push(self.collect_solution(engine));
+            if matches!(
+                self.config.restart_policy,
+                crate::config::RestartPolicy::OnSolution
+            ) {
+                self.pending_solution_restart = true;
+            }
             return;
         }
 
@@ -272,6 +296,7 @@ impl DepthFirstSearch {
             && let Some(conflict) = engine.last_conflict()
         {
             self.bump_weights(&conflict.explanation.unique_branch_literals());
+            self.bump_activities(&conflict.explanation.unique_branch_literals());
             let nogood = ConflictAnalyzer::analyze(&conflict.explanation, conflict.variable);
             let branch_order: Vec<NogoodLiteral> = conflict.explanation.unique_branch_literals();
             let learned = self.nogoods.learn(nogood.clone());
@@ -292,10 +317,18 @@ impl DepthFirstSearch {
     }
 
     fn should_restart(&self) -> bool {
+        if self.pending_solution_restart
+            && matches!(
+                self.config.restart_policy,
+                crate::config::RestartPolicy::OnSolution
+            )
+        {
+            return true;
+        }
         self.config
             .restart_policy
             .node_limit(self.restart_index)
-            .is_some_and(|limit| self.nodes_since_restart >= limit)
+            .is_some_and(|limit| limit > 0 && self.nodes_since_restart >= limit)
     }
 
     fn perform_restart(&mut self, engine: &mut Engine) {
@@ -305,6 +338,7 @@ impl DepthFirstSearch {
         self.stats.record_restart();
         self.restart_index += 1;
         self.nodes_since_restart = 0;
+        self.pending_solution_restart = false;
     }
 
     fn record_branch(&mut self) {
@@ -327,6 +361,19 @@ impl DepthFirstSearch {
         }
         for literal in literals {
             *self.weights.entry(literal.variable).or_insert(1) += 1;
+        }
+    }
+
+    fn bump_activities(&mut self, literals: &[NogoodLiteral]) {
+        if !matches!(
+            self.config.variable_ordering,
+            crate::config::VariableOrdering::Activity
+        ) {
+            return;
+        }
+        for literal in literals {
+            let entry = self.activities.entry(literal.variable).or_insert(1);
+            *entry = entry.saturating_add(1);
         }
     }
 
@@ -368,6 +415,19 @@ impl DepthFirstSearch {
                 .iter()
                 .copied()
                 .find(|&var| !engine.domain(var).is_fixed()),
+            crate::config::VariableOrdering::Activity => {
+                candidates.into_iter().max_by(|&left, &right| {
+                    let left_activity = self.activities.get(&left).copied().unwrap_or(1);
+                    let right_activity = self.activities.get(&right).copied().unwrap_or(1);
+                    left_activity
+                        .cmp(&right_activity)
+                        .then_with(|| engine.domain(left).size().cmp(&engine.domain(right).size()))
+                        .then_with(|| {
+                            variable_index(&self.variables, left)
+                                .cmp(&variable_index(&self.variables, right))
+                        })
+                })
+            }
         }
     }
 
@@ -393,6 +453,23 @@ impl DepthFirstSearch {
                         .filter(|&&other| other != var && engine.domain(other).contains(*value))
                         .count()
                 });
+            }
+            crate::config::ValueOrdering::Split => {
+                if let (Some(min), Some(max)) = (domain.min(), domain.max()) {
+                    let midpoint = min + (max - min) / 2;
+                    values.sort_by_key(|value| {
+                        let distance = value.abs_diff(midpoint);
+                        (distance, *value)
+                    });
+                }
+            }
+            crate::config::ValueOrdering::Median => {
+                if !values.is_empty() {
+                    let median = values[values.len() / 2];
+                    values.retain(|&value| value != median);
+                    values.sort_unstable();
+                    values.insert(0, median);
+                }
             }
         }
 

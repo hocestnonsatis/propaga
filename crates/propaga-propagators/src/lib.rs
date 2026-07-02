@@ -5,11 +5,14 @@
 //! element, cumulative, and disjunctive constraints.
 
 mod all_different;
+mod circuit;
 mod cumulative;
+mod diffn;
 mod disjunctive;
 mod element;
 mod equality;
 mod gcc;
+mod inverse;
 mod less_equal;
 mod less_than;
 mod linear_eq;
@@ -22,11 +25,14 @@ mod scheduling;
 mod table;
 
 pub use all_different::AllDifferentPropagator;
+pub use circuit::CircuitPropagator;
 pub use cumulative::CumulativePropagator;
+pub use diffn::{DiffnPropagator, RectangleSpec};
 pub use disjunctive::{DisjunctivePropagator, DisjunctiveTask};
 pub use element::ElementPropagator;
 pub use equality::EqualityPropagator;
 pub use gcc::{CardinalityBound, GlobalCardinalityPropagator};
+pub use inverse::InversePropagator;
 pub use less_equal::LessEqualPropagator;
 pub use less_than::LessThanPropagator;
 pub use linear_eq::LinearEqPropagator;

@@ -1,4 +1,4 @@
-use crate::output::{print_schedule_result, print_stats_plain};
+use crate::output::{print_schedule_result, print_schedule_result_json, print_stats_plain};
 use crate::puzzle_io::{GlobalOptions, OutputFormat};
 use propaga_model::Model;
 use propaga_propagators::{DisjunctiveTask, TaskSpec};
@@ -152,17 +152,18 @@ pub fn run(path: &Path, options: GlobalOptions) -> Result<(), Box<dyn std::error
             }
         }
         OutputFormat::Json => {
-            print_schedule_result(
+            print_schedule_result_json(
                 &model,
                 &starts,
                 &ends,
                 &spec.tasks,
                 solution.as_ref(),
-                options.quiet,
+                if options.stats {
+                    Some((stats, elapsed))
+                } else {
+                    None
+                },
             );
-            if options.stats {
-                print_stats_plain(stats, elapsed);
-            }
         }
     }
 

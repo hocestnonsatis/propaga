@@ -82,7 +82,17 @@ fn solve_one(
         };
         Ok((solution_to_grid(first, &cells), stats))
     } else {
-        let (solution, stats) = model.solve_subset_with_stats(cells.clone());
+        let (solution, stats) = if options.workers > 1 {
+            model.solve_portfolio(
+                cells.clone(),
+                propaga_search::PortfolioConfig {
+                    workers: options.workers,
+                    deterministic: options.deterministic,
+                },
+            )
+        } else {
+            model.solve_subset_with_stats(cells.clone())
+        };
         let Some(solution) = solution else {
             if stats.timed_out {
                 return Err("timeout".into());

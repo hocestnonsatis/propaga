@@ -39,13 +39,16 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `disjunctive` | Supported | Disjunctive propagator |
 | `global_cardinality` | Supported | 2-arg and 4-arg forms |
 | `table` | Supported | Tuple table propagator |
-| Other globals (`regular`, `circuit`, `diffn`, …) | Not supported | Parse error: `Unsupported constraint` |
+| `circuit` | Supported | Hamiltonian circuit propagator |
+| `inverse` | Supported | Inverse array propagator |
+| `diffn` | Supported | Non-overlap rectangles (fixed width/height) |
+| Other globals (`regular`, …) | Not supported | Parse error: `Unsupported constraint` |
 
 ### Partial support
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| `cumulative` variable duration/height arrays | Partial | Inline lists and int param arrays only; variable arrays error |
+| `cumulative` variable duration/height arrays | Supported | Variable `array of var int` duration/height arrays |
 | `solve :: int_search(...)` | Supported subset | Variable list, `first_fail`/`input_order`/…, `indomain_min`/`indomain_max`, `complete` |
 | `solve :: restart_luby(base)` | Supported | Optional second scale argument is parsed and ignored |
 | `solve :: restart_constant(scale)` | Supported | Constant node budget between restarts |
@@ -103,9 +106,11 @@ FlatZinc search annotations are applied when solving with `propaga solve`. CLI f
 
 Supported `int_search` variable selectors: `input_order`, `first_fail`, `smallest`, `largest`, `occurrence`, `degree`, `anti_first_fail`.
 
-Supported `int_search` value selectors: `indomain_min`, `indomain_max`. `indomain_split` and `indomain_median` fall back to ascending order.
+Supported `int_search` value selectors: `indomain_min`, `indomain_max`, `indomain_split`, `indomain_median`.
 
-`incomplete` search is not supported. Other restart policies (`restart_linear`, `restart_on_solution`, …) are rejected at parse time.
+`bool_search` is supported with the same selector vocabulary as `int_search`.
+
+`incomplete` search is not supported. Supported restart policies include `restart_linear` and `restart_on_solution`.
 
 ## Performance benchmarks
 

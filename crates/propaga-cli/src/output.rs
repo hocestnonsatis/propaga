@@ -341,6 +341,66 @@ pub(crate) fn print_objective_plain(
     }
 }
 
+#[derive(Serialize)]
+struct ScheduleTaskJson {
+    index: usize,
+    start: i32,
+    duration: i32,
+    end: i32,
+    demand: i32,
+}
+
+#[derive(Serialize)]
+struct ScheduleResultJson {
+    status: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tasks: Option<Vec<ScheduleTaskJson>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stats: Option<StatsJson>,
+}
+
+fn schedule_task_entries(
+    model: &Model,
+    starts: &[propaga_core::VariableId],
+    ends: &[propaga_core::VariableId],
+    tasks: &[crate::schedule::ScheduleTaskSpec],
+    solution: &propaga_search::Solution,
+) -> Vec<ScheduleTaskJson> {
+    let values: std::collections::HashMap<_, _> = solution.iter().copied().collect();
+    let engine = model.engine();
+    starts
+        .iter()
+        .zip(ends.iter())
+        .zip(tasks.iter())
+        .enumerate()
+        .map(|(index, ((start, end), task))| {
+            let start_time = values
+                .get(start)
+                .copied()
+                .or_else(|| engine.domain(*start).fixed_value())
+                .unwrap_or(-1);
+            let end_time = engine
+                .domain(*end)
+                .fixed_value()
+                .or_else(|| values.get(end).copied())
+                .unwrap_or_else(|| {
+                    if start_time >= 0 {
+                        start_time + task.duration
+                    } else {
+                        -1
+                    }
+                });
+            ScheduleTaskJson {
+                index: index + 1,
+                start: start_time,
+                duration: task.duration,
+                end: end_time,
+                demand: task.demand,
+            }
+        })
+        .collect()
+}
+
 /// Prints a schedule solution with start/end times per task.
 pub(crate) fn print_schedule_result(
     model: &Model,
@@ -357,33 +417,44 @@ pub(crate) fn print_schedule_result(
         println!("UNSATISFIABLE");
         return;
     };
-    let values: std::collections::HashMap<_, _> = solution.iter().copied().collect();
-    let engine = model.engine();
-    for (index, ((start, end), task)) in
-        starts.iter().zip(ends.iter()).zip(tasks.iter()).enumerate()
-    {
-        let start_time = values
-            .get(start)
-            .copied()
-            .or_else(|| engine.domain(*start).fixed_value())
-            .unwrap_or(-1);
-        let end_time = engine
-            .domain(*end)
-            .fixed_value()
-            .or_else(|| values.get(end).copied())
-            .unwrap_or_else(|| {
-                if start_time >= 0 {
-                    start_time + task.duration
-                } else {
-                    -1
-                }
-            });
+    for entry in schedule_task_entries(model, starts, ends, tasks, solution) {
         println!(
-            "task {}: start={start_time} duration={} end={end_time}",
-            index + 1,
-            task.duration
+            "task {}: start={} duration={} end={}",
+            entry.index, entry.start, entry.duration, entry.end
         );
     }
+}
+
+/// Prints a schedule solution as JSON.
+pub(crate) fn print_schedule_result_json(
+    model: &Model,
+    starts: &[propaga_core::VariableId],
+    ends: &[propaga_core::VariableId],
+    tasks: &[crate::schedule::ScheduleTaskSpec],
+    solution: Option<&propaga_search::Solution>,
+    stats: Option<(SearchStats, Duration)>,
+) {
+    let payload = match solution {
+        Some(solution) => ScheduleResultJson {
+            status: if stats.map(|(s, _)| s.timed_out).unwrap_or(false) {
+                "timeout"
+            } else {
+                "sat"
+            },
+            tasks: Some(schedule_task_entries(model, starts, ends, tasks, solution)),
+            stats: stats.map(|(stats, elapsed)| stats_json(stats, elapsed)),
+        },
+        None => ScheduleResultJson {
+            status: if stats.map(|(s, _)| s.timed_out).unwrap_or(false) {
+                "timeout"
+            } else {
+                "unsatisfiable"
+            },
+            tasks: None,
+            stats: stats.map(|(stats, elapsed)| stats_json(stats, elapsed)),
+        },
+    };
+    println!("{}", serde_json::to_string(&payload).expect("json"));
 }
 
 pub(crate) fn print_stats_plain(stats: SearchStats, elapsed: Duration) {

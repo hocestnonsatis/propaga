@@ -1,11 +1,11 @@
 use crate::error::FlatZincError;
 use crate::parse::{
     Constraint, DurationSpec, Expr, FlatZincProgram, IntSearchAnnotation, OutputDirective,
-    ParamDecl, RestartKind, SearchAnnotations, SolveGoal, VarDecl,
+    ParamDecl, PredicateDecl, RestartKind, SearchAnnotations, SolveGoal, VarDecl,
 };
 use propaga_core::VariableId;
 use propaga_model::Model;
-use propaga_propagators::{CardinalityBound, DisjunctiveTask, TaskSpec};
+use propaga_propagators::{CardinalityBound, DisjunctiveTask, RectangleSpec, TaskSpec};
 use propaga_search::{RestartPolicy, ValueOrdering, VariableOrdering};
 use std::collections::HashMap;
 
@@ -114,13 +114,17 @@ pub fn compile(program: FlatZincProgram) -> Result<CompiledInstance, FlatZincErr
         }
     }
 
-    for constraint in program.constraints {
+    for constraint in expand_predicates(program.constraints, &program.predicates) {
         post_constraint(&mut model, &env, constraint)?;
     }
 
     let annotation_search = compile_search_config(&program.solve.annotations)?;
-    let solve_vars =
-        resolve_search_vars(&env, program.solve.annotations.int_search.as_ref(), &model)?;
+    let solve_vars = resolve_search_vars(
+        &env,
+        program.solve.annotations.int_search.as_ref(),
+        program.solve.annotations.bool_search.as_ref(),
+        &model,
+    )?;
 
     let objective = match program.solve.goal {
         SolveGoal::Satisfy => None,
@@ -160,19 +164,27 @@ enum Binding {
 fn compile_search_config(
     annotations: &SearchAnnotations,
 ) -> Result<Option<AnnotationSearchConfig>, FlatZincError> {
-    if annotations.int_search.is_none() && annotations.restart.is_none() {
+    if annotations.int_search.is_none()
+        && annotations.bool_search.is_none()
+        && annotations.restart.is_none()
+    {
         return Ok(None);
     }
 
-    let (variable_ordering, value_ordering) = if let Some(int_search) = &annotations.int_search {
-        if !int_search.complete {
+    let search_annotation = annotations
+        .int_search
+        .as_ref()
+        .or(annotations.bool_search.as_ref());
+
+    let (variable_ordering, value_ordering) = if let Some(search) = search_annotation {
+        if !search.complete {
             return Err(FlatZincError::Unsupported(
-                "incomplete int_search is not supported".to_string(),
+                "incomplete search is not supported".to_string(),
             ));
         }
         (
-            map_var_choice(&int_search.var_choice)?,
-            map_value_choice(&int_search.value_choice)?,
+            map_var_choice(&search.var_choice)?,
+            map_value_choice(&search.value_choice)?,
         )
     } else {
         (VariableOrdering::default(), ValueOrdering::default())
@@ -186,6 +198,8 @@ fn compile_search_config(
         },
         Some(RestartKind::Luby { base }) => RestartPolicy::Luby { base: *base },
         Some(RestartKind::None) => RestartPolicy::None,
+        Some(RestartKind::Linear { scale }) => RestartPolicy::Linear { scale: *scale },
+        Some(RestartKind::OnSolution) => RestartPolicy::OnSolution,
         None => RestartPolicy::default(),
     };
 
@@ -214,6 +228,7 @@ fn map_var_choice(choice: &str) -> Result<VariableOrdering, FlatZincError> {
         "first_fail" => Ok(VariableOrdering::Mrv),
         "smallest" | "occurrence" | "degree" | "anti_first_fail" => Ok(VariableOrdering::Dom),
         "largest" => Ok(VariableOrdering::DomWdeg),
+        "activity" | "vsids" => Ok(VariableOrdering::Activity),
         other => Err(FlatZincError::Unsupported(format!(
             "unsupported variable selection `{other}`"
         ))),
@@ -224,7 +239,8 @@ fn map_value_choice(choice: &str) -> Result<ValueOrdering, FlatZincError> {
     match choice {
         "indomain_min" => Ok(ValueOrdering::Ascending),
         "indomain_max" => Ok(ValueOrdering::Descending),
-        "indomain_split" | "indomain_median" => Ok(ValueOrdering::Ascending),
+        "indomain_split" => Ok(ValueOrdering::Split),
+        "indomain_median" => Ok(ValueOrdering::Median),
         other => Err(FlatZincError::Unsupported(format!(
             "unsupported value selection `{other}`"
         ))),
@@ -234,6 +250,7 @@ fn map_value_choice(choice: &str) -> Result<ValueOrdering, FlatZincError> {
 fn resolve_search_vars(
     env: &HashMap<String, Binding>,
     int_search: Option<&IntSearchAnnotation>,
+    bool_search: Option<&IntSearchAnnotation>,
     model: &Model,
 ) -> Result<Vec<VariableId>, FlatZincError> {
     if let Some(int_search) = int_search {
@@ -241,6 +258,14 @@ fn resolve_search_vars(
         if vars.is_empty() {
             return Err(FlatZincError::Unsupported(
                 "int_search has no variables".to_string(),
+            ));
+        }
+        Ok(vars)
+    } else if let Some(bool_search) = bool_search {
+        let vars = resolve_var_list(env, Expr::List(bool_search.vars.clone()))?;
+        if vars.is_empty() {
+            return Err(FlatZincError::Unsupported(
+                "bool_search has no variables".to_string(),
             ));
         }
         Ok(vars)
@@ -417,7 +442,149 @@ fn post_constraint(
             let int_var = resolve_var(env, int_expr)?;
             model.equal(bool_var, int_var);
         }
+        Constraint::Circuit(successors) => {
+            let vars = resolve_var_list(env, successors)?;
+            model.circuit(vars);
+        }
+        Constraint::Inverse { forward, backward } => {
+            let forward_vars = resolve_var_list(env, forward)?;
+            let backward_vars = resolve_var_list(env, backward)?;
+            if forward_vars.len() != backward_vars.len() {
+                return Err(FlatZincError::Unsupported(
+                    "inverse array length mismatch".to_string(),
+                ));
+            }
+            model.inverse(forward_vars, backward_vars);
+        }
+        Constraint::Diffn {
+            xs,
+            ys,
+            widths,
+            heights,
+        } => {
+            post_diffn(model, env, xs, ys, widths, heights)?;
+        }
+        Constraint::PredicateCall { .. } => {
+            return Err(FlatZincError::Unsupported(
+                "unexpanded predicate call".to_string(),
+            ));
+        }
     }
+    Ok(())
+}
+
+fn expand_predicates(
+    constraints: Vec<Constraint>,
+    predicates: &[PredicateDecl],
+) -> Vec<Constraint> {
+    let lookup: HashMap<_, _> = predicates
+        .iter()
+        .map(|predicate| (predicate.name.as_str(), predicate))
+        .collect();
+    constraints
+        .into_iter()
+        .flat_map(|constraint| match constraint {
+            Constraint::PredicateCall { name, args } => {
+                if let Some(predicate) = lookup.get(name.as_str()) {
+                    vec![substitute_predicate(predicate, &args)]
+                } else {
+                    vec![Constraint::PredicateCall { name, args }]
+                }
+            }
+            other => vec![other],
+        })
+        .collect()
+}
+
+fn substitute_predicate(predicate: &PredicateDecl, args: &[Expr]) -> Constraint {
+    let substitutions: HashMap<_, _> = predicate
+        .params
+        .iter()
+        .cloned()
+        .zip(args.iter().cloned())
+        .collect();
+    substitute_constraint(&predicate.body, &substitutions)
+}
+
+fn substitute_constraint(
+    constraint: &Constraint,
+    substitutions: &HashMap<String, Expr>,
+) -> Constraint {
+    match constraint {
+        Constraint::IntEq(left, right) => Constraint::IntEq(
+            substitute_expr(left, substitutions),
+            substitute_expr(right, substitutions),
+        ),
+        Constraint::IntNe(left, right) => Constraint::IntNe(
+            substitute_expr(left, substitutions),
+            substitute_expr(right, substitutions),
+        ),
+        Constraint::IntLe(left, right) => Constraint::IntLe(
+            substitute_expr(left, substitutions),
+            substitute_expr(right, substitutions),
+        ),
+        Constraint::AllDifferent(vars) => Constraint::AllDifferent(
+            vars.iter()
+                .map(|expr| substitute_expr(expr, substitutions))
+                .collect(),
+        ),
+        other => other.clone(),
+    }
+}
+
+fn substitute_expr(expr: &Expr, substitutions: &HashMap<String, Expr>) -> Expr {
+    match expr {
+        Expr::Name(name) => substitutions
+            .get(name)
+            .cloned()
+            .unwrap_or_else(|| Expr::Name(name.clone())),
+        Expr::Index { name, index } => Expr::Index {
+            name: name.clone(),
+            index: Box::new(substitute_expr(index, substitutions)),
+        },
+        Expr::Int(value) => Expr::Int(*value),
+        Expr::List(items) => Expr::List(
+            items
+                .iter()
+                .map(|item| substitute_expr(item, substitutions))
+                .collect(),
+        ),
+    }
+}
+
+fn post_diffn(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    xs: Expr,
+    ys: Expr,
+    widths: DurationSpec,
+    heights: DurationSpec,
+) -> Result<(), FlatZincError> {
+    let x_vars = resolve_var_list(env, xs)?;
+    let y_vars = resolve_var_list(env, ys)?;
+    let width_values = resolve_duration_values(env, widths)?;
+    let height_values = resolve_duration_values(env, heights)?;
+    if x_vars.len() != y_vars.len()
+        || x_vars.len() != width_values.len()
+        || x_vars.len() != height_values.len()
+    {
+        return Err(FlatZincError::Unsupported(
+            "diffn array length mismatch".to_string(),
+        ));
+    }
+    let rectangles: Vec<RectangleSpec> = x_vars
+        .into_iter()
+        .zip(y_vars)
+        .zip(width_values)
+        .zip(height_values)
+        .map(|(((x, y), width), height)| RectangleSpec {
+            x,
+            y,
+            width,
+            height,
+        })
+        .collect();
+    model.diffn(rectangles);
     Ok(())
 }
 
@@ -438,18 +605,27 @@ fn post_cumulative(
         ));
     }
 
-    let duration_values = resolve_duration_values(env, durations)?;
-    let height_values = match heights {
-        Some(spec) => resolve_duration_values(env, spec)?,
-        None => vec![1; start_vars.len()],
+    let duration_binding = resolve_duration_binding(env, durations)?;
+    let height_binding = match heights {
+        Some(spec) => resolve_duration_binding(env, spec)?,
+        None => DurationBinding::Fixed(vec![1; start_vars.len()]),
     };
 
-    if duration_values.len() != start_vars.len() {
+    let duration_len = match &duration_binding {
+        DurationBinding::Fixed(values) => values.len(),
+        DurationBinding::Variables(vars) => vars.len(),
+    };
+    let height_len = match &height_binding {
+        DurationBinding::Fixed(values) => values.len(),
+        DurationBinding::Variables(vars) => vars.len(),
+    };
+
+    if duration_len != start_vars.len() {
         return Err(FlatZincError::Unsupported(
             "cumulative duration length mismatch".to_string(),
         ));
     }
-    if height_values.len() != start_vars.len() {
+    if height_len != start_vars.len() {
         return Err(FlatZincError::Unsupported(
             "cumulative height length mismatch".to_string(),
         ));
@@ -458,14 +634,62 @@ fn post_cumulative(
     let tasks: Vec<TaskSpec> = start_vars
         .into_iter()
         .zip(end_vars)
-        .zip(duration_values)
-        .zip(height_values)
-        .map(|(((start, end), duration), demand)| {
-            TaskSpec::with_demand(start, duration, end, demand)
+        .enumerate()
+        .map(|(index, (start, end))| {
+            let (duration, duration_var) = duration_field(&duration_binding, index);
+            let (demand, demand_var) = duration_field(&height_binding, index);
+            TaskSpec::with_variable_spec(start, end, duration, duration_var, demand, demand_var)
         })
         .collect();
     model.cumulative(tasks, capacity);
     Ok(())
+}
+
+enum DurationBinding {
+    Fixed(Vec<i32>),
+    Variables(Vec<VariableId>),
+}
+
+fn duration_field(binding: &DurationBinding, index: usize) -> (i32, Option<VariableId>) {
+    match binding {
+        DurationBinding::Fixed(values) => (values[index], None),
+        DurationBinding::Variables(vars) => (1, Some(vars[index])),
+    }
+}
+
+fn resolve_duration_binding(
+    env: &HashMap<String, Binding>,
+    durations: DurationSpec,
+) -> Result<DurationBinding, FlatZincError> {
+    match durations {
+        DurationSpec::Inline(values) => Ok(DurationBinding::Fixed(values)),
+        DurationSpec::Name(name) => match env.get(&name) {
+            Some(Binding::ParamArray(values)) => Ok(DurationBinding::Fixed(values.clone())),
+            Some(Binding::Array(elements)) => {
+                let mut indices: Vec<_> = elements.keys().copied().collect();
+                indices.sort_unstable();
+                Ok(DurationBinding::Variables(
+                    indices
+                        .into_iter()
+                        .map(|index| {
+                            elements.get(&index).copied().ok_or_else(|| {
+                                FlatZincError::Unsupported(format!(
+                                    "missing index {index} in variable array `{name}`"
+                                ))
+                            })
+                        })
+                        .collect::<Result<_, _>>()?,
+                ))
+            }
+            Some(Binding::Param(_)) => Err(FlatZincError::Unsupported(format!(
+                "scalar `{name}` used as duration array"
+            ))),
+            Some(Binding::Var(_)) => Err(FlatZincError::Unsupported(format!(
+                "scalar variable `{name}` used as duration array"
+            ))),
+            None => Err(FlatZincError::UnknownIdentifier(name)),
+        },
+    }
 }
 
 fn post_linear_eq(

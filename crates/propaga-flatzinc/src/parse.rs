@@ -9,6 +9,8 @@ pub struct FlatZincProgram {
     pub variables: Vec<VarDecl>,
     /// Posted constraints.
     pub constraints: Vec<Constraint>,
+    /// User-defined predicate declarations.
+    pub predicates: Vec<PredicateDecl>,
     /// Output directives for solution formatting.
     pub outputs: Vec<OutputDirective>,
     /// Solve directive with optional search annotations.
@@ -218,6 +220,44 @@ pub enum Constraint {
     BoolEq(Expr, Expr),
     /// `bool2int(b, i)`
     Bool2Int(Expr, Expr),
+    /// `circuit(successors)`
+    Circuit(Expr),
+    /// `inverse(forward, backward)`
+    Inverse {
+        /// Forward array.
+        forward: Expr,
+        /// Backward array.
+        backward: Expr,
+    },
+    /// `diffn(xs, ys, widths, heights)`
+    Diffn {
+        /// X coordinates.
+        xs: Expr,
+        /// Y coordinates.
+        ys: Expr,
+        /// Widths (inline ints or param array).
+        widths: DurationSpec,
+        /// Heights (inline ints or param array).
+        heights: DurationSpec,
+    },
+    /// User-defined predicate call.
+    PredicateCall {
+        /// Predicate name.
+        name: String,
+        /// Call arguments.
+        args: Vec<Expr>,
+    },
+}
+
+/// A parsed user-defined predicate with a single-constraint body.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PredicateDecl {
+    /// Predicate name.
+    pub name: String,
+    /// Formal parameter names in order.
+    pub params: Vec<String>,
+    /// Inlined constraint body.
+    pub body: Constraint,
 }
 
 /// Duration array in a cumulative constraint.
@@ -277,6 +317,8 @@ pub struct SolveDirective {
 pub struct SearchAnnotations {
     /// `int_search(...)` annotation, when present.
     pub int_search: Option<IntSearchAnnotation>,
+    /// `bool_search(...)` annotation, when present.
+    pub bool_search: Option<IntSearchAnnotation>,
     /// `restart_*` annotation, when present.
     pub restart: Option<RestartAnnotation>,
 }
@@ -323,6 +365,13 @@ pub enum RestartKind {
     },
     /// `restart_none`.
     None,
+    /// `restart_linear(scale)`.
+    Linear {
+        /// Node limit multiplier per restart.
+        scale: u64,
+    },
+    /// `restart_on_solution()`.
+    OnSolution,
 }
 
 /// Solve directive.
@@ -445,6 +494,7 @@ impl Parser {
         let mut params = Vec::new();
         let mut variables = Vec::new();
         let mut constraints = Vec::new();
+        let mut predicates = Vec::new();
         let mut outputs = Vec::new();
         let mut solve = None;
 
@@ -471,9 +521,7 @@ impl Parser {
             } else if self.peek_is_ident("output") {
                 outputs.push(self.parse_output()?);
             } else if self.peek_is_ident("predicate") {
-                return Err(FlatZincError::Unsupported(
-                    "predicate declarations are not supported".to_string(),
-                ));
+                predicates.push(self.parse_predicate_decl()?);
             } else if self.peek_is_ident("function") {
                 return Err(FlatZincError::Unsupported(
                     "function declarations are not supported".to_string(),
@@ -500,6 +548,7 @@ impl Parser {
             params,
             variables,
             constraints,
+            predicates,
             outputs,
             solve,
         })
@@ -909,8 +958,111 @@ impl Parser {
                 let int_var = self.parse_expr()?;
                 Constraint::Bool2Int(bool_var, int_var)
             }
+            "circuit" => {
+                let successors = self.parse_expr()?;
+                Constraint::Circuit(successors)
+            }
+            "inverse" => {
+                let forward = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let backward = self.parse_expr()?;
+                Constraint::Inverse { forward, backward }
+            }
+            "diffn" => {
+                let xs = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let ys = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let widths = self.parse_duration_spec()?;
+                self.expect_symbol(",")?;
+                let heights = self.parse_duration_spec()?;
+                Constraint::Diffn {
+                    xs,
+                    ys,
+                    widths,
+                    heights,
+                }
+            }
             other => {
-                return Err(FlatZincError::Unsupported(format!("constraint `{other}`")));
+                let args = self.parse_expr_list()?;
+                Constraint::PredicateCall {
+                    name: other.to_string(),
+                    args,
+                }
+            }
+        };
+        self.expect_symbol(")")?;
+        Ok(constraint)
+    }
+
+    fn parse_predicate_decl(&mut self) -> Result<PredicateDecl, FlatZincError> {
+        self.expect_ident("predicate")?;
+        let name = self.expect_ident_token()?;
+        self.expect_symbol("(")?;
+        let mut params = Vec::new();
+        if !self.peek_is_symbol(")") {
+            loop {
+                self.expect_ident("var")?;
+                if self.peek_is_ident("int") {
+                    self.expect_ident("int")?;
+                } else if self.peek_is_ident("bool") {
+                    self.expect_ident("bool")?;
+                } else {
+                    return Err(FlatZincError::Unsupported(
+                        "predicate parameters must be var int or var bool".to_string(),
+                    ));
+                }
+                self.expect_symbol(":")?;
+                params.push(self.expect_ident_token()?);
+                if self.peek_is_symbol(")") {
+                    break;
+                }
+                self.expect_symbol(",")?;
+            }
+        }
+        self.expect_symbol(")")?;
+        self.expect_symbol("=")?;
+        let body = self.parse_predicate_body_constraint()?;
+        Ok(PredicateDecl { name, params, body })
+    }
+
+    fn parse_predicate_body_constraint(&mut self) -> Result<Constraint, FlatZincError> {
+        if self.peek_is_ident("constraint") {
+            self.expect_ident("constraint")?;
+        }
+        let name = self.expect_ident_token()?;
+        self.expect_symbol("(")?;
+        let constraint = match name.as_str() {
+            "int_eq" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                Constraint::IntEq(left, right)
+            }
+            "int_ne" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                Constraint::IntNe(left, right)
+            }
+            "int_le" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                Constraint::IntLe(left, right)
+            }
+            "all_different" => {
+                let expr = self.parse_expr()?;
+                let args = match expr {
+                    Expr::List(items) => items,
+                    other => vec![other],
+                };
+                Constraint::AllDifferent(args)
+            }
+            other => {
+                return Err(FlatZincError::Unsupported(format!(
+                    "predicate body constraint `{other}` is not supported for inline expansion"
+                )));
             }
         };
         self.expect_symbol(")")?;
@@ -1086,6 +1238,40 @@ impl Parser {
                     complete,
                 });
             }
+            "bool_search" => {
+                if annotations.bool_search.is_some() {
+                    return Err(FlatZincError::Unsupported(
+                        "multiple bool_search annotations".to_string(),
+                    ));
+                }
+                self.expect_symbol("(")?;
+                let vars_expr = self.parse_expr()?;
+                let vars = match vars_expr {
+                    Expr::List(items) => items,
+                    other => vec![other],
+                };
+                self.expect_symbol(",")?;
+                let var_choice = self.expect_ident_token()?;
+                self.expect_symbol(",")?;
+                let value_choice = self.expect_ident_token()?;
+                self.expect_symbol(",")?;
+                let complete = match self.expect_ident_token()?.as_str() {
+                    "complete" => true,
+                    "incomplete" => false,
+                    other => {
+                        return Err(FlatZincError::Unsupported(format!(
+                            "unsupported bool_search completeness `{other}`"
+                        )));
+                    }
+                };
+                self.expect_symbol(")")?;
+                annotations.bool_search = Some(IntSearchAnnotation {
+                    vars,
+                    var_choice,
+                    value_choice,
+                    complete,
+                });
+            }
             "restart_constant" => {
                 if annotations.restart.is_some() {
                     return Err(FlatZincError::Unsupported(
@@ -1143,6 +1329,33 @@ impl Parser {
                 }
                 annotations.restart = Some(RestartAnnotation {
                     kind: RestartKind::None,
+                });
+            }
+            "restart_linear" => {
+                if annotations.restart.is_some() {
+                    return Err(FlatZincError::Unsupported(
+                        "multiple restart annotations".to_string(),
+                    ));
+                }
+                self.expect_symbol("(")?;
+                let scale = self.expect_non_negative_u64("restart_linear scale")?;
+                self.expect_symbol(")")?;
+                annotations.restart = Some(RestartAnnotation {
+                    kind: RestartKind::Linear { scale },
+                });
+            }
+            "restart_on_solution" => {
+                if annotations.restart.is_some() {
+                    return Err(FlatZincError::Unsupported(
+                        "multiple restart annotations".to_string(),
+                    ));
+                }
+                if self.peek_is_symbol("(") {
+                    self.expect_symbol("(")?;
+                    self.expect_symbol(")")?;
+                }
+                annotations.restart = Some(RestartAnnotation {
+                    kind: RestartKind::OnSolution,
                 });
             }
             other => {
@@ -1401,25 +1614,30 @@ mod tests {
     }
 
     #[test]
-    fn rejects_unknown_constraint() {
+    fn unknown_constraint_becomes_predicate_call() {
         let source = r#"
             var 1..3: x;
             constraint unknown_constraint(x);
             solve satisfy;
         "#;
-        let err = parse(source).unwrap_err();
-        assert!(err.to_string().contains("unknown_constraint"));
+        let program = parse(source).expect("unknown constraints parse as predicate calls");
+        assert!(matches!(
+            &program.constraints[0],
+            crate::Constraint::PredicateCall { name, .. } if name == "unknown_constraint"
+        ));
     }
 
     #[test]
-    fn rejects_predicate_declaration() {
+    fn parses_predicate_declaration() {
         let source = r#"
             predicate foo(var int: x) = int_eq(x, 1);
             var 1..3: y;
+            constraint foo(y);
             solve satisfy;
         "#;
-        let err = parse(source).unwrap_err();
-        assert!(err.to_string().contains("predicate"));
+        let program = parse(source).expect("predicate should parse");
+        assert_eq!(program.predicates.len(), 1);
+        assert_eq!(program.constraints.len(), 1);
     }
 
     #[test]
@@ -1538,12 +1756,17 @@ mod tests {
     }
 
     #[test]
-    fn rejects_unsupported_search_annotation() {
+    fn parses_restart_linear_annotation() {
         let source = r#"
             var 1..3: x;
             solve :: restart_linear(100) satisfy;
         "#;
-        let err = parse(source).unwrap_err();
-        assert!(err.to_string().contains("restart_linear"));
+        let program = parse(source).expect("restart_linear should parse");
+        assert!(matches!(
+            program.solve.annotations.restart,
+            Some(RestartAnnotation {
+                kind: RestartKind::Linear { scale: 100 }
+            })
+        ));
     }
 }

@@ -1,7 +1,7 @@
 use crate::config::SearchConfig;
 use crate::dfs::{DepthFirstSearch, Solution};
 use crate::stats::SearchStats;
-use propaga_core::VariableId;
+use propaga_core::{DomainView, VariableId};
 use propaga_engine::Engine;
 use propaga_propagators::LessEqualPropagator;
 
@@ -123,6 +123,10 @@ impl OptimizationSearch {
             ObjectiveDirection::Maximize => best.saturating_add(1),
         };
 
+        if !bound_is_feasible(engine, self.objective, self.direction, bound) {
+            return false;
+        }
+
         let bound_var = engine.new_variable(propaga_domains::HybridDomain::fix(bound));
         match self.direction {
             ObjectiveDirection::Minimize => {
@@ -143,6 +147,19 @@ impl OptimizationSearch {
             Ok(status) => !status.is_failure(),
             Err(_) => false,
         }
+    }
+}
+
+fn bound_is_feasible(
+    engine: &Engine,
+    objective: VariableId,
+    direction: ObjectiveDirection,
+    bound: i32,
+) -> bool {
+    let domain = engine.domain(objective);
+    match direction {
+        ObjectiveDirection::Minimize => domain.min().is_some_and(|min| bound >= min),
+        ObjectiveDirection::Maximize => domain.max().is_some_and(|max| bound <= max),
     }
 }
 

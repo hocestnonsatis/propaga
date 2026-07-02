@@ -24,6 +24,6 @@ pub use compile::{AnnotationSearchConfig, CompiledInstance, ObjectiveSpec, compi
 pub use error::FlatZincError;
 pub use parse::{
     Constraint, DurationSpec, Expr, FlatZincProgram, IntSearchAnnotation, OutputDirective,
-    OutputSegment, ParamDecl, RestartAnnotation, RestartKind, SearchAnnotations, SolveDirective,
-    SolveGoal, VarDecl, parse,
+    OutputSegment, ParamDecl, PredicateDecl, RestartAnnotation, RestartKind, SearchAnnotations,
+    SolveDirective, SolveGoal, VarDecl, parse,
 };

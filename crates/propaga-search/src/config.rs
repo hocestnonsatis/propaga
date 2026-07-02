@@ -13,6 +13,10 @@ pub enum RestartPolicy {
     Geometric { base: f64, scale: u64 },
     /// Luby restarts with the given base node limit multiplier.
     Luby { base: u64 },
+    /// Linear restarts: scale * (restart_index + 1).
+    Linear { scale: u64 },
+    /// Restart after each solution is found.
+    OnSolution,
 }
 
 impl Default for RestartPolicy {
@@ -47,6 +51,11 @@ impl RestartPolicy {
                 .strip_prefix("luby:")
                 .and_then(|base| base.parse().ok())
                 .map(|base| Self::Luby { base }),
+            _ if text.starts_with("linear:") => text
+                .strip_prefix("linear:")
+                .and_then(|scale| scale.parse().ok())
+                .map(|scale| Self::Linear { scale }),
+            "on-solution" | "on_solution" => Some(Self::OnSolution),
             _ => None,
         }
     }
@@ -62,6 +71,8 @@ impl RestartPolicy {
                 Some(float_node_limit(limit))
             }
             Self::Luby { base } => Some(base.saturating_mul(luby_sequence(restart_index))),
+            Self::Linear { scale } => Some(scale.saturating_mul(u64::from(restart_index + 1))),
+            Self::OnSolution => Some(0),
         }
     }
 }
@@ -98,6 +109,10 @@ pub enum ValueOrdering {
     Descending,
     /// Least constraining value: prefer values that appear in fewer other domains.
     Lcv,
+    /// Try values near the domain midpoint first (binary split style).
+    Split,
+    /// Try the median domain value first, then ascending.
+    Median,
 }
 
 impl ValueOrdering {
@@ -108,6 +123,8 @@ impl ValueOrdering {
             "asc" | "ascending" | "min" => Some(Self::Ascending),
             "desc" | "descending" | "max" => Some(Self::Descending),
             "lcv" => Some(Self::Lcv),
+            "split" | "indomain_split" => Some(Self::Split),
+            "median" | "indomain_median" => Some(Self::Median),
             _ => None,
         }
     }
@@ -125,6 +142,8 @@ pub enum VariableOrdering {
     DomWdeg,
     /// First unfixed variable in the configured search order.
     InputOrder,
+    /// Activity-based ordering (VSIDS-style): prefer variables involved in recent conflicts.
+    Activity,
 }
 
 impl VariableOrdering {
@@ -136,6 +155,7 @@ impl VariableOrdering {
             "dom" => Some(Self::Dom),
             "dom-wdeg" | "wdeg" | "domwdeg" => Some(Self::DomWdeg),
             "input" | "input-order" | "input_order" => Some(Self::InputOrder),
+            "activity" | "vsids" => Some(Self::Activity),
             _ => None,
         }
     }
