@@ -24,6 +24,12 @@ impl EngineCheckpoint {
             .map(propaga_core::VariableId::from_key)
             .collect()
     }
+
+    /// Returns the number of propagators captured at checkpoint time.
+    #[must_use]
+    pub fn propagator_count(&self) -> usize {
+        self.propagator_keys.len()
+    }
 }
 
 impl Engine {
@@ -104,11 +110,8 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use crate::Engine;
-    use propaga_core::{
-        DomainView, NogoodLiteral, PropagationContext, PropagationStatus, Propagator,
-    };
+    use propaga_core::{DomainView, PropagationContext, PropagationStatus, Propagator};
     use propaga_domains::IntervalDomain;
-    use propaga_propagators::{AllDifferentPropagator, NogoodPropagator};
 
     #[derive(Clone)]
     struct LowerBoundPropagator {
@@ -130,6 +133,21 @@ mod tests {
         }
     }
 
+    #[derive(Clone)]
+    struct NoOpPropagator {
+        var: propaga_core::VariableId,
+    }
+
+    impl Propagator for NoOpPropagator {
+        fn watched_variables(&self) -> &[propaga_core::VariableId] {
+            std::slice::from_ref(&self.var)
+        }
+
+        fn propagate(&mut self, _ctx: &mut dyn PropagationContext) -> PropagationStatus {
+            PropagationStatus::OkNoChange
+        }
+    }
+
     #[test]
     fn checkpoint_round_trip_restores_domains() {
         let mut engine = Engine::new();
@@ -147,38 +165,29 @@ mod tests {
     }
 
     #[test]
-    fn restore_removes_nogood_propagators() {
+    fn restore_removes_propagators_added_after_checkpoint() {
         let mut engine = Engine::new();
-        let vars: Vec<_> = (0..3)
-            .map(|_| engine.new_variable(IntervalDomain::new(1, 3)))
-            .collect();
-        engine.add_propagator(Box::new(AllDifferentPropagator::new(vars.clone())));
+        let var = engine.new_variable(IntervalDomain::new(1, 3));
+        engine.add_propagator(Box::new(LowerBoundPropagator { var, bound: 1 }));
         engine.commit_initial_propagation().unwrap();
         let checkpoint = engine.checkpoint();
 
-        engine.add_propagator(Box::new(NogoodPropagator::new(vec![NogoodLiteral {
-            variable: vars[0],
-            value: 1,
-        }])));
-        assert_eq!(engine.checkpoint().propagator_keys.len(), 2);
+        engine.add_propagator(Box::new(NoOpPropagator { var }));
+        assert_eq!(engine.checkpoint().propagator_count(), 2);
 
         engine.restore_checkpoint(&checkpoint);
-        assert_eq!(engine.checkpoint().propagator_keys.len(), 1);
+        assert_eq!(engine.checkpoint().propagator_count(), 1);
     }
 
     #[test]
     fn fork_preserves_variable_keys() {
         let mut engine = Engine::new();
-        let vars: Vec<_> = (0..3)
-            .map(|_| engine.new_variable(IntervalDomain::new(1, 3)))
-            .collect();
-        engine.add_propagator(Box::new(AllDifferentPropagator::new(vars.clone())));
+        let var = engine.new_variable(IntervalDomain::new(1, 3));
+        engine.add_propagator(Box::new(LowerBoundPropagator { var, bound: 1 }));
         engine.commit_initial_propagation().unwrap();
         let checkpoint = engine.checkpoint();
 
         let forked = engine.fork_at_checkpoint(&checkpoint);
-        for var in vars {
-            assert_eq!(engine.domain(var).min(), forked.domain(var).min());
-        }
+        assert_eq!(engine.domain(var).min(), forked.domain(var).min());
     }
 }

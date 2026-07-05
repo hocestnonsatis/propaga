@@ -540,7 +540,6 @@ dependencies = [
  "priority-queue",
  "propaga-core",
  "propaga-domains",
- "propaga-propagators",
  "slotmap",
 ]
 
