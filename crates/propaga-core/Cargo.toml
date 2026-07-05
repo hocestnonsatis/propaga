@@ -13,5 +13,6 @@ categories.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+dyn-clone.workspace = true
 slotmap.workspace = true
 thiserror.workspace = true

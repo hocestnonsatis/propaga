@@ -28,6 +28,7 @@ impl CardinalityBound {
 }
 
 /// Propagates global cardinality with bounds consistency.
+#[derive(Clone)]
 pub struct GlobalCardinalityPropagator {
     variables: Vec<VariableId>,
     cards: HashMap<i32, CardinalityBound>,

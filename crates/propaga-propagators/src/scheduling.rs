@@ -1,7 +1,7 @@
 //! Scheduling helpers for cumulative propagation.
 
 /// Task specification for cumulative constraints.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TaskSpec {
     /// Start time variable.
     pub start: propaga_core::VariableId,

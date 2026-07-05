@@ -55,6 +55,27 @@ impl ClauseStore {
             })
         })
     }
+
+    /// Returns `true` when assigning `(var, value)` would satisfy a stored clause.
+    #[must_use]
+    pub fn would_violate(
+        &self,
+        assignment: &[(propaga_core::VariableId, i32)],
+        var: propaga_core::VariableId,
+        value: i32,
+    ) -> bool {
+        self.clauses.iter().any(|clause| {
+            clause.literals.iter().all(|literal| {
+                if literal.variable == var {
+                    literal.value == value
+                } else {
+                    assignment
+                        .iter()
+                        .any(|(v, val)| *v == literal.variable && *val == literal.value)
+                }
+            })
+        })
+    }
 }
 
 #[cfg(test)]

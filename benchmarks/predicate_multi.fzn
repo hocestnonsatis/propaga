@@ -1,0 +1,7 @@
+predicate ordered_pair(var int: a, var int: b) =
+  constraint int_le(a, b) /\
+  constraint all_different([a, b]);
+var 1..5: x;
+var 1..5: y;
+constraint ordered_pair(x, y);
+solve satisfy;

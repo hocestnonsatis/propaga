@@ -1,6 +1,7 @@
 use propaga_core::{PropagationContext, PropagationStatus, Propagator, VariableId};
 
 /// Propagates `left != right + offset`.
+#[derive(Clone)]
 pub struct NotEqualOffsetPropagator {
     watched: [VariableId; 2],
     offset: i32,

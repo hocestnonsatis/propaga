@@ -166,6 +166,8 @@ impl VariableOrdering {
 pub struct SearchConfig {
     /// Enables nogood learning and backjumping.
     pub learning: bool,
+    /// Enables lazy clause pruning during search.
+    pub clause_learning: bool,
     /// Restart policy applied during search.
     pub restart_policy: RestartPolicy,
     /// Branch value ordering strategy.
@@ -182,6 +184,7 @@ impl Default for SearchConfig {
     fn default() -> Self {
         Self {
             learning: true,
+            clause_learning: false,
             restart_policy: RestartPolicy::default(),
             value_ordering: ValueOrdering::default(),
             variable_ordering: VariableOrdering::default(),

@@ -1,6 +1,7 @@
 use propaga_core::{PropagationContext, PropagationStatus, Propagator, VariableId};
 
 /// Propagates `reif == 1 <=> left == right`.
+#[derive(Clone)]
 pub struct ReifiedEqualityPropagator {
     watched: [VariableId; 3],
 }
@@ -62,6 +63,7 @@ impl Propagator for ReifiedEqualityPropagator {
 }
 
 /// Propagates `reif == 1 <=> left != right`.
+#[derive(Clone)]
 pub struct ReifiedNotEqualPropagator {
     watched: [VariableId; 3],
 }
@@ -123,6 +125,7 @@ impl Propagator for ReifiedNotEqualPropagator {
 }
 
 /// Propagates `reif == 1 <=> left <= right`.
+#[derive(Clone)]
 pub struct ReifiedLessEqualPropagator {
     watched: [VariableId; 3],
 }
@@ -186,6 +189,7 @@ impl Propagator for ReifiedLessEqualPropagator {
 }
 
 /// Propagates `reif == 1 <=> left < right`.
+#[derive(Clone)]
 pub struct ReifiedLessThanPropagator {
     watched: [VariableId; 3],
 }

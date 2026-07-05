@@ -1,0 +1,4 @@
+var 1..5: x;
+var 1..5: y;
+constraint int_le(x, y);
+solve minimize x, y;

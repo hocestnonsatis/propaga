@@ -41,8 +41,8 @@ pub struct CompiledInstance {
     pub names: HashMap<VariableId, String>,
     /// Parsed output directives.
     pub outputs: Vec<OutputDirective>,
-    /// Optional optimization objective.
-    pub objective: Option<ObjectiveSpec>,
+    /// Optimization objectives in priority order (empty for satisfy).
+    pub objectives: Vec<ObjectiveSpec>,
     /// Optional search configuration from FlatZinc annotations.
     pub annotation_search: Option<AnnotationSearchConfig>,
 }
@@ -126,21 +126,13 @@ pub fn compile(program: FlatZincProgram) -> Result<CompiledInstance, FlatZincErr
         &model,
     )?;
 
-    let objective = match program.solve.goal {
-        SolveGoal::Satisfy => None,
-        SolveGoal::Minimize(expr) => {
-            let var = resolve_var(&env, expr)?;
-            Some(ObjectiveSpec {
-                var,
-                direction: ObjectiveDirection::Minimize,
-            })
+    let objectives = match program.solve.goal {
+        SolveGoal::Satisfy => Vec::new(),
+        SolveGoal::Minimize(exprs) => {
+            compile_objectives(&env, exprs, ObjectiveDirection::Minimize)?
         }
-        SolveGoal::Maximize(expr) => {
-            let var = resolve_var(&env, expr)?;
-            Some(ObjectiveSpec {
-                var,
-                direction: ObjectiveDirection::Maximize,
-            })
+        SolveGoal::Maximize(exprs) => {
+            compile_objectives(&env, exprs, ObjectiveDirection::Maximize)?
         }
     };
 
@@ -149,9 +141,23 @@ pub fn compile(program: FlatZincProgram) -> Result<CompiledInstance, FlatZincErr
         solve_vars,
         names,
         outputs: program.outputs,
-        objective,
+        objectives,
         annotation_search,
     })
+}
+
+fn compile_objectives(
+    env: &HashMap<String, Binding>,
+    exprs: Vec<Expr>,
+    direction: ObjectiveDirection,
+) -> Result<Vec<ObjectiveSpec>, FlatZincError> {
+    exprs
+        .into_iter()
+        .map(|expr| {
+            let var = resolve_var(env, expr)?;
+            Ok(ObjectiveSpec { var, direction })
+        })
+        .collect()
 }
 
 enum Binding {
@@ -486,7 +492,7 @@ fn expand_predicates(
         .flat_map(|constraint| match constraint {
             Constraint::PredicateCall { name, args } => {
                 if let Some(predicate) = lookup.get(name.as_str()) {
-                    vec![substitute_predicate(predicate, &args)]
+                    substitute_predicate(predicate, &args)
                 } else {
                     vec![Constraint::PredicateCall { name, args }]
                 }
@@ -496,14 +502,18 @@ fn expand_predicates(
         .collect()
 }
 
-fn substitute_predicate(predicate: &PredicateDecl, args: &[Expr]) -> Constraint {
+fn substitute_predicate(predicate: &PredicateDecl, args: &[Expr]) -> Vec<Constraint> {
     let substitutions: HashMap<_, _> = predicate
         .params
         .iter()
         .cloned()
         .zip(args.iter().cloned())
         .collect();
-    substitute_constraint(&predicate.body, &substitutions)
+    predicate
+        .body
+        .iter()
+        .map(|constraint| substitute_constraint(constraint, &substitutions))
+        .collect()
 }
 
 fn substitute_constraint(

@@ -1,6 +1,7 @@
 use propaga_core::{PropagationContext, PropagationStatus, Propagator, VariableId};
 
 /// Propagates a positive table constraint to generalized arc consistency.
+#[derive(Clone)]
 pub struct TablePropagator {
     variables: Vec<VariableId>,
     tuples: Vec<Vec<i32>>,

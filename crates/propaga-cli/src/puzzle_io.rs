@@ -85,6 +85,7 @@ impl GlobalOptions {
     pub fn search_config(&self) -> propaga_search::SearchConfig {
         propaga_search::SearchConfig {
             learning: self.learning,
+            clause_learning: false,
             restart_policy: if self.all {
                 propaga_search::RestartPolicy::None
             } else {

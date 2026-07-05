@@ -4,7 +4,7 @@ A propagator-based constraint solver written in Rust.
 
 Propaga combines a typed propagation engine with pluggable domains, composable propagators, and conflict-driven search. Use it as a library via the `Model` API, from FlatZinc files, or through the `propaga` CLI.
 
-**v0.2.0** — [crates.io](https://crates.io/crates/propaga-cli) · [GitHub Releases](https://github.com/hocestnonsatis/propaga/releases) · [CHANGELOG](CHANGELOG.md)
+**v0.3.0** — [crates.io](https://crates.io/crates/propaga-cli) · [GitHub Releases](https://github.com/hocestnonsatis/propaga/releases) · [CHANGELOG](CHANGELOG.md)
 
 ## Installation
 
@@ -20,9 +20,9 @@ Prebuilt binaries: [GitHub Releases](https://github.com/hocestnonsatis/propaga/r
 **As a library** ([docs.rs](https://docs.rs/propaga-core)):
 
 ```toml
-propaga-core = "0.2"
-propaga-model = "0.2"
-propaga-flatzinc = "0.2"
+propaga-core = "0.3"
+propaga-model = "0.3"
+propaga-flatzinc = "0.3"
 ```
 
 FlatZinc support is an intentional subset — check [COMPATIBILITY.md](benchmarks/minizinc/COMPATIBILITY.md) before compiling MiniZinc models.
@@ -48,7 +48,7 @@ Equality, disequality, linear constraints, ordering (`<=`, `<`), reified compari
 
 ### Search
 
-MRV, DOM, DOM/W-DEG, and input-order variable ordering; ascending, descending, or LCV value ordering; first-UIP nogood learning; Luby, constant, and geometric restarts; phase saving; branch-and-bound for single-objective optimization. Configurable via CLI flags or `Model::set_search_config()`.
+MRV, DOM, DOM/W-DEG, activity-based, and input-order variable ordering; ascending, descending, LCV, split, and median value ordering; first-UIP nogood learning; optional lazy clause pruning; Luby, constant, geometric, linear, and on-solution restarts; phase saving; parallel portfolio search (`--workers`); lexicographic multi-objective optimization; branch-and-bound for single-objective optimization.
 
 ### FlatZinc
 
@@ -83,6 +83,8 @@ Global options:
 | `--var-ordering` | (from annotation or `mrv`) | `mrv`, `dom`, `dom-wdeg`, `input-order` |
 | `--value-ordering` | (from annotation or `asc`) | `asc`, `desc`, or `lcv` |
 | `--no-phase-saving` | off | Disable phase saving |
+| `--workers N` | `1` | Portfolio worker count for `solve` and puzzles |
+| `--deterministic` | off | Use only the base search configuration in portfolio mode |
 
 ## Quick start
 

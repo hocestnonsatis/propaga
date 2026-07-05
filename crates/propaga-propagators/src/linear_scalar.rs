@@ -1,6 +1,7 @@
 use propaga_core::{PropagationContext, PropagationStatus, Propagator, VariableId};
 
 /// Propagates `sum(coeffs[i] * vars[i]) <= rhs` with bound consistency.
+#[derive(Clone)]
 pub struct LinearScalarLePropagator {
     watched: Vec<VariableId>,
     coeffs: Vec<i32>,
@@ -33,6 +34,7 @@ impl Propagator for LinearScalarLePropagator {
 }
 
 /// Propagates `sum(coeffs[i] * vars[i]) >= rhs` with bound consistency.
+#[derive(Clone)]
 pub struct LinearScalarGePropagator {
     watched: Vec<VariableId>,
     coeffs: Vec<i32>,
@@ -65,6 +67,7 @@ impl Propagator for LinearScalarGePropagator {
 }
 
 /// Propagates `reif == 1 <=> sum(coeffs[i] * vars[i]) <= rhs`.
+#[derive(Clone)]
 pub struct ReifiedScalarLePropagator {
     watched: Vec<VariableId>,
     coeffs: Vec<i32>,
@@ -170,6 +173,7 @@ impl Propagator for ReifiedScalarLePropagator {
 }
 
 /// Propagates `reif == 1 <=> sum(coeffs[i] * vars[i]) >= rhs`.
+#[derive(Clone)]
 pub struct ReifiedScalarGePropagator {
     watched: Vec<VariableId>,
     coeffs: Vec<i32>,
@@ -275,6 +279,7 @@ impl Propagator for ReifiedScalarGePropagator {
 }
 
 /// Propagates `reif == 1 <=> sum(coeffs[i] * vars[i]) == rhs`.
+#[derive(Clone)]
 pub struct ReifiedScalarEqPropagator {
     watched: Vec<VariableId>,
     coeffs: Vec<i32>,

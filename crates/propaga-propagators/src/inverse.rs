@@ -1,6 +1,7 @@
 use propaga_core::{PropagationContext, PropagationStatus, Propagator, VariableId};
 
 /// Propagates `inverse(forward, backward)`: forward[i] = j <=> backward[j] = i.
+#[derive(Clone)]
 pub struct InversePropagator {
     forward: Vec<VariableId>,
     backward: Vec<VariableId>,

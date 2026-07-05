@@ -5,6 +5,7 @@ use crate::scheduling::{
 use propaga_core::{PropagationContext, PropagationStatus, Propagator, VariableId};
 
 /// Propagates a cumulative scheduling constraint with overload checking and edge finding.
+#[derive(Clone)]
 pub struct CumulativePropagator {
     watched: Vec<VariableId>,
     tasks: Vec<TaskSpec>,

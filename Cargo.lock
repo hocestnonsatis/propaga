@@ -253,6 +253,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
+name = "dyn-clone"
+version = "1.0.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
+
+[[package]]
 name = "either"
 version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -497,7 +503,7 @@ dependencies = [
 
 [[package]]
 name = "propaga-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "clap",
  "propaga-core",
@@ -512,32 +518,35 @@ dependencies = [
 
 [[package]]
 name = "propaga-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
+ "dyn-clone",
  "slotmap",
  "thiserror",
 ]
 
 [[package]]
 name = "propaga-domains"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "propaga-core",
 ]
 
 [[package]]
 name = "propaga-engine"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
+ "dyn-clone",
  "priority-queue",
  "propaga-core",
  "propaga-domains",
+ "propaga-propagators",
  "slotmap",
 ]
 
 [[package]]
 name = "propaga-flatzinc"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "propaga-core",
  "propaga-model",
@@ -548,7 +557,7 @@ dependencies = [
 
 [[package]]
 name = "propaga-model"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "propaga-core",
  "propaga-domains",
@@ -559,7 +568,7 @@ dependencies = [
 
 [[package]]
 name = "propaga-propagators"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "criterion",
  "propaga-core",
@@ -569,18 +578,19 @@ dependencies = [
 
 [[package]]
 name = "propaga-search"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "propaga-core",
  "propaga-domains",
  "propaga-engine",
  "propaga-propagators",
+ "rayon",
  "slotmap",
 ]
 
 [[package]]
 name = "propaga-wasm"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "propaga-core",
  "propaga-model",

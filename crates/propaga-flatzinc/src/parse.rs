@@ -249,15 +249,15 @@ pub enum Constraint {
     },
 }
 
-/// A parsed user-defined predicate with a single-constraint body.
+/// A parsed user-defined predicate with one or more constraint bodies.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PredicateDecl {
     /// Predicate name.
     pub name: String,
     /// Formal parameter names in order.
     pub params: Vec<String>,
-    /// Inlined constraint body.
-    pub body: Constraint,
+    /// Inlined constraint bodies.
+    pub body: Vec<Constraint>,
 }
 
 /// Duration array in a cumulative constraint.
@@ -379,10 +379,10 @@ pub enum RestartKind {
 pub enum SolveGoal {
     /// `solve satisfy`
     Satisfy,
-    /// `solve minimize expr`
-    Minimize(Expr),
-    /// `solve maximize expr`
-    Maximize(Expr),
+    /// `solve minimize expr` or `solve minimize x, y`
+    Minimize(Vec<Expr>),
+    /// `solve maximize expr` or `solve maximize x, y`
+    Maximize(Vec<Expr>),
 }
 
 /// Parses a FlatZinc subset program from source text.
@@ -687,7 +687,13 @@ impl Parser {
         self.expect_ident("constraint")?;
         let name = self.expect_ident_token()?;
         self.expect_symbol("(")?;
-        let constraint = match name.as_str() {
+        let constraint = self.parse_constraint_by_name(&name)?;
+        self.expect_symbol(")")?;
+        Ok(constraint)
+    }
+
+    fn parse_constraint_by_name(&mut self, name: &str) -> Result<Constraint, FlatZincError> {
+        let constraint = match name {
             "all_different" => {
                 let expr = self.parse_expr()?;
                 let args = match expr {
@@ -991,7 +997,6 @@ impl Parser {
                 }
             }
         };
-        self.expect_symbol(")")?;
         Ok(constraint)
     }
 
@@ -1022,51 +1027,55 @@ impl Parser {
         }
         self.expect_symbol(")")?;
         self.expect_symbol("=")?;
-        let body = self.parse_predicate_body_constraint()?;
+        let body = self.parse_predicate_body_constraints()?;
         Ok(PredicateDecl { name, params, body })
     }
 
-    fn parse_predicate_body_constraint(&mut self) -> Result<Constraint, FlatZincError> {
-        if self.peek_is_ident("constraint") {
-            self.expect_ident("constraint")?;
+    fn parse_predicate_body_constraints(&mut self) -> Result<Vec<Constraint>, FlatZincError> {
+        let mut constraints = Vec::new();
+        loop {
+            if self.peek_is_ident("constraint") {
+                self.expect_ident("constraint")?;
+            }
+            let name = self.expect_ident_token()?;
+            self.expect_symbol("(")?;
+            let constraint = self.parse_constraint_by_name(&name)?;
+            self.expect_symbol(")")?;
+            if matches!(constraint, Constraint::PredicateCall { .. }) {
+                return Err(FlatZincError::Unsupported(
+                    "nested predicate calls in predicate bodies are not supported".to_string(),
+                ));
+            }
+            constraints.push(constraint);
+            if self.peek_is_symbol("/") {
+                self.expect_symbol("/")?;
+                self.expect_symbol("\\")?;
+                continue;
+            }
+            if self.peek_is_symbol(";") {
+                self.expect_symbol(";")?;
+                if self.peek_is_ident("constraint") {
+                    continue;
+                }
+            }
+            break;
         }
-        let name = self.expect_ident_token()?;
-        self.expect_symbol("(")?;
-        let constraint = match name.as_str() {
-            "int_eq" => {
-                let left = self.parse_expr()?;
-                self.expect_symbol(",")?;
-                let right = self.parse_expr()?;
-                Constraint::IntEq(left, right)
+        Ok(constraints)
+    }
+
+    fn parse_objective_exprs(&mut self) -> Result<Vec<Expr>, FlatZincError> {
+        let first = self.parse_expr()?;
+        match first {
+            Expr::List(items) => Ok(items),
+            expr => {
+                let mut exprs = vec![expr];
+                while self.peek_is_symbol(",") {
+                    self.expect_symbol(",")?;
+                    exprs.push(self.parse_expr()?);
+                }
+                Ok(exprs)
             }
-            "int_ne" => {
-                let left = self.parse_expr()?;
-                self.expect_symbol(",")?;
-                let right = self.parse_expr()?;
-                Constraint::IntNe(left, right)
-            }
-            "int_le" => {
-                let left = self.parse_expr()?;
-                self.expect_symbol(",")?;
-                let right = self.parse_expr()?;
-                Constraint::IntLe(left, right)
-            }
-            "all_different" => {
-                let expr = self.parse_expr()?;
-                let args = match expr {
-                    Expr::List(items) => items,
-                    other => vec![other],
-                };
-                Constraint::AllDifferent(args)
-            }
-            other => {
-                return Err(FlatZincError::Unsupported(format!(
-                    "predicate body constraint `{other}` is not supported for inline expansion"
-                )));
-            }
-        };
-        self.expect_symbol(")")?;
-        Ok(constraint)
+        }
     }
 
     fn parse_tuple_set(&mut self) -> Result<Vec<i32>, FlatZincError> {
@@ -1185,12 +1194,10 @@ impl Parser {
         }
         let goal = if self.peek_is_ident("minimize") {
             self.expect_ident("minimize")?;
-            let expr = self.parse_expr()?;
-            SolveGoal::Minimize(expr)
+            SolveGoal::Minimize(self.parse_objective_exprs()?)
         } else if self.peek_is_ident("maximize") {
             self.expect_ident("maximize")?;
-            let expr = self.parse_expr()?;
-            SolveGoal::Maximize(expr)
+            SolveGoal::Maximize(self.parse_objective_exprs()?)
         } else {
             self.expect_ident("satisfy")?;
             SolveGoal::Satisfy
@@ -1756,17 +1763,26 @@ mod tests {
     }
 
     #[test]
-    fn parses_restart_linear_annotation() {
+    fn parses_multi_constraint_predicate() {
+        let source = r#"
+            predicate chained(var int: a, var int: b) =
+              constraint int_le(a, b) /\
+              constraint all_different([a, b]);
+            var 1..3: x;
+            solve satisfy;
+        "#;
+        let program = parse(source).expect("multi-constraint predicate should parse");
+        assert_eq!(program.predicates[0].body.len(), 2);
+    }
+
+    #[test]
+    fn parses_lexicographic_objectives() {
         let source = r#"
             var 1..3: x;
-            solve :: restart_linear(100) satisfy;
+            var 1..3: y;
+            solve minimize x, y;
         "#;
-        let program = parse(source).expect("restart_linear should parse");
-        assert!(matches!(
-            program.solve.annotations.restart,
-            Some(RestartAnnotation {
-                kind: RestartKind::Linear { scale: 100 }
-            })
-        ));
+        let program = parse(source).expect("lexicographic objectives should parse");
+        assert!(matches!(program.solve.goal, SolveGoal::Minimize(ref exprs) if exprs.len() == 2));
     }
 }

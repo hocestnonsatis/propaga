@@ -2,6 +2,7 @@ use crate::matching::{has_perfect_matching, remove_unsupported_values};
 use propaga_core::{PropagationContext, PropagationStatus, Propagator, VariableId};
 
 /// Propagates pairwise distinctness to generalized arc consistency when possible.
+#[derive(Clone)]
 pub struct AllDifferentPropagator {
     variables: Vec<VariableId>,
 }

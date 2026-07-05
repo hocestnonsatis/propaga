@@ -5,6 +5,29 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-07-05
+
+### Added
+
+- `EngineCheckpoint` API with `checkpoint`, `restore_checkpoint`, and `fork_at_checkpoint` for parallel search workers.
+- Parallel portfolio search using rayon when `--workers > 1` (FlatZinc `solve`, Sudoku, and portfolio API).
+- Multi-constraint FlatZinc predicate bodies (`constraint A /\ constraint B` and semicolon chains).
+- FlatZinc lexicographic multi-objective (`solve minimize x, y`); CLI JSON includes `objective_values`.
+- Lazy clause pruning in DFS via `SearchConfig::clause_learning`.
+- Benchmarks: `predicate_multi.fzn`, `lexicographic_multi.fzn`.
+
+### Changed
+
+- `CompiledInstance.objective` replaced by `objectives: Vec<ObjectiveSpec>`.
+- `SolveGoal::Minimize` / `Maximize` now hold expression lists for lexicographic goals.
+- Propagators implement `DynClone` for engine fork at checkpoint.
+
+### Known limitations
+
+- Set/float domains are not yet wired into the propagation engine.
+- Predicate bodies still inline-expand only; nested predicate calls in bodies are rejected.
+- `clause_learning` prunes branches but does not post learned clauses as propagators yet.
+
 ## [0.2.0] - 2026-07-02
 
 ### Added
@@ -55,5 +78,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multi-objective optimization supports lexicographic API; FlatZinc multi-objective directives are not yet parsed.
 - See [ROADMAP.md](ROADMAP.md) for planned features.
 
+[0.3.0]: https://github.com/hocestnonsatis/propaga/releases/tag/v0.3.0
 [0.2.0]: https://github.com/hocestnonsatis/propaga/releases/tag/v0.2.0
 [0.1.0]: https://github.com/hocestnonsatis/propaga/releases/tag/v0.1.0

@@ -1,6 +1,7 @@
 use propaga_core::{PropagationContext, PropagationStatus, Propagator, VariableId};
 
 /// Propagates `value == array[index]` with bound consistency.
+#[derive(Clone)]
 pub struct ElementPropagator {
     watched: Vec<VariableId>,
     index: VariableId,

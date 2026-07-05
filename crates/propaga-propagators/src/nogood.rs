@@ -1,6 +1,7 @@
 use propaga_core::{NogoodLiteral, PropagationContext, PropagationStatus, Propagator, VariableId};
 
 /// Forbids the conjunction of branch literals in a learned nogood.
+#[derive(Clone)]
 pub struct NogoodPropagator {
     watched: Vec<VariableId>,
     literals: Vec<NogoodLiteral>,

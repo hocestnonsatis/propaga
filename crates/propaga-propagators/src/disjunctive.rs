@@ -1,7 +1,7 @@
 use propaga_core::{PropagationContext, PropagationStatus, Propagator, VariableId};
 
 /// Single task in a disjunctive (single-machine) constraint.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DisjunctiveTask {
     /// Task start time variable.
     pub start: VariableId,
@@ -10,6 +10,7 @@ pub struct DisjunctiveTask {
 }
 
 /// Propagates pairwise disjunctive scheduling: tasks do not overlap on one machine.
+#[derive(Clone)]
 pub struct DisjunctivePropagator {
     watched: Vec<VariableId>,
     tasks: Vec<DisjunctiveTask>,

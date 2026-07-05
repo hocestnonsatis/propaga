@@ -21,14 +21,14 @@ pub struct ConflictInfo {
 
 /// Constraint propagation engine with trail-based backtracking.
 pub struct Engine {
-    variables: SlotMap<VariableKey, HybridDomain>,
-    propagators: SlotMap<PropagatorKey, Box<dyn Propagator>>,
-    subscriptions: HashMap<VariableKey, Vec<PropagatorKey>>,
-    priorities: HashMap<PropagatorKey, u32>,
-    queue: EventQueue,
-    trail: Trail,
-    explanation: Explanation,
-    last_conflict: Option<ConflictInfo>,
+    pub(crate) variables: SlotMap<VariableKey, HybridDomain>,
+    pub(crate) propagators: SlotMap<PropagatorKey, Box<dyn Propagator>>,
+    pub(crate) subscriptions: HashMap<VariableKey, Vec<PropagatorKey>>,
+    pub(crate) priorities: HashMap<PropagatorKey, u32>,
+    pub(crate) queue: EventQueue,
+    pub(crate) trail: Trail,
+    pub(crate) explanation: Explanation,
+    pub(crate) last_conflict: Option<ConflictInfo>,
 }
 
 impl Engine {
@@ -294,6 +294,7 @@ mod tests {
     use propaga_core::PropagationContext;
     use propaga_domains::{HybridDomain, IntervalDomain};
 
+    #[derive(Clone)]
     struct LowerBoundPropagator {
         var: VariableId,
         bound: i32,
@@ -313,6 +314,7 @@ mod tests {
         }
     }
 
+    #[derive(Clone)]
     struct EqualizingPropagator {
         watched: [VariableId; 2],
     }

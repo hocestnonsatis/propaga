@@ -16,7 +16,7 @@ fn magic_square_is_satisfiable() {
 fn maximize_x_finds_optimum() {
     let program = parse(MAXIMIZE_X).expect("parse maximize_x");
     let mut instance = compile(program).expect("compile maximize_x");
-    let objective = instance.objective.expect("objective");
+    let objective = instance.objectives.first().expect("objective");
     let (solution, best, _stats, _solutions) =
         instance
             .model

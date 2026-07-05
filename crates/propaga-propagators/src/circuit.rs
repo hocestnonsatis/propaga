@@ -2,6 +2,7 @@ use crate::matching::{has_perfect_matching, remove_unsupported_values};
 use propaga_core::{PropagationContext, PropagationStatus, Propagator, VariableId};
 
 /// Propagates a Hamiltonian circuit over successor variables.
+#[derive(Clone)]
 pub struct CircuitPropagator {
     successors: Vec<VariableId>,
     /// Index base for node numbering (0 for 0-based, 1 for 1-based FlatZinc).

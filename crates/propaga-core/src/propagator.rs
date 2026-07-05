@@ -1,7 +1,10 @@
 use crate::{PropagationContext, PropagationStatus, VariableId};
+use dyn_clone::DynClone;
+
+dyn_clone::clone_trait_object!(Propagator);
 
 /// A constraint propagator that reacts to domain changes on watched variables.
-pub trait Propagator {
+pub trait Propagator: DynClone + Send {
     /// Variables whose domains this propagator depends on.
     fn watched_variables(&self) -> &[VariableId];
 

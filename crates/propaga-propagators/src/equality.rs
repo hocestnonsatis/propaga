@@ -1,6 +1,7 @@
 use propaga_core::{PropagationContext, PropagationStatus, Propagator, VariableId};
 
 /// Propagates `left == right` using bound consistency.
+#[derive(Clone)]
 pub struct EqualityPropagator {
     watched: [VariableId; 2],
 }

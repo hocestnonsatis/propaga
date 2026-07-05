@@ -1,7 +1,7 @@
 use propaga_core::{PropagationContext, PropagationStatus, Propagator, VariableId};
 
 /// Rectangle specification for `diffn`.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RectangleSpec {
     /// Left x coordinate.
     pub x: VariableId,
@@ -14,6 +14,7 @@ pub struct RectangleSpec {
 }
 
 /// Propagates pairwise non-overlap among fixed-size rectangles.
+#[derive(Clone)]
 pub struct DiffnPropagator {
     rectangles: Vec<RectangleSpec>,
     watched: Vec<VariableId>,

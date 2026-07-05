@@ -1,5 +1,6 @@
 use crate::config::SearchConfig;
 use crate::conflict::{ConflictAnalyzer, NogoodStore};
+use crate::lcg::ClauseStore;
 use crate::stats::{SearchStats, branch_assignments_from_explanation};
 use propaga_core::{DomainView, NogoodLiteral, PropagationStatus, VariableId};
 use propaga_engine::Engine;
@@ -15,6 +16,7 @@ pub struct DepthFirstSearch {
     variables: Vec<VariableId>,
     config: SearchConfig,
     nogoods: NogoodStore,
+    clauses: ClauseStore,
     stats: SearchStats,
     nodes_since_restart: u64,
     restart_index: u32,
@@ -39,6 +41,7 @@ impl DepthFirstSearch {
             variables: variables.into(),
             config,
             nogoods: NogoodStore::new(),
+            clauses: ClauseStore::new(),
             stats: SearchStats::default(),
             nodes_since_restart: 0,
             restart_index: 0,
@@ -159,6 +162,33 @@ impl DepthFirstSearch {
         }
     }
 
+    /// Searches without running root propagation (caller must commit root state first).
+    pub fn solve_without_root_propagation(&mut self, engine: &mut Engine) -> Option<Solution> {
+        self.begin_search();
+        loop {
+            if self.check_timeout() {
+                return None;
+            }
+
+            if let Some(solution) = self.search(engine) {
+                return Some(solution);
+            }
+
+            if self.stats.timed_out || !self.should_restart() {
+                return None;
+            }
+
+            if matches!(
+                self.config.restart_policy,
+                crate::config::RestartPolicy::OnSolution
+            ) {
+                return None;
+            }
+
+            self.perform_restart(engine);
+        }
+    }
+
     #[cfg(test)]
     fn solve_without_initial_propagation(&mut self, engine: &mut Engine) -> Option<Solution> {
         self.search(engine)
@@ -180,7 +210,7 @@ impl DepthFirstSearch {
         }
 
         let assignment = branch_assignments_from_explanation(engine.explanation());
-        if self.config.learning && self.nogoods.is_violated(&assignment) {
+        if self.is_pruned(&assignment) {
             return None;
         }
 
@@ -188,7 +218,7 @@ impl DepthFirstSearch {
         let values = self.ordered_values(engine, var);
 
         for value in values {
-            if self.config.learning && self.nogoods.would_violate(&assignment, var, value) {
+            if self.would_prune(&assignment, var, value) {
                 continue;
             }
 
@@ -245,7 +275,7 @@ impl DepthFirstSearch {
         }
 
         let assignment = branch_assignments_from_explanation(engine.explanation());
-        if self.config.learning && self.nogoods.is_violated(&assignment) {
+        if self.is_pruned(&assignment) {
             return;
         }
 
@@ -256,7 +286,7 @@ impl DepthFirstSearch {
         let values = self.ordered_values(engine, var);
 
         for value in values {
-            if self.config.learning && self.nogoods.would_violate(&assignment, var, value) {
+            if self.would_prune(&assignment, var, value) {
                 continue;
             }
 
@@ -304,6 +334,9 @@ impl DepthFirstSearch {
                 engine.add_propagator(Box::new(NogoodPropagator::new(nogood.literals().to_vec())));
                 self.stats.record_nogood();
             }
+            if self.config.clause_learning {
+                self.clauses.learn_from_nogood(&nogood);
+            }
             if learned && let Some(learned_nogood) = self.nogoods.last() {
                 let backjump = ConflictAnalyzer::backjump_level(learned_nogood, &branch_order);
                 let target = backjump.min(level);
@@ -350,6 +383,16 @@ impl DepthFirstSearch {
         if self.config.phase_saving {
             self.phases.insert(var, value);
         }
+    }
+
+    fn is_pruned(&self, assignment: &[(VariableId, i32)]) -> bool {
+        (self.config.learning && self.nogoods.is_violated(assignment))
+            || (self.config.clause_learning && self.clauses.is_violated(assignment))
+    }
+
+    fn would_prune(&self, assignment: &[(VariableId, i32)], var: VariableId, value: i32) -> bool {
+        (self.config.learning && self.nogoods.would_violate(assignment, var, value))
+            || (self.config.clause_learning && self.clauses.would_violate(assignment, var, value))
     }
 
     fn bump_weights(&mut self, literals: &[NogoodLiteral]) {

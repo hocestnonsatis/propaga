@@ -54,7 +54,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `solve :: restart_constant(scale)` | Supported | Constant node budget between restarts |
 | `solve :: restart_geometric(base, scale)` | Supported | Geometric node budget; `base` may be a FlatZinc float literal |
 | `solve :: restart_none` | Supported | With or without `()` |
-| `predicate` / `function` / `test` | **Rejected** | Parse error: unsupported declaration |
+| `predicate` declarations | Supported subset | Multi-constraint bodies (`/\` or `;` chains); inline expansion |
 | Unknown top-level statements (`annotation`, etc.) | **Rejected** | Parse error: unsupported top-level statement |
 
 ## Solve directives
@@ -64,7 +64,8 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `solve satisfy;` | Supported |
 | `solve minimize x;` | Supported | Branch-and-bound |
 | `solve maximize x;` | Supported | Branch-and-bound |
-| Multi-objective | Not supported | Medium-term roadmap |
+| `solve minimize x, y;` | Supported | Lexicographic branch-and-bound |
+| Multi-objective Pareto | Not supported | Medium-term roadmap |
 
 ## CLI features (FlatZinc path)
 
@@ -75,6 +76,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `--time-limit SECS` | Supported | Wall-clock cutoff (Sprint 23) |
 | `--all`, `--solutions N` | Supported | Satisfy instances |
 | `--stats`, `--format json` | Supported | Includes `timed_out` when applicable |
+| `--workers N` | Supported | Parallel portfolio search for satisfy instances |
 
 ## MiniZinc workflow example
 

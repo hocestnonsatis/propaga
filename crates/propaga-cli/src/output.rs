@@ -255,7 +255,7 @@ pub(crate) fn print_flatzinc_json(
     order: &[propaga_core::VariableId],
     solution: Option<&propaga_search::Solution>,
     outputs: &[propaga_flatzinc::OutputDirective],
-    objective_value: Option<i32>,
+    objective_values: &[i32],
     direction: Option<propaga_search::ObjectiveDirection>,
     stats: Option<(SearchStats, Duration, u32)>,
 ) {
@@ -297,7 +297,7 @@ pub(crate) fn print_flatzinc_json(
     if !formatted.is_empty() {
         payload["outputs"] = json!(formatted);
     }
-    if let (Some(value), Some(direction)) = (objective_value, direction) {
+    if let (Some(value), Some(direction)) = (objective_values.first().copied(), direction) {
         payload["objective"] = json!({
             "value": value,
             "direction": match direction {
@@ -305,6 +305,9 @@ pub(crate) fn print_flatzinc_json(
                 propaga_search::ObjectiveDirection::Maximize => "maximize",
             },
         });
+    }
+    if objective_values.len() > 1 {
+        payload["objective_values"] = json!(objective_values);
     }
     if let Some((stats, elapsed, solutions_found)) = stats {
         payload["stats"] = json!({
