@@ -10,6 +10,7 @@ mod dfs;
 mod lcg;
 mod lexicographic;
 mod optimize;
+mod pareto;
 mod portfolio;
 mod stats;
 
@@ -19,5 +20,6 @@ pub use dfs::{DepthFirstSearch, Solution};
 pub use lcg::{ClauseStore, LearnedClause};
 pub use lexicographic::{LexicographicOptimization, LexicographicResult, Objective};
 pub use optimize::{ObjectiveDirection, OptimizationResult, OptimizationSearch};
+pub use pareto::{ParetoOptimization, ParetoResult, ParetoSolution, dominates};
 pub use portfolio::{PortfolioConfig, PortfolioSearch};
 pub use stats::SearchStats;

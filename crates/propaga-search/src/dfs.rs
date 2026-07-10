@@ -4,6 +4,7 @@ use crate::lcg::ClauseStore;
 use crate::stats::{SearchStats, branch_assignments_from_explanation};
 use propaga_core::{DomainView, NogoodLiteral, PropagationStatus, VariableId};
 use propaga_engine::Engine;
+use propaga_propagators::ClausePropagator;
 use propaga_propagators::NogoodPropagator;
 use std::collections::HashMap;
 use std::time::Instant;
@@ -76,6 +77,12 @@ impl DepthFirstSearch {
     #[must_use]
     pub fn nogood_count(&self) -> usize {
         self.nogoods.len()
+    }
+
+    /// Returns the number of learned clauses.
+    #[must_use]
+    pub fn clause_count(&self) -> usize {
+        self.clauses.clauses().len()
     }
 
     /// Searches for a solution, returning the first one found.
@@ -334,8 +341,8 @@ impl DepthFirstSearch {
                 engine.add_propagator(Box::new(NogoodPropagator::new(nogood.literals().to_vec())));
                 self.stats.record_nogood();
             }
-            if self.config.clause_learning {
-                self.clauses.learn_from_nogood(&nogood);
+            if self.config.clause_learning && self.clauses.learn_from_nogood(&nogood) {
+                engine.add_propagator(Box::new(ClausePropagator::new(nogood.literals().to_vec())));
             }
             if learned && let Some(learned_nogood) = self.nogoods.last() {
                 let backjump = ConflictAnalyzer::backjump_level(learned_nogood, &branch_order);

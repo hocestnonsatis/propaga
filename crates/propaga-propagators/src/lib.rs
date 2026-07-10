@@ -6,6 +6,7 @@
 
 mod all_different;
 mod circuit;
+mod clause;
 mod cumulative;
 mod diffn;
 mod disjunctive;
@@ -20,12 +21,14 @@ mod linear_scalar;
 mod matching;
 mod nogood;
 mod not_equal_offset;
+mod regular;
 mod reified;
 mod scheduling;
 mod table;
 
 pub use all_different::AllDifferentPropagator;
 pub use circuit::CircuitPropagator;
+pub use clause::ClausePropagator;
 pub use cumulative::CumulativePropagator;
 pub use diffn::{DiffnPropagator, RectangleSpec};
 pub use disjunctive::{DisjunctivePropagator, DisjunctiveTask};
@@ -42,6 +45,7 @@ pub use linear_scalar::{
 };
 pub use nogood::NogoodPropagator;
 pub use not_equal_offset::NotEqualOffsetPropagator;
+pub use regular::RegularPropagator;
 pub use reified::{
     ReifiedEqualityPropagator, ReifiedLessEqualPropagator, ReifiedLessThanPropagator,
     ReifiedNotEqualPropagator,

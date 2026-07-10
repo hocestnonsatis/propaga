@@ -47,3 +47,24 @@ fn compiles_inline_predicate() {
     let (solution, _) = instance.model.solve_subset_with_stats(instance.solve_vars);
     assert!(solution.is_some());
 }
+
+#[test]
+fn compiles_pareto_solve_directive() {
+    let source = r#"
+var 1..2: x;
+var 1..2: y;
+constraint int_ne(x, y);
+solve :: pareto([x, y]) satisfy;
+"#;
+    let program = parse(source).expect("parse");
+    let compiled = compile(program).expect("compile");
+    assert!(compiled.pareto);
+    assert_eq!(compiled.pareto_objectives.len(), 2);
+}
+
+#[test]
+fn compiles_regular_constraint() {
+    let source = include_str!("../../../benchmarks/regular_chain.fzn");
+    let program = parse(source).expect("parse");
+    compile(program).expect("compile");
+}

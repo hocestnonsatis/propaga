@@ -250,6 +250,7 @@ pub(crate) fn format_output_directive(
 }
 
 /// Prints FlatZinc JSON including optional formatted outputs.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn print_flatzinc_json(
     names: &std::collections::HashMap<propaga_core::VariableId, String>,
     order: &[propaga_core::VariableId],
@@ -257,6 +258,7 @@ pub(crate) fn print_flatzinc_json(
     outputs: &[propaga_flatzinc::OutputDirective],
     objective_values: &[i32],
     direction: Option<propaga_search::ObjectiveDirection>,
+    pareto_solutions: &[propaga_search::ParetoSolution],
     stats: Option<(SearchStats, Duration, u32)>,
 ) {
     use serde_json::json;
@@ -309,6 +311,19 @@ pub(crate) fn print_flatzinc_json(
     if objective_values.len() > 1 {
         payload["objective_values"] = json!(objective_values);
     }
+    if !pareto_solutions.is_empty() {
+        payload["pareto_solutions"] = json!(
+            pareto_solutions
+                .iter()
+                .map(|entry| {
+                    json!({
+                        "objectives": entry.objective_values,
+                        "variables": assignment_json(names, order, &entry.assignment),
+                    })
+                })
+                .collect::<Vec<_>>()
+        );
+    }
     if let Some((stats, elapsed, solutions_found)) = stats {
         payload["stats"] = json!({
             "nodes": stats.nodes,
@@ -322,6 +337,22 @@ pub(crate) fn print_flatzinc_json(
         });
     }
     println!("{}", payload);
+}
+
+fn assignment_json(
+    names: &std::collections::HashMap<propaga_core::VariableId, String>,
+    order: &[propaga_core::VariableId],
+    solution: &propaga_search::Solution,
+) -> std::collections::HashMap<String, i32> {
+    let values: std::collections::HashMap<_, _> = solution.iter().copied().collect();
+    order
+        .iter()
+        .filter_map(|var| {
+            let name = names.get(var)?.clone();
+            let value = *values.get(var)?;
+            Some((name, value))
+        })
+        .collect()
 }
 
 /// Prints the optimized objective value in plain text.

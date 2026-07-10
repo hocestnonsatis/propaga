@@ -43,6 +43,10 @@ pub struct CompiledInstance {
     pub outputs: Vec<OutputDirective>,
     /// Optimization objectives in priority order (empty for satisfy).
     pub objectives: Vec<ObjectiveSpec>,
+    /// Whether the solve directive requests Pareto enumeration.
+    pub pareto: bool,
+    /// Objective variables listed in `:: pareto([...])`.
+    pub pareto_objectives: Vec<VariableId>,
     /// Optional search configuration from FlatZinc annotations.
     pub annotation_search: Option<AnnotationSearchConfig>,
 }
@@ -136,12 +140,24 @@ pub fn compile(program: FlatZincProgram) -> Result<CompiledInstance, FlatZincErr
         }
     };
 
+    let pareto_objectives = if let Some(exprs) = &program.solve.annotations.pareto {
+        exprs
+            .iter()
+            .cloned()
+            .map(|expr| resolve_var(&env, expr))
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        Vec::new()
+    };
+
     Ok(CompiledInstance {
         model,
         solve_vars,
         names,
         outputs: program.outputs,
         objectives,
+        pareto: !pareto_objectives.is_empty(),
+        pareto_objectives,
         annotation_search,
     })
 }
@@ -470,6 +486,25 @@ fn post_constraint(
         } => {
             post_diffn(model, env, xs, ys, widths, heights)?;
         }
+        Constraint::Regular {
+            vars,
+            num_symbols,
+            num_states,
+            transitions,
+            start,
+            accepting,
+        } => {
+            post_regular(
+                model,
+                env,
+                vars,
+                num_symbols,
+                num_states,
+                transitions,
+                start,
+                accepting,
+            )?;
+        }
         Constraint::PredicateCall { .. } => {
             return Err(FlatZincError::Unsupported(
                 "unexpanded predicate call".to_string(),
@@ -595,6 +630,51 @@ fn post_diffn(
         })
         .collect();
     model.diffn(rectangles);
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn post_regular(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    vars: Vec<Expr>,
+    num_symbols: i32,
+    num_states: i32,
+    transitions: String,
+    start: i32,
+    accepting: Vec<i32>,
+) -> Result<(), FlatZincError> {
+    let variables = resolve_var_list(env, Expr::List(vars))?;
+    let flat = match env.get(&transitions) {
+        Some(Binding::ParamArray(values)) => values.clone(),
+        Some(_) => {
+            return Err(FlatZincError::Unsupported(format!(
+                "regular transition `{transitions}` must be an int array"
+            )));
+        }
+        None => {
+            return Err(FlatZincError::Unsupported(format!(
+                "unknown regular transition array `{transitions}`"
+            )));
+        }
+    };
+    let states = num_states.max(0) as usize;
+    let symbols = num_symbols.max(0) as usize;
+    if states == 0 || symbols == 0 {
+        return Err(FlatZincError::Unsupported(
+            "regular requires positive state and symbol counts".to_string(),
+        ));
+    }
+    let mut matrix = vec![vec![0; symbols]; states];
+    for (index, value) in flat.iter().enumerate() {
+        let row = index / symbols;
+        let col = index % symbols;
+        if row >= states {
+            break;
+        }
+        matrix[row][col] = *value;
+    }
+    model.regular(variables, states, matrix, start, accepting);
     Ok(())
 }
 

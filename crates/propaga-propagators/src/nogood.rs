@@ -32,38 +32,45 @@ impl Propagator for NogoodPropagator {
     }
 
     fn propagate(&mut self, ctx: &mut dyn PropagationContext) -> PropagationStatus {
-        let mut matched = 0usize;
-        let mut pending: Option<NogoodLiteral> = None;
+        propagate_nogood_literals(&self.literals, ctx)
+    }
+}
 
-        for literal in &self.literals {
-            match ctx.fixed_value(literal.variable) {
-                Some(value) if value == literal.value => matched += 1,
-                Some(_) => return PropagationStatus::OkNoChange,
-                None => {
-                    if pending.is_some() {
-                        return PropagationStatus::OkNoChange;
-                    }
-                    pending = Some(*literal);
+pub(crate) fn propagate_nogood_literals(
+    literals: &[NogoodLiteral],
+    ctx: &mut dyn PropagationContext,
+) -> PropagationStatus {
+    let mut matched = 0usize;
+    let mut pending: Option<NogoodLiteral> = None;
+
+    for literal in literals {
+        match ctx.fixed_value(literal.variable) {
+            Some(value) if value == literal.value => matched += 1,
+            Some(_) => return PropagationStatus::OkNoChange,
+            None => {
+                if pending.is_some() {
+                    return PropagationStatus::OkNoChange;
                 }
+                pending = Some(*literal);
             }
         }
+    }
 
-        if matched == self.literals.len() {
+    if matched == literals.len() {
+        return PropagationStatus::Failure;
+    }
+
+    if matched + 1 == literals.len()
+        && let Some(literal) = pending
+        && ctx.remove_value(literal.variable, literal.value)
+    {
+        if ctx.domain(literal.variable).is_empty() {
             return PropagationStatus::Failure;
         }
-
-        if matched + 1 == self.literals.len()
-            && let Some(literal) = pending
-            && ctx.remove_value(literal.variable, literal.value)
-        {
-            if ctx.domain(literal.variable).is_empty() {
-                return PropagationStatus::Failure;
-            }
-            return PropagationStatus::OkChanged;
-        }
-
-        PropagationStatus::OkNoChange
+        return PropagationStatus::OkChanged;
     }
+
+    PropagationStatus::OkNoChange
 }
 
 #[cfg(test)]

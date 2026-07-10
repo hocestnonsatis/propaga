@@ -1,16 +1,17 @@
 # Propaga Roadmap
 
-Forward-looking ideas beyond v0.3.0. See [README.md](README.md) for what ships today.
-
-## Medium term
-
-- Pareto-front multi-objective optimization
+Forward-looking ideas beyond v0.4.0. See [README.md](README.md) for what ships today.
 
 ## Long term
 
 - Full engine integration for set and float variable domains
-- Deeper lazy clause generation integration with search (propagator posting)
-- WASM demo packaging and hosted deployment
+
+## Shipped in v0.4.0
+
+- Pareto-front multi-objective optimization
+- FlatZinc `regular` global constraint
+- Deeper lazy clause generation integration (clause propagator posting)
+- WASM demo packaging and GitHub Pages deployment workflow
 
 ## Shipped in v0.3.0
 

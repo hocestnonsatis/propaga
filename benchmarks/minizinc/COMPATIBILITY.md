@@ -42,7 +42,8 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `circuit` | Supported | Hamiltonian circuit propagator |
 | `inverse` | Supported | Inverse array propagator |
 | `diffn` | Supported | Non-overlap rectangles (fixed width/height) |
-| Other globals (`regular`, …) | Not supported | Parse error: `Unsupported constraint` |
+| `regular` | Supported | DFA compiled to table propagator |
+| Other globals (`automaton`, …) | Not supported | Parse error: `Unsupported constraint` |
 
 ### Partial support
 
@@ -65,7 +66,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `solve minimize x;` | Supported | Branch-and-bound |
 | `solve maximize x;` | Supported | Branch-and-bound |
 | `solve minimize x, y;` | Supported | Lexicographic branch-and-bound |
-| Multi-objective Pareto | Not supported | Medium-term roadmap |
+| Multi-objective Pareto | Supported | `solve :: pareto([...])` with CLI JSON `pareto_solutions` |
 
 ## CLI features (FlatZinc path)
 

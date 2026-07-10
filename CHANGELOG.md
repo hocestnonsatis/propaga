@@ -5,6 +5,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-07-10
+
+### Added
+
+- Pareto-front multi-objective enumeration (`ParetoOptimization`, `Model::pareto_optimize`).
+- FlatZinc `solve :: pareto([...]) satisfy` annotation and CLI JSON `pareto_solutions`.
+- `regular` global constraint (DFA compiled to table propagator) with FlatZinc compile support.
+- LCG clause propagator posting during search when `SearchConfig::clause_learning` is enabled.
+- WASM demo build script (`scripts/build-wasm.sh`) and GitHub Pages deploy workflow.
+- Benchmarks: `regular_chain.fzn`, `pareto_biobjective.fzn`.
+
+### Changed
+
+- `ClauseStore` learned clauses are posted as `ClausePropagator` instances on the engine.
+- WASM demo page includes an N-Queens solver section.
+
+### Known limitations
+
+- Set/float domains are not yet wired into the propagation engine.
+- Pareto enumeration collects all solutions before filtering (practical for small fronts).
+
 ## [0.3.0] - 2026-07-05
 
 ### Added

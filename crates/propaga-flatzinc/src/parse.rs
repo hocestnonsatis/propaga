@@ -247,6 +247,21 @@ pub enum Constraint {
         /// Call arguments.
         args: Vec<Expr>,
     },
+    /// `regular(vars, q, s, d, start, accepting)`
+    Regular {
+        /// Sequence variables.
+        vars: Vec<Expr>,
+        /// Alphabet size.
+        num_symbols: i32,
+        /// Number of states.
+        num_states: i32,
+        /// Transition matrix parameter name.
+        transitions: String,
+        /// Start state.
+        start: i32,
+        /// Accepting state(s).
+        accepting: Vec<i32>,
+    },
 }
 
 /// A parsed user-defined predicate with one or more constraint bodies.
@@ -321,6 +336,8 @@ pub struct SearchAnnotations {
     pub bool_search: Option<IntSearchAnnotation>,
     /// `restart_*` annotation, when present.
     pub restart: Option<RestartAnnotation>,
+    /// `pareto([...])` annotation listing objective variables.
+    pub pareto: Option<Vec<Expr>>,
 }
 
 /// Parsed `int_search(vars, var_choice, value_choice, complete)` annotation.
@@ -989,6 +1006,31 @@ impl Parser {
                     heights,
                 }
             }
+            "regular" => {
+                let vars_expr = self.parse_expr()?;
+                let vars = match vars_expr {
+                    Expr::List(items) => items,
+                    other => vec![other],
+                };
+                self.expect_symbol(",")?;
+                let num_symbols = self.expect_int()?;
+                self.expect_symbol(",")?;
+                let num_states = self.expect_int()?;
+                self.expect_symbol(",")?;
+                let transitions = self.expect_ident_token()?;
+                self.expect_symbol(",")?;
+                let start = self.expect_int()?;
+                self.expect_symbol(",")?;
+                let accepting = self.expect_int()?;
+                Constraint::Regular {
+                    vars,
+                    num_symbols,
+                    num_states,
+                    transitions,
+                    start,
+                    accepting: vec![accepting],
+                }
+            }
             other => {
                 let args = self.parse_expr_list()?;
                 Constraint::PredicateCall {
@@ -1364,6 +1406,21 @@ impl Parser {
                 annotations.restart = Some(RestartAnnotation {
                     kind: RestartKind::OnSolution,
                 });
+            }
+            "pareto" => {
+                if annotations.pareto.is_some() {
+                    return Err(FlatZincError::Unsupported(
+                        "multiple pareto annotations".to_string(),
+                    ));
+                }
+                self.expect_symbol("(")?;
+                let expr = self.parse_expr()?;
+                let vars = match expr {
+                    Expr::List(items) => items,
+                    other => vec![other],
+                };
+                self.expect_symbol(")")?;
+                annotations.pareto = Some(vars);
             }
             other => {
                 return Err(FlatZincError::Unsupported(format!(

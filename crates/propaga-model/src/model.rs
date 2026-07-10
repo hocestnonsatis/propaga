@@ -6,13 +6,15 @@ use propaga_propagators::{
     DiffnPropagator, DisjunctivePropagator, DisjunctiveTask, ElementPropagator, EqualityPropagator,
     GlobalCardinalityPropagator, InversePropagator, LessEqualPropagator, LessThanPropagator,
     LinearEqPropagator, LinearScalarGePropagator, LinearScalarLePropagator,
-    NotEqualOffsetPropagator, RectangleSpec, ReifiedEqualityPropagator, ReifiedLessEqualPropagator,
-    ReifiedLessThanPropagator, ReifiedNotEqualPropagator, ReifiedScalarEqPropagator,
-    ReifiedScalarGePropagator, ReifiedScalarLePropagator, TablePropagator, TaskSpec,
+    NotEqualOffsetPropagator, RectangleSpec, RegularPropagator, ReifiedEqualityPropagator,
+    ReifiedLessEqualPropagator, ReifiedLessThanPropagator, ReifiedNotEqualPropagator,
+    ReifiedScalarEqPropagator, ReifiedScalarGePropagator, ReifiedScalarLePropagator,
+    TablePropagator, TaskSpec,
 };
 use propaga_search::{
-    DepthFirstSearch, LexicographicOptimization, LexicographicResult, Objective, PortfolioConfig,
-    PortfolioSearch, SearchConfig, SearchStats, Solution,
+    DepthFirstSearch, LexicographicOptimization, LexicographicResult, Objective,
+    ObjectiveDirection, ParetoOptimization, ParetoResult, PortfolioConfig, PortfolioSearch,
+    SearchConfig, SearchStats, Solution,
 };
 
 /// High-level modeling facade over the Propaga engine.
@@ -298,6 +300,24 @@ impl Model {
             .add_propagator(Box::new(DiffnPropagator::new(rectangles.into())));
     }
 
+    /// Posts a `regular` sequence constraint.
+    pub fn regular(
+        &mut self,
+        variables: impl Into<Vec<VariableId>>,
+        num_states: usize,
+        transitions: Vec<Vec<i32>>,
+        start_state: i32,
+        accepting: impl Into<Vec<i32>>,
+    ) {
+        self.engine.add_propagator(Box::new(RegularPropagator::new(
+            variables.into(),
+            num_states,
+            transitions,
+            start_state,
+            &accepting.into(),
+        )));
+    }
+
     /// Runs propagation to fixpoint.
     pub fn propagate(&mut self) -> Result<PropagationStatus, propaga_core::PropagaError> {
         self.engine.propagate_all()
@@ -417,6 +437,17 @@ impl Model {
         objectives: Vec<Objective>,
     ) -> LexicographicResult {
         let mut search = LexicographicOptimization::new(variables, objectives, self.search_config);
+        search.optimize(&mut self.engine)
+    }
+
+    /// Enumerates the Pareto front for multiple objectives.
+    pub fn pareto_optimize(
+        &mut self,
+        variables: impl Into<Vec<VariableId>>,
+        objectives: Vec<(VariableId, ObjectiveDirection)>,
+    ) -> ParetoResult {
+        let _ = self.propagate();
+        let mut search = ParetoOptimization::new(variables, objectives, self.search_config);
         search.optimize(&mut self.engine)
     }
 }

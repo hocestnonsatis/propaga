@@ -4,7 +4,9 @@ use crate::output::{
 use crate::puzzle_io::{GlobalOptions, OutputFormat};
 use propaga_core::VariableId;
 use propaga_flatzinc::{OutputDirective, compile, parse};
-use propaga_search::{Objective, ObjectiveDirection, PortfolioConfig, SearchStats, Solution};
+use propaga_search::{
+    Objective, ObjectiveDirection, ParetoSolution, PortfolioConfig, SearchStats, Solution,
+};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -23,6 +25,7 @@ struct SolveOutcome {
     objective_value: Option<i32>,
     objective_values: Vec<i32>,
     objective_direction: Option<ObjectiveDirection>,
+    pareto_solutions: Vec<ParetoSolution>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -113,85 +116,122 @@ fn solve_source(source: &str, options: GlobalOptions) -> Result<SolveOutcome, St
         .set_search_config(options.merge_flatzinc_search_config(instance.annotation_search));
 
     let started = Instant::now();
-    let (solution, stats, objective_value, objective_values, solutions_found, objective_direction) =
-        if !instance.objectives.is_empty() {
-            if instance.objectives.len() > 1 {
-                let objectives: Vec<Objective> = instance
-                    .objectives
-                    .iter()
-                    .map(|objective| Objective {
-                        var: objective.var,
-                        direction: objective.direction,
-                    })
-                    .collect();
-                let result = instance
-                    .model
-                    .optimize_lexicographic(instance.solve_vars.clone(), objectives);
-                let direction = instance
-                    .objectives
-                    .first()
-                    .map(|objective| objective.direction);
-                let found = u32::from(result.solution.is_some());
-                (
-                    result.solution,
-                    result.stats,
-                    result.objective_values.first().copied(),
-                    result.objective_values,
-                    found,
-                    direction,
-                )
-            } else {
-                let objective = instance.objectives[0];
-                let (solution, value, stats, solutions_found) = instance.model.optimize(
-                    instance.solve_vars.clone(),
-                    objective.var,
-                    objective.direction,
-                );
-                (
-                    solution,
-                    stats,
-                    value,
-                    value.into_iter().collect(),
-                    solutions_found,
-                    Some(objective.direction),
-                )
-            }
-        } else if options.all {
-            let (solutions, stats) = instance.model.solve_all_with_stats_limited(
-                instance.solve_vars.clone(),
-                options.effective_solutions_limit(),
-            );
-            let found = solutions.len() as u32;
-            (
-                solutions.into_iter().next(),
-                stats,
-                None,
-                Vec::new(),
-                found,
-                None,
-            )
-        } else if options.workers > 1 {
-            let (solution, stats) = instance.model.solve_portfolio(
-                instance.solve_vars.clone(),
-                PortfolioConfig {
-                    workers: options.workers,
-                    deterministic: options.deterministic,
-                },
-            );
-            let found = u32::from(solution.is_some());
-            (solution, stats, None, Vec::new(), found, None)
-        } else {
-            let (solution, stats) = instance
+    let (
+        solution,
+        stats,
+        objective_value,
+        objective_values,
+        solutions_found,
+        objective_direction,
+        pareto_solutions,
+    ) = if instance.pareto {
+        let objectives: Vec<(VariableId, ObjectiveDirection)> = instance
+            .pareto_objectives
+            .iter()
+            .map(|&var| (var, ObjectiveDirection::Minimize))
+            .collect();
+        let result = instance
+            .model
+            .pareto_optimize(instance.solve_vars.clone(), objectives);
+        let found = result.front.len() as u32;
+        let first = result.front.first().cloned();
+        (
+            first.as_ref().map(|entry| entry.assignment.clone()),
+            result.stats,
+            first
+                .as_ref()
+                .and_then(|entry| entry.objective_values.first().copied()),
+            first
+                .map(|entry| entry.objective_values.clone())
+                .unwrap_or_default(),
+            found,
+            Some(ObjectiveDirection::Minimize),
+            result.front,
+        )
+    } else if !instance.objectives.is_empty() {
+        if instance.objectives.len() > 1 {
+            let objectives: Vec<Objective> = instance
+                .objectives
+                .iter()
+                .map(|objective| Objective {
+                    var: objective.var,
+                    direction: objective.direction,
+                })
+                .collect();
+            let result = instance
                 .model
-                .solve_subset_with_stats(instance.solve_vars.clone());
-            let found = u32::from(solution.is_some());
-            (solution, stats, None, Vec::new(), found, None)
-        };
+                .optimize_lexicographic(instance.solve_vars.clone(), objectives);
+            let direction = instance
+                .objectives
+                .first()
+                .map(|objective| objective.direction);
+            let found = u32::from(result.solution.is_some());
+            (
+                result.solution,
+                result.stats,
+                result.objective_values.first().copied(),
+                result.objective_values,
+                found,
+                direction,
+                Vec::new(),
+            )
+        } else {
+            let objective = instance.objectives[0];
+            let (solution, value, stats, solutions_found) = instance.model.optimize(
+                instance.solve_vars.clone(),
+                objective.var,
+                objective.direction,
+            );
+            (
+                solution,
+                stats,
+                value,
+                value.into_iter().collect(),
+                solutions_found,
+                Some(objective.direction),
+                Vec::new(),
+            )
+        }
+    } else if options.all {
+        let (solutions, stats) = instance.model.solve_all_with_stats_limited(
+            instance.solve_vars.clone(),
+            options.effective_solutions_limit(),
+        );
+        let found = solutions.len() as u32;
+        (
+            solutions.into_iter().next(),
+            stats,
+            None,
+            Vec::new(),
+            found,
+            None,
+            Vec::new(),
+        )
+    } else if options.workers > 1 {
+        let (solution, stats) = instance.model.solve_portfolio(
+            instance.solve_vars.clone(),
+            PortfolioConfig {
+                workers: options.workers,
+                deterministic: options.deterministic,
+            },
+        );
+        let found = u32::from(solution.is_some());
+        (solution, stats, None, Vec::new(), found, None, Vec::new())
+    } else {
+        let (solution, stats) = instance
+            .model
+            .solve_subset_with_stats(instance.solve_vars.clone());
+        let found = u32::from(solution.is_some());
+        (solution, stats, None, Vec::new(), found, None, Vec::new())
+    };
     let elapsed = started.elapsed();
 
     let status = if stats.timed_out {
         SolveStatus::Timeout
-    } else if solution.is_some() || (options.all && solutions_found > 0) {
+    } else if solution.is_some()
+        || !pareto_solutions.is_empty()
+        || (options.all && solutions_found > 0)
+    {
         SolveStatus::Sat
     } else {
         SolveStatus::Unsat
@@ -209,6 +249,7 @@ fn solve_source(source: &str, options: GlobalOptions) -> Result<SolveOutcome, St
         objective_value,
         objective_values,
         objective_direction,
+        pareto_solutions,
     })
 }
 
@@ -241,6 +282,7 @@ fn print_outcome(path: &Path, options: GlobalOptions, outcome: &SolveOutcome) {
                 &outcome.outputs,
                 outcome.objective_values.as_slice(),
                 outcome.objective_direction,
+                &outcome.pareto_solutions,
                 if options.stats {
                     Some((outcome.stats, outcome.elapsed, outcome.solutions_found))
                 } else {

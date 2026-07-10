@@ -15,12 +15,23 @@
     <textarea id="puzzle" rows="4">530070000600195000098000060000060008006000030200080000040000000017000000806000000080</textarea>
     <p><button id="solve">Solve Sudoku</button></p>
     <pre id="output"></pre>
+
+    <h2>N-Queens</h2>
+    <label>Size: <input id="n-size" type="number" min="1" max="12" value="8" /></label>
+    <button id="solve-queens">Solve</button>
+    <pre id="queens-output"></pre>
+
     <script type="module">
-      import init, { solve_sudoku } from "./pkg/propaga_wasm.js";
+      import init, { solve_sudoku, solve_n_queens } from "./pkg/propaga_wasm.js";
       await init();
       document.getElementById("solve").addEventListener("click", () => {
         const puzzle = document.getElementById("puzzle").value.replace(/\D/g, "");
         document.getElementById("output").textContent = solve_sudoku(puzzle) || "UNSAT";
+      });
+      document.getElementById("solve-queens").addEventListener("click", () => {
+        const size = Number(document.getElementById("n-size").value);
+        document.getElementById("queens-output").textContent =
+          solve_n_queens(size) || "UNSAT";
       });
     </script>
   </body>
