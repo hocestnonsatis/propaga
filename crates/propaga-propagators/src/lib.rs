@@ -12,6 +12,8 @@ mod diffn;
 mod disjunctive;
 mod element;
 mod equality;
+mod float_eq;
+mod float_le;
 mod gcc;
 mod inverse;
 mod less_equal;
@@ -24,6 +26,8 @@ mod not_equal_offset;
 mod regular;
 mod reified;
 mod scheduling;
+mod set_card;
+mod set_subset;
 mod table;
 
 pub use all_different::AllDifferentPropagator;
@@ -34,6 +38,8 @@ pub use diffn::{DiffnPropagator, RectangleSpec};
 pub use disjunctive::{DisjunctivePropagator, DisjunctiveTask};
 pub use element::ElementPropagator;
 pub use equality::EqualityPropagator;
+pub use float_eq::FloatEqPropagator;
+pub use float_le::FloatLePropagator;
 pub use gcc::{CardinalityBound, GlobalCardinalityPropagator};
 pub use inverse::InversePropagator;
 pub use less_equal::LessEqualPropagator;
@@ -51,4 +57,6 @@ pub use reified::{
     ReifiedNotEqualPropagator,
 };
 pub use scheduling::TaskSpec;
+pub use set_card::SetCardPropagator;
+pub use set_subset::SetSubsetPropagator;
 pub use table::TablePropagator;
