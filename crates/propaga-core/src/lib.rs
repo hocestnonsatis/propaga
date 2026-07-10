@@ -6,6 +6,7 @@
 mod context;
 mod domain;
 mod error;
+mod extended;
 pub mod id;
 mod nogood;
 mod propagator;
@@ -15,6 +16,7 @@ mod status;
 pub use context::PropagationContext;
 pub use domain::{Domain, DomainView};
 pub use error::PropagaError;
+pub use extended::{ExtendedPropagationContext, FloatDomainSnapshot, SetDomainSnapshot};
 pub use id::{PropagatorId, PropagatorKey, VariableId, VariableKey};
 pub use nogood::{Nogood, NogoodLiteral};
 pub use propagator::Propagator;

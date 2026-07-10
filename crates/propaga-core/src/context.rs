@@ -1,9 +1,14 @@
-use crate::{DomainView, PropagatorId, VariableId};
+use crate::{DomainView, ExtendedPropagationContext, PropagatorId, VariableId};
 
 /// Mutable propagation view used by propagators to read and tighten domains.
 pub trait PropagationContext {
     /// Returns a read-only view of `var`'s domain.
     fn domain(&self, var: VariableId) -> &dyn DomainView<Value = i32>;
+
+    /// Returns extended set/float propagation when supported by the engine.
+    fn as_extended(&mut self) -> Option<&mut dyn ExtendedPropagationContext> {
+        None
+    }
 
     /// Returns the propagator currently executing, if any.
     fn current_propagator(&self) -> Option<PropagatorId> {

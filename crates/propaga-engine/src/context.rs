@@ -2,9 +2,10 @@ use crate::event_queue::EventQueue;
 use crate::trail::Trail;
 use propaga_core::id::{PropagatorKey, VariableKey};
 use propaga_core::{
-    ChangeReason, DomainView, Explanation, PropagationContext, PropagatorId, VariableId,
+    ChangeReason, DomainView, Explanation, ExtendedPropagationContext, FloatDomainSnapshot,
+    PropagationContext, PropagatorId, SetDomainSnapshot, VariableId,
 };
-use propaga_domains::{AnyDomain, HybridDomain};
+use propaga_domains::{AnyDomain, FloatDomain, HybridDomain, SetIntervalDomain};
 use slotmap::SlotMap;
 use std::collections::HashMap;
 
@@ -93,6 +94,26 @@ impl<'a> EnginePropagationContext<'a> {
         true
     }
 
+    fn mutate_any<F>(&mut self, var: VariableId, reason: Option<ChangeReason>, mutate: F) -> bool
+    where
+        F: FnOnce(AnyDomain) -> AnyDomain,
+    {
+        let current = self.variables[var.key()].clone();
+        let updated = mutate(current.clone());
+        if updated == current {
+            return false;
+        }
+
+        if self.record_trail {
+            self.trail.push(var, current, reason, self.explanation);
+        }
+
+        self.variables[var.key()] = updated;
+        self.schedule_propagators_for(var);
+        self.changed = true;
+        true
+    }
+
     fn propagator_reason(
         &self,
         variable: VariableId,
@@ -110,6 +131,10 @@ impl<'a> EnginePropagationContext<'a> {
 }
 
 impl PropagationContext for EnginePropagationContext<'_> {
+    fn as_extended(&mut self) -> Option<&mut dyn ExtendedPropagationContext> {
+        Some(self)
+    }
+
     fn domain(&self, var: VariableId) -> &dyn DomainView<Value = i32> {
         self.domain_for(var)
     }
@@ -146,5 +171,112 @@ impl PropagationContext for EnginePropagationContext<'_> {
         self.explanation.record(ChangeReason::PropagatorConflict {
             literals: literals.to_vec(),
         });
+    }
+}
+
+impl ExtendedPropagationContext for EnginePropagationContext<'_> {
+    fn set_domain(&self, var: VariableId) -> Option<SetDomainSnapshot> {
+        let set = self.variables[var.key()].as_set()?;
+        Some(SetDomainSnapshot {
+            glb: set.glb().iter().copied().collect(),
+            lub: set.lub().iter().copied().collect(),
+            card_min: set.card_min(),
+            card_max: set.card_max(),
+        })
+    }
+
+    fn float_domain(&self, var: VariableId) -> Option<FloatDomainSnapshot> {
+        let float = self.variables[var.key()].as_float()?;
+        Some(FloatDomainSnapshot {
+            min: float.lower_bound(),
+            max: float.upper_bound(),
+        })
+    }
+
+    fn force_set_in(&mut self, var: VariableId, value: i32) -> bool {
+        let reason = self.propagator_reason(var, None, None);
+        self.mutate_any(var, reason, |domain| {
+            let AnyDomain::Set(set) = domain else {
+                return domain;
+            };
+            match set.force_in(value) {
+                Some(next) => AnyDomain::Set(next),
+                None => AnyDomain::Set(SetIntervalDomain::universe([])),
+            }
+        })
+    }
+
+    fn force_set_out(&mut self, var: VariableId, value: i32) -> bool {
+        let reason = self.propagator_reason(var, None, None);
+        self.mutate_any(var, reason, |domain| {
+            let AnyDomain::Set(set) = domain else {
+                return domain;
+            };
+            match set.force_out(value) {
+                Some(next) => AnyDomain::Set(next),
+                None => AnyDomain::Set(SetIntervalDomain::universe([])),
+            }
+        })
+    }
+
+    fn tighten_float_below(&mut self, var: VariableId, bound: f64) -> bool {
+        let reason = self.propagator_reason(var, None, None);
+        self.mutate_any(var, reason, |domain| {
+            let AnyDomain::Float(float) = domain else {
+                return domain;
+            };
+            AnyDomain::Float(float.remove_below(bound))
+        })
+    }
+
+    fn tighten_float_above(&mut self, var: VariableId, bound: f64) -> bool {
+        let reason = self.propagator_reason(var, None, None);
+        self.mutate_any(var, reason, |domain| {
+            let AnyDomain::Float(float) = domain else {
+                return domain;
+            };
+            AnyDomain::Float(float.remove_above(bound))
+        })
+    }
+}
+
+#[cfg(test)]
+mod extended_tests {
+    use super::*;
+    use crate::Engine;
+    use propaga_core::{PropagationStatus, Propagator};
+
+    #[derive(Clone)]
+    struct FloatLowerBound {
+        var: VariableId,
+        bound: f64,
+    }
+
+    impl Propagator for FloatLowerBound {
+        fn watched_variables(&self) -> &[VariableId] {
+            std::slice::from_ref(&self.var)
+        }
+
+        fn propagate(&mut self, ctx: &mut dyn PropagationContext) -> PropagationStatus {
+            let Some(ext) = ctx.as_extended() else {
+                return PropagationStatus::OkNoChange;
+            };
+            if ext.tighten_float_below(self.var, self.bound) {
+                PropagationStatus::OkChanged
+            } else {
+                PropagationStatus::OkNoChange
+            }
+        }
+    }
+
+    #[test]
+    fn extended_context_tightens_float_domain() {
+        let mut engine = Engine::new();
+        let var = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 10.0)));
+        engine.add_propagator(Box::new(FloatLowerBound { var, bound: 3.0 }));
+        engine.propagate_all().unwrap();
+        let domain = engine.domain(var).as_float().unwrap();
+        assert!(domain.contains(5.0));
+        assert!(!domain.contains(1.0));
     }
 }
