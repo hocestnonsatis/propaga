@@ -5,7 +5,7 @@ use propaga_core::{
     ChangeReason, DomainView, Explanation, ExtendedPropagationContext, FloatDomainSnapshot,
     PropagationContext, PropagatorId, SetDomainSnapshot, VariableId,
 };
-use propaga_domains::{AnyDomain, FloatDomain, HybridDomain, SetIntervalDomain};
+use propaga_domains::{AnyDomain, HybridDomain, SetIntervalDomain};
 use slotmap::SlotMap;
 use std::collections::HashMap;
 

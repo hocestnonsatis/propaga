@@ -6,8 +6,7 @@ use propaga_core::{
     ChangeReason, DomainView, Explanation, PropagaError, PropagationStatus, Propagator,
     PropagatorId, VariableId,
 };
-use propaga_domains::{AnyDomain, HybridDomain};
-use propaga_domains::{FloatDomain, SetIntervalDomain};
+use propaga_domains::{AnyDomain, FloatDomain, HybridDomain};
 use slotmap::SlotMap;
 use std::collections::HashMap;
 
@@ -377,7 +376,7 @@ impl Engine {
         Ok(overall)
     }
 
-    pub(crate) fn set_domain(&mut self, var: VariableId, domain: AnyDomain) {
+    pub fn set_domain(&mut self, var: VariableId, domain: AnyDomain) {
         self.variables[var.key()] = domain;
     }
 

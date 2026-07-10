@@ -1,0 +1,5 @@
+var 0.0..10.0: x;
+var 4.0..4.0: y;
+constraint float_le(x, y);
+constraint float_eq(x, y);
+solve satisfy;

@@ -115,6 +115,17 @@ pub fn compile(program: FlatZincProgram) -> Result<CompiledInstance, FlatZincErr
                 }
                 env.insert(name, Binding::Array(elements));
             }
+            VarDecl::SetVar { name, low, high } => {
+                let universe = (high - low + 1).max(0) as usize;
+                let var = model.set_var(low, high, 0, universe);
+                names.insert(var, name.clone());
+                env.insert(name, Binding::Var(var));
+            }
+            VarDecl::FloatVar { name, low, high } => {
+                let var = model.float_var(low, high);
+                names.insert(var, name.clone());
+                env.insert(name, Binding::Var(var));
+            }
         }
     }
 
@@ -504,6 +515,26 @@ fn post_constraint(
                 start,
                 accepting,
             )?;
+        }
+        Constraint::SetCard(set_expr, card) => {
+            let set = resolve_var(env, set_expr)?;
+            let card = card.max(0) as usize;
+            model.constrain_set_cardinality(set, card, card);
+        }
+        Constraint::SetSubset(subset, superset) => {
+            let subset = resolve_var(env, subset)?;
+            let superset = resolve_var(env, superset)?;
+            model.set_subset(subset, superset);
+        }
+        Constraint::FloatLe(left, right) => {
+            let left = resolve_var(env, left)?;
+            let right = resolve_var(env, right)?;
+            model.float_le(left, right);
+        }
+        Constraint::FloatEq(left, right) => {
+            let left = resolve_var(env, left)?;
+            let right = resolve_var(env, right)?;
+            model.float_eq(left, right);
         }
         Constraint::PredicateCall { .. } => {
             return Err(FlatZincError::Unsupported(

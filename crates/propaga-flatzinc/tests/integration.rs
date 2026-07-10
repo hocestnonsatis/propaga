@@ -68,3 +68,19 @@ fn compiles_regular_constraint() {
     let program = parse(source).expect("parse");
     compile(program).expect("compile");
 }
+
+#[test]
+fn compiles_set_cardinality_instance() {
+    let source = include_str!("../../../benchmarks/set_cardinality.fzn");
+    let program = parse(source).expect("parse set instance");
+    let instance = compile(program).expect("compile set instance");
+    assert!(!instance.model.decision_variables().is_empty());
+}
+
+#[test]
+fn compiles_float_bounds_instance() {
+    let source = include_str!("../../../benchmarks/float_bounds.fzn");
+    let program = parse(source).expect("parse float instance");
+    let instance = compile(program).expect("compile float instance");
+    assert!(instance.model.decision_variables().len() >= 2);
+}

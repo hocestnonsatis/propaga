@@ -1,7 +1,7 @@
 use crate::error::FlatZincError;
 
 /// Parsed FlatZinc program (subset).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FlatZincProgram {
     /// Parameter declarations.
     pub params: Vec<ParamDecl>,
@@ -37,7 +37,7 @@ pub enum ParamDecl {
 }
 
 /// A FlatZinc variable declaration.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum VarDecl {
     /// Scalar integer variable with inclusive bounds.
     IntVar {
@@ -76,6 +76,24 @@ pub enum VarDecl {
         index_low: i32,
         /// Inclusive upper index.
         index_high: i32,
+    },
+    /// Scalar set variable over an integer universe.
+    SetVar {
+        /// Variable name.
+        name: String,
+        /// Universe lower bound.
+        low: i32,
+        /// Universe upper bound.
+        high: i32,
+    },
+    /// Scalar float variable with inclusive bounds.
+    FloatVar {
+        /// Variable name.
+        name: String,
+        /// Domain lower bound.
+        low: f64,
+        /// Domain upper bound.
+        high: f64,
     },
 }
 
@@ -262,6 +280,14 @@ pub enum Constraint {
         /// Accepting state(s).
         accepting: Vec<i32>,
     },
+    /// `set_card(set, card)`
+    SetCard(Expr, i32),
+    /// `set_subset(subset, superset)`
+    SetSubset(Expr, Expr),
+    /// `float_le(left, right)`
+    FloatLe(Expr, Expr),
+    /// `float_eq(left, right)`
+    FloatEq(Expr, Expr),
 }
 
 /// A parsed user-defined predicate with one or more constraint bodies.
@@ -648,6 +674,32 @@ impl Parser {
             };
             return Ok(VarDecl::BoolVar { name, fixed });
         }
+        if self.peek_is_ident("set") {
+            self.expect_ident("set")?;
+            self.expect_ident("of")?;
+            let (low, high) = self.parse_domain()?;
+            self.expect_symbol(":")?;
+            let name = self.expect_ident_token()?;
+            return Ok(VarDecl::SetVar { name, low, high });
+        }
+        if self.peek_is_ident("float") {
+            self.expect_ident("float")?;
+            self.expect_symbol(":")?;
+            let name = self.expect_ident_token()?;
+            let (low, high) = if self.peek_is_symbol("=") {
+                self.expect_symbol("=")?;
+                self.parse_float_domain()?
+            } else {
+                (f64::NEG_INFINITY, f64::INFINITY)
+            };
+            return Ok(VarDecl::FloatVar { name, low, high });
+        }
+        if matches!(self.peek(), Some(Token::Float(_))) {
+            let (low, high) = self.parse_float_domain()?;
+            self.expect_symbol(":")?;
+            let name = self.expect_ident_token()?;
+            return Ok(VarDecl::FloatVar { name, low, high });
+        }
         let (low, high) = self.parse_domain()?;
         self.expect_symbol(":")?;
         let name = self.expect_ident_token()?;
@@ -697,6 +749,19 @@ impl Parser {
         let low = self.expect_int()?;
         self.expect_symbol("..")?;
         let high = self.expect_int()?;
+        Ok((low, high))
+    }
+
+    fn parse_float_domain(&mut self) -> Result<(f64, f64), FlatZincError> {
+        let low = self
+            .expect_float_text()?
+            .parse::<f64>()
+            .map_err(|_| FlatZincError::Unsupported("invalid float literal".into()))?;
+        self.expect_symbol("..")?;
+        let high = self
+            .expect_float_text()?
+            .parse::<f64>()
+            .map_err(|_| FlatZincError::Unsupported("invalid float literal".into()))?;
         Ok((low, high))
     }
 
@@ -1030,6 +1095,30 @@ impl Parser {
                     start,
                     accepting: vec![accepting],
                 }
+            }
+            "set_card" => {
+                let set = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let card = self.expect_int()?;
+                Constraint::SetCard(set, card)
+            }
+            "set_subset" => {
+                let subset = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let superset = self.parse_expr()?;
+                Constraint::SetSubset(subset, superset)
+            }
+            "float_le" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                Constraint::FloatLe(left, right)
+            }
+            "float_eq" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                Constraint::FloatEq(left, right)
             }
             other => {
                 let args = self.parse_expr_list()?;

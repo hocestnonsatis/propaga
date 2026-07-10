@@ -1,6 +1,4 @@
-use propaga_core::{
-    ExtendedPropagationContext, PropagationContext, PropagationStatus, Propagator, VariableId,
-};
+use propaga_core::{PropagationContext, PropagationStatus, Propagator, VariableId};
 
 /// Propagates set cardinality bounds already stored in the domain.
 #[derive(Clone, Debug)]

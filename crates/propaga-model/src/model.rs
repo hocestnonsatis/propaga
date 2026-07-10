@@ -107,6 +107,15 @@ impl Model {
             .add_propagator(Box::new(SetCardPropagator::new(set)));
     }
 
+    /// Tightens set cardinality bounds before posting propagation.
+    pub fn constrain_set_cardinality(&mut self, set: VariableId, card_min: usize, card_max: usize) {
+        if let Some(domain) = self.engine.domain(set).as_set().cloned() {
+            let updated = domain.with_cardinality(card_min, card_max);
+            self.engine.set_domain(set, AnyDomain::Set(updated));
+        }
+        self.set_card(set);
+    }
+
     /// Posts `subset ⊆ superset`.
     pub fn set_subset(&mut self, subset: VariableId, superset: VariableId) {
         self.engine
