@@ -115,8 +115,8 @@ mod tests {
         engine.add_propagator(Box::new(TablePropagator::new(vec![x, y], tuples)));
 
         engine.propagate_all().unwrap();
-        assert!(!engine.domain(x).contains(2) || engine.domain(x).contains(1));
-        assert!(!engine.domain(y).contains(2) || engine.domain(y).contains(2));
+        assert!(!engine.hybrid_domain(x).contains(2) || engine.hybrid_domain(x).contains(1));
+        assert!(!engine.hybrid_domain(y).contains(2) || engine.hybrid_domain(y).contains(2));
     }
 
     #[test]

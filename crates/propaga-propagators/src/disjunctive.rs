@@ -337,11 +337,11 @@ mod tests {
         ])));
         engine.fix_variable(start_a, 0).unwrap();
         engine.propagate_all().unwrap();
-        assert!(!engine.domain(start_b).contains(0));
-        assert!(!engine.domain(start_b).contains(1));
-        assert!(!engine.domain(start_b).contains(2));
-        assert!(!engine.domain(start_b).contains(3));
-        assert!(engine.domain(start_b).contains(4));
+        assert!(!engine.hybrid_domain(start_b).contains(0));
+        assert!(!engine.hybrid_domain(start_b).contains(1));
+        assert!(!engine.hybrid_domain(start_b).contains(2));
+        assert!(!engine.hybrid_domain(start_b).contains(3));
+        assert!(engine.hybrid_domain(start_b).contains(4));
     }
 
     #[test]

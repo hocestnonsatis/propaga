@@ -4,13 +4,13 @@ use propaga_core::id::{PropagatorKey, VariableKey};
 use propaga_core::{
     ChangeReason, DomainView, Explanation, PropagationContext, PropagatorId, VariableId,
 };
-use propaga_domains::HybridDomain;
+use propaga_domains::{AnyDomain, HybridDomain};
 use slotmap::SlotMap;
 use std::collections::HashMap;
 
 /// Borrowed engine state used while running a propagator.
 pub(crate) struct EnginePropagationParts<'a> {
-    pub variables: &'a mut SlotMap<VariableKey, HybridDomain>,
+    pub variables: &'a mut SlotMap<VariableKey, AnyDomain>,
     pub subscriptions: &'a HashMap<VariableKey, Vec<PropagatorKey>>,
     pub priorities: &'a HashMap<PropagatorKey, u32>,
     pub queue: &'a mut EventQueue,
@@ -20,7 +20,7 @@ pub(crate) struct EnginePropagationParts<'a> {
 
 /// Mutable propagation view over engine state.
 pub struct EnginePropagationContext<'a> {
-    variables: &'a mut SlotMap<VariableKey, HybridDomain>,
+    variables: &'a mut SlotMap<VariableKey, AnyDomain>,
     subscriptions: &'a HashMap<VariableKey, Vec<PropagatorKey>>,
     priorities: &'a HashMap<PropagatorKey, u32>,
     queue: &'a mut EventQueue,
@@ -57,7 +57,9 @@ impl<'a> EnginePropagationContext<'a> {
     }
 
     fn domain_for(&self, var: VariableId) -> &HybridDomain {
-        &self.variables[var.key()]
+        self.variables[var.key()]
+            .as_int()
+            .expect("int propagator accessed non-int variable")
     }
 
     fn schedule_propagators_for(&mut self, var: VariableId) {
@@ -81,10 +83,11 @@ impl<'a> EnginePropagationContext<'a> {
         }
 
         if self.record_trail {
-            self.trail.push(var, current, reason, self.explanation);
+            self.trail
+                .push(var, AnyDomain::Int(current), reason, self.explanation);
         }
 
-        self.variables[var.key()] = updated;
+        self.variables[var.key()] = AnyDomain::Int(updated);
         self.schedule_propagators_for(var);
         self.changed = true;
         true

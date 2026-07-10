@@ -138,6 +138,6 @@ mod tests {
         )));
         engine.fix_variable(f0, 1).unwrap();
         engine.propagate_all().unwrap();
-        assert_eq!(engine.domain(t1).fixed_value(), Some(0));
+        assert_eq!(engine.hybrid_domain(t1).fixed_value(), Some(0));
     }
 }

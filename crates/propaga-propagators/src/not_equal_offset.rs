@@ -64,6 +64,6 @@ mod tests {
         engine.add_propagator(Box::new(NotEqualOffsetPropagator::new(left, right, 1)));
 
         engine.propagate_all().unwrap();
-        assert!(!engine.domain(left).contains(2));
+        assert!(!engine.hybrid_domain(left).contains(2));
     }
 }

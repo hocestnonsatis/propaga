@@ -634,8 +634,8 @@ mod tests {
             6,
         )));
         engine.propagate_all().unwrap();
-        assert!(engine.domain(x).max().unwrap() <= 3);
-        assert!(engine.domain(y).max().unwrap() <= 6);
+        assert!(engine.hybrid_domain(x).max().unwrap() <= 3);
+        assert!(engine.hybrid_domain(y).max().unwrap() <= 6);
     }
 
     #[test]
@@ -651,8 +651,8 @@ mod tests {
             reif,
         )));
         engine.propagate_all().unwrap();
-        assert_eq!(engine.domain(reif).min(), Some(1));
-        assert_eq!(engine.domain(reif).max(), Some(1));
+        assert_eq!(engine.hybrid_domain(reif).min(), Some(1));
+        assert_eq!(engine.hybrid_domain(reif).max(), Some(1));
     }
 
     #[test]
@@ -668,7 +668,7 @@ mod tests {
             reif,
         )));
         engine.propagate_all().unwrap();
-        assert!(engine.domain(x).max().unwrap() <= 3);
+        assert!(engine.hybrid_domain(x).max().unwrap() <= 3);
     }
 
     #[test]
@@ -684,7 +684,7 @@ mod tests {
             reif,
         )));
         engine.propagate_all().unwrap();
-        assert!(!engine.domain(x).contains(2));
+        assert!(!engine.hybrid_domain(x).contains(2));
     }
 
     #[test]
@@ -719,7 +719,7 @@ mod tests {
             6,
         )));
         engine.propagate_all().unwrap();
-        assert_eq!(engine.domain(x).max(), Some(4));
-        assert_eq!(engine.domain(y).max(), Some(4));
+        assert_eq!(engine.hybrid_domain(x).max(), Some(4));
+        assert_eq!(engine.hybrid_domain(y).max(), Some(4));
     }
 }

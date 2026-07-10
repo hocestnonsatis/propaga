@@ -6,6 +6,7 @@ use propaga_core::{
     ChangeReason, DomainView, Explanation, PropagaError, PropagationStatus, Propagator,
     PropagatorId, VariableId,
 };
+use propaga_domains::AnyDomain;
 use propaga_domains::HybridDomain;
 use slotmap::SlotMap;
 use std::collections::HashMap;
@@ -21,7 +22,7 @@ pub struct ConflictInfo {
 
 /// Constraint propagation engine with trail-based backtracking.
 pub struct Engine {
-    pub(crate) variables: SlotMap<VariableKey, HybridDomain>,
+    pub(crate) variables: SlotMap<VariableKey, AnyDomain>,
     pub(crate) propagators: SlotMap<PropagatorKey, Box<dyn Propagator>>,
     pub(crate) subscriptions: HashMap<VariableKey, Vec<PropagatorKey>>,
     pub(crate) priorities: HashMap<PropagatorKey, u32>,
@@ -48,7 +49,7 @@ impl Engine {
     }
 
     /// Registers a new decision variable and returns its handle.
-    pub fn new_variable(&mut self, domain: impl Into<HybridDomain>) -> VariableId {
+    pub fn new_variable(&mut self, domain: impl Into<AnyDomain>) -> VariableId {
         VariableId::from_key(self.variables.insert(domain.into()))
     }
 
@@ -70,8 +71,20 @@ impl Engine {
     }
 
     /// Returns a read-only view of `var`'s domain.
-    pub fn domain(&self, var: VariableId) -> &HybridDomain {
+    pub fn domain(&self, var: VariableId) -> &AnyDomain {
         &self.variables[var.key()]
+    }
+
+    /// Returns the integer domain of `var` when it is an int variable.
+    #[must_use]
+    pub fn int_domain(&self, var: VariableId) -> Option<&HybridDomain> {
+        self.domain(var).as_int()
+    }
+
+    /// Returns the integer domain of `var`, panicking when it is not int.
+    #[must_use]
+    pub fn hybrid_domain(&self, var: VariableId) -> &HybridDomain {
+        self.int_domain(var).expect("expected int variable domain")
     }
 
     /// Returns the explanation log for the latest propagation conflict, if any.
@@ -89,7 +102,7 @@ impl Engine {
     /// Returns `true` when every variable is assigned.
     #[must_use]
     pub fn is_solved(&self) -> bool {
-        self.variables.values().all(HybridDomain::is_fixed)
+        self.variables.values().all(AnyDomain::is_fixed)
     }
 
     /// Creates a backtrack choice point and returns its level index.
@@ -122,7 +135,15 @@ impl Engine {
         var: VariableId,
         value: i32,
     ) -> Result<PropagationStatus, PropagaError> {
-        if !self.domain(var).contains(value) {
+        let current = self
+            .int_domain(var)
+            .cloned()
+            .ok_or(PropagaError::TypeMismatch {
+                variable: var,
+                expected: "int".to_string(),
+            })?;
+
+        if !current.contains(value) {
             if self.trail.has_choice_point() {
                 self.explanation.record(ChangeReason::Branch {
                     variable: var,
@@ -133,7 +154,7 @@ impl Engine {
             return Ok(PropagationStatus::Failure);
         }
 
-        if self.domain(var).is_fixed() && self.domain(var).min() == Some(value) {
+        if current.is_fixed() && current.min() == Some(value) {
             return self.propagate();
         }
 
@@ -146,7 +167,7 @@ impl Engine {
             }),
             &mut self.explanation,
         );
-        self.set_domain(var, HybridDomain::fix(value));
+        self.set_domain(var, AnyDomain::Int(HybridDomain::fix(value)));
         self.schedule_propagators_for(var);
         self.propagate()
     }
@@ -188,11 +209,11 @@ impl Engine {
         Ok(overall)
     }
 
-    pub(crate) fn set_domain(&mut self, var: VariableId, domain: HybridDomain) {
+    pub(crate) fn set_domain(&mut self, var: VariableId, domain: AnyDomain) {
         self.variables[var.key()] = domain;
     }
 
-    pub(crate) fn restore_domain(&mut self, var: VariableId, domain: HybridDomain) {
+    pub(crate) fn restore_domain(&mut self, var: VariableId, domain: AnyDomain) {
         self.variables[var.key()] = domain;
     }
 
@@ -292,7 +313,7 @@ impl Default for Engine {
 mod tests {
     use super::*;
     use propaga_core::PropagationContext;
-    use propaga_domains::{HybridDomain, IntervalDomain};
+    use propaga_domains::{AnyDomain, HybridDomain, IntervalDomain};
 
     #[derive(Clone)]
     struct LowerBoundPropagator {
@@ -383,7 +404,7 @@ mod tests {
     fn stores_and_returns_domains() {
         let mut engine = Engine::new();
         let var = engine.new_variable(IntervalDomain::new(1, 5));
-        assert_eq!(engine.domain(var), &HybridDomain::new(1, 5));
+        assert_eq!(engine.domain(var), &AnyDomain::Int(HybridDomain::new(1, 5)));
     }
 
     #[test]
@@ -394,7 +415,7 @@ mod tests {
 
         let status = engine.propagate_all().unwrap();
         assert_eq!(status, PropagationStatus::OkChanged);
-        assert_eq!(engine.domain(var).min(), Some(4));
+        assert_eq!(engine.int_domain(var).unwrap().min(), Some(4));
 
         let status = engine.propagate_all().unwrap();
         assert_eq!(status, PropagationStatus::OkNoChange);
@@ -411,7 +432,7 @@ mod tests {
 
         let status = engine.propagate_all().unwrap();
         assert_eq!(status, PropagationStatus::OkChanged);
-        assert_eq!(engine.domain(right).fixed_value(), Some(3));
+        assert_eq!(engine.int_domain(right).unwrap().fixed_value(), Some(3));
     }
 
     #[test]
@@ -421,10 +442,13 @@ mod tests {
         let level = engine.trail_mark();
 
         engine.fix_variable(var, 5).unwrap();
-        assert_eq!(engine.domain(var).fixed_value(), Some(5));
+        assert_eq!(engine.int_domain(var).unwrap().fixed_value(), Some(5));
 
         engine.trail_backtrack(level);
-        assert_eq!(engine.domain(var), &HybridDomain::new(1, 10));
+        assert_eq!(
+            engine.domain(var),
+            &AnyDomain::Int(HybridDomain::new(1, 10))
+        );
     }
 
     #[test]

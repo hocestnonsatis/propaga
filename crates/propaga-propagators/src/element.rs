@@ -258,8 +258,8 @@ mod tests {
         )));
 
         engine.propagate_all().unwrap();
-        assert_eq!(engine.domain(value).min(), Some(10));
-        assert_eq!(engine.domain(value).max(), Some(20));
+        assert_eq!(engine.hybrid_domain(value).min(), Some(10));
+        assert_eq!(engine.hybrid_domain(value).max(), Some(20));
     }
 
     #[test]
@@ -277,6 +277,6 @@ mod tests {
         )));
 
         engine.propagate_all().unwrap();
-        assert_eq!(engine.domain(index).fixed_value(), Some(2));
+        assert_eq!(engine.hybrid_domain(index).fixed_value(), Some(2));
     }
 }

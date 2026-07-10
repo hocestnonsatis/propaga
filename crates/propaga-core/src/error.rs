@@ -15,4 +15,13 @@ pub enum PropagaError {
     /// A propagator handle does not exist in the engine.
     #[error("unknown propagator")]
     UnknownPropagator,
+
+    /// A variable was used with the wrong domain type.
+    #[error("variable {variable:?} expected {expected} domain")]
+    TypeMismatch {
+        /// Variable handle.
+        variable: VariableId,
+        /// Expected domain kind label.
+        expected: String,
+    },
 }

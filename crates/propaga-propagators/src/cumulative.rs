@@ -461,6 +461,6 @@ mod tests {
         let tasks = vec![TaskSpec::new(start, 3, end)];
         engine.add_propagator(Box::new(CumulativePropagator::new(tasks, 2)));
         engine.propagate_all().unwrap();
-        assert!(engine.domain(end).min().unwrap() >= 5);
+        assert!(engine.hybrid_domain(end).min().unwrap() >= 5);
     }
 }

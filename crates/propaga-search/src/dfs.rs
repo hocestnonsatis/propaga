@@ -482,7 +482,7 @@ impl DepthFirstSearch {
     }
 
     fn ordered_values(&self, engine: &Engine, var: VariableId) -> Vec<i32> {
-        let domain = engine.domain(var);
+        let domain = engine.int_domain(var).expect("int search variable");
         let mut values = Vec::new();
 
         if let (Some(min), Some(max)) = (domain.min(), domain.max()) {
@@ -500,7 +500,12 @@ impl DepthFirstSearch {
                 values.sort_by_key(|value| {
                     self.variables
                         .iter()
-                        .filter(|&&other| other != var && engine.domain(other).contains(*value))
+                        .filter(|&&other| {
+                            other != var
+                                && engine
+                                    .int_domain(other)
+                                    .is_some_and(|domain| domain.contains(*value))
+                        })
                         .count()
                 });
             }
@@ -538,10 +543,15 @@ impl DepthFirstSearch {
         self.variables
             .iter()
             .filter_map(|&var| {
-                engine
-                    .domain(var)
-                    .is_fixed()
-                    .then_some((var, engine.domain(var).min().expect("fixed domain")))
+                engine.domain(var).is_fixed().then(|| {
+                    (
+                        var,
+                        engine
+                            .int_domain(var)
+                            .and_then(|domain| domain.min())
+                            .expect("fixed int domain"),
+                    )
+                })
             })
             .collect()
     }

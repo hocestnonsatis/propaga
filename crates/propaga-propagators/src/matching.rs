@@ -480,8 +480,8 @@ mod tests {
         let c = engine.new_variable(IntervalDomain::new(1, 3));
         engine.add_propagator(Box::new(crate::AllDifferentPropagator::new(vec![a, b, c])));
         engine.propagate_all().unwrap();
-        assert_eq!(engine.domain(c).size(), 1);
-        assert_eq!(engine.domain(c).min(), Some(3));
+        assert_eq!(engine.hybrid_domain(c).size(), 1);
+        assert_eq!(engine.hybrid_domain(c).min(), Some(3));
     }
 
     #[test]
@@ -616,7 +616,7 @@ mod tests {
 
     impl PropagationContext for ReadOnlyEngine<'_> {
         fn domain(&self, var: VariableId) -> &dyn DomainView<Value = i32> {
-            self.0.domain(var)
+            self.0.hybrid_domain(var)
         }
 
         fn remove_below(&mut self, _: VariableId, _: i32) -> bool {
@@ -632,7 +632,7 @@ mod tests {
         }
 
         fn fixed_value(&self, var: VariableId) -> Option<i32> {
-            self.0.domain(var).fixed_value()
+            self.0.hybrid_domain(var).fixed_value()
         }
     }
 }

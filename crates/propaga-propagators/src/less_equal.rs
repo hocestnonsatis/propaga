@@ -80,7 +80,7 @@ mod tests {
         engine.add_propagator(Box::new(LessEqualPropagator::new(left, right)));
 
         engine.propagate_all().unwrap();
-        assert_eq!(engine.domain(left).max(), Some(4));
+        assert_eq!(engine.hybrid_domain(left).max(), Some(4));
     }
 
     #[test]
@@ -91,7 +91,7 @@ mod tests {
         engine.add_propagator(Box::new(LessEqualPropagator::new(left, right)));
 
         engine.propagate_all().unwrap();
-        assert_eq!(engine.domain(right).min(), Some(6));
+        assert_eq!(engine.hybrid_domain(right).min(), Some(6));
     }
 
     #[test]

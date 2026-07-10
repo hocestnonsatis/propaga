@@ -1,9 +1,9 @@
 use propaga_core::{ChangeReason, Explanation, VariableId};
-use propaga_domains::HybridDomain;
+use propaga_domains::AnyDomain;
 
 struct TrailEntry {
     variable: VariableId,
-    old_domain: HybridDomain,
+    old_domain: AnyDomain,
 }
 
 /// Stack of domain snapshots for backtracking.
@@ -35,7 +35,7 @@ impl Trail {
     pub fn push(
         &mut self,
         variable: VariableId,
-        old_domain: HybridDomain,
+        old_domain: AnyDomain,
         reason: Option<ChangeReason>,
         explanation: &mut Explanation,
     ) {
@@ -49,7 +49,7 @@ impl Trail {
     }
 
     /// Returns domain snapshots recorded after `level` and truncates the trail to that level.
-    pub fn backtrack(&mut self, level: usize) -> (Vec<(VariableId, HybridDomain)>, usize) {
+    pub fn backtrack(&mut self, level: usize) -> (Vec<(VariableId, AnyDomain)>, usize) {
         if self.marks.is_empty() {
             return (Vec::new(), 0);
         }

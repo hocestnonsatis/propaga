@@ -192,7 +192,7 @@ mod tests {
         model.cumulative(vec![TaskSpec::new(start, 4, end)], 1);
         let status = model.engine_mut().fix_variable(start, 0).unwrap();
         assert_ne!(status, propaga_core::PropagationStatus::Failure);
-        assert_eq!(model.engine().domain(end).fixed_value(), Some(4));
+        assert_eq!(model.engine().hybrid_domain(end).fixed_value(), Some(4));
     }
 
     #[test]
@@ -313,9 +313,13 @@ mod tests {
         assert!(solution.is_some());
         for (index, end) in ends.iter().enumerate() {
             let expected = starts[index];
-            let start_time = model.engine().domain(expected).fixed_value().unwrap();
+            let start_time = model
+                .engine()
+                .hybrid_domain(expected)
+                .fixed_value()
+                .unwrap();
             assert_eq!(
-                model.engine().domain(*end).fixed_value(),
+                model.engine().hybrid_domain(*end).fixed_value(),
                 Some(start_time + spec.tasks[index].duration)
             );
         }

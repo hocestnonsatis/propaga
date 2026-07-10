@@ -100,8 +100,8 @@ mod tests {
         engine.add_propagator(Box::new(AllDifferentPropagator::new([a, b, c])));
 
         engine.propagate_all().unwrap();
-        assert!(!engine.domain(b).contains(2));
-        assert!(!engine.domain(c).contains(2));
+        assert!(!engine.hybrid_domain(b).contains(2));
+        assert!(!engine.hybrid_domain(c).contains(2));
     }
 
     #[test]
@@ -113,7 +113,7 @@ mod tests {
         engine.add_propagator(Box::new(AllDifferentPropagator::new(vec![a, b, c])));
 
         engine.propagate_all().unwrap();
-        assert_eq!(engine.domain(c).size(), 1);
-        assert_eq!(engine.domain(c).min(), Some(3));
+        assert_eq!(engine.hybrid_domain(c).size(), 1);
+        assert_eq!(engine.hybrid_domain(c).min(), Some(3));
     }
 }

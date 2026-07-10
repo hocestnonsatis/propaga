@@ -209,6 +209,6 @@ mod tests {
             [(1, CardinalityBound::exact(2))],
         )));
         engine.propagate_all().unwrap();
-        assert!(!engine.domain(c).contains(1));
+        assert!(!engine.hybrid_domain(c).contains(1));
     }
 }

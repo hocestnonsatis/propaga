@@ -67,6 +67,23 @@ impl AnyDomain {
             _ => None,
         }
     }
+
+    #[must_use]
+    pub fn size(&self) -> usize {
+        match self {
+            Self::Int(domain) => domain.size(),
+            Self::Set(domain) => domain.size(),
+            Self::Float(domain) => {
+                if domain.is_empty() {
+                    0
+                } else if domain.is_fixed() {
+                    1
+                } else {
+                    2
+                }
+            }
+        }
+    }
 }
 
 impl From<HybridDomain> for AnyDomain {
@@ -84,6 +101,12 @@ impl From<SetIntervalDomain> for AnyDomain {
 impl From<FloatDomain> for AnyDomain {
     fn from(domain: FloatDomain) -> Self {
         Self::Float(domain)
+    }
+}
+
+impl From<crate::IntervalDomain> for AnyDomain {
+    fn from(domain: crate::IntervalDomain) -> Self {
+        Self::Int(domain.into())
     }
 }
 

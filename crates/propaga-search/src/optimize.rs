@@ -156,7 +156,7 @@ fn bound_is_feasible(
     direction: ObjectiveDirection,
     bound: i32,
 ) -> bool {
-    let domain = engine.domain(objective);
+    let domain = engine.int_domain(objective).expect("int objective");
     match direction {
         ObjectiveDirection::Minimize => domain.min().is_some_and(|min| bound >= min),
         ObjectiveDirection::Maximize => domain.max().is_some_and(|max| bound <= max),
@@ -172,7 +172,11 @@ fn objective_value_from_solution(
         .iter()
         .find(|(var, _)| *var == objective)
         .map(|(_, value)| *value)
-        .or_else(|| engine.domain(objective).fixed_value())
+        .or_else(|| {
+            engine
+                .int_domain(objective)
+                .and_then(|domain| domain.fixed_value())
+        })
 }
 
 fn merge_stats(total: &mut SearchStats, partial: SearchStats) {

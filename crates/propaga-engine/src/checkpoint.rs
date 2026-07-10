@@ -4,14 +4,14 @@ use crate::trail::Trail;
 use dyn_clone::clone_box;
 use propaga_core::Explanation;
 use propaga_core::id::{PropagatorKey, VariableKey};
-use propaga_domains::HybridDomain;
+use propaga_domains::AnyDomain;
 use slotmap::SlotMap;
 use std::collections::{HashMap, HashSet};
 
 /// Snapshot of engine variable domains and base propagators after root propagation.
 #[derive(Clone, Debug)]
 pub struct EngineCheckpoint {
-    pub(crate) domains: SlotMap<VariableKey, HybridDomain>,
+    pub(crate) domains: SlotMap<VariableKey, AnyDomain>,
     propagator_keys: Vec<PropagatorKey>,
 }
 
@@ -157,10 +157,10 @@ mod tests {
         let checkpoint = engine.checkpoint();
 
         engine.fix_variable(var, 7).unwrap();
-        assert_eq!(engine.domain(var).fixed_value(), Some(7));
+        assert_eq!(engine.int_domain(var).unwrap().fixed_value(), Some(7));
 
         engine.restore_checkpoint(&checkpoint);
-        assert_eq!(engine.domain(var).min(), Some(4));
+        assert_eq!(engine.int_domain(var).unwrap().min(), Some(4));
         assert_eq!(engine.trail_depth(), 0);
     }
 
@@ -188,6 +188,24 @@ mod tests {
         let checkpoint = engine.checkpoint();
 
         let forked = engine.fork_at_checkpoint(&checkpoint);
-        assert_eq!(engine.domain(var).min(), forked.domain(var).min());
+        assert_eq!(
+            engine.int_domain(var).unwrap().min(),
+            forked.int_domain(var).unwrap().min()
+        );
+    }
+
+    #[test]
+    fn checkpoint_preserves_set_domain() {
+        use propaga_domains::{AnyDomain, DomainKind, SetIntervalDomain};
+
+        let mut engine = Engine::new();
+        let set_domain = SetIntervalDomain::universe(1..=3).with_cardinality(1, 2);
+        let var = engine.new_variable(AnyDomain::Set(set_domain));
+        engine.commit_initial_propagation().unwrap();
+        let checkpoint = engine.checkpoint();
+
+        engine.restore_checkpoint(&checkpoint);
+        assert!(engine.domain(var).as_set().is_some());
+        assert_eq!(engine.domain(var).kind(), DomainKind::Set);
     }
 }

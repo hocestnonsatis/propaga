@@ -493,7 +493,7 @@ mod tests {
         engine.fix_variable(reif, 1).unwrap();
         engine.fix_variable(left, 3).unwrap();
         engine.propagate_all().unwrap();
-        assert_eq!(engine.domain(right).fixed_value(), Some(3));
+        assert_eq!(engine.hybrid_domain(right).fixed_value(), Some(3));
     }
 
     #[test]
@@ -505,7 +505,7 @@ mod tests {
         engine.add_propagator(Box::new(ReifiedEqualityPropagator::new(left, right, reif)));
         engine.fix_variable(reif, 0).unwrap();
         engine.propagate_all().unwrap();
-        assert!(!engine.domain(left).contains(2));
+        assert!(!engine.hybrid_domain(left).contains(2));
     }
 
     #[test]
@@ -517,7 +517,7 @@ mod tests {
         engine.add_propagator(Box::new(ReifiedNotEqualPropagator::new(left, right, reif)));
         engine.fix_variable(reif, 1).unwrap();
         engine.propagate_all().unwrap();
-        assert!(!engine.domain(left).contains(2));
+        assert!(!engine.hybrid_domain(left).contains(2));
     }
 
     #[test]
@@ -529,8 +529,10 @@ mod tests {
         engine.add_propagator(Box::new(ReifiedLessEqualPropagator::new(left, right, reif)));
         engine.fix_variable(reif, 0).unwrap();
         engine.propagate_all().unwrap();
-        assert!(engine.domain(right).max().unwrap() <= 2);
-        assert!(engine.domain(left).min().unwrap() > engine.domain(right).max().unwrap());
+        assert!(engine.hybrid_domain(right).max().unwrap() <= 2);
+        assert!(
+            engine.hybrid_domain(left).min().unwrap() > engine.hybrid_domain(right).max().unwrap()
+        );
     }
 
     #[test]
@@ -542,6 +544,6 @@ mod tests {
         engine.add_propagator(Box::new(ReifiedLessThanPropagator::new(left, right, reif)));
         engine.fix_variable(reif, 1).unwrap();
         engine.propagate_all().unwrap();
-        assert_eq!(engine.domain(left).max(), Some(3));
+        assert_eq!(engine.hybrid_domain(left).max(), Some(3));
     }
 }

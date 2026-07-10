@@ -411,10 +411,10 @@ fn schedule_task_entries(
             let start_time = values
                 .get(start)
                 .copied()
-                .or_else(|| engine.domain(*start).fixed_value())
+                .or_else(|| engine.hybrid_domain(*start).fixed_value())
                 .unwrap_or(-1);
             let end_time = engine
-                .domain(*end)
+                .hybrid_domain(*end)
                 .fixed_value()
                 .or_else(|| values.get(end).copied())
                 .unwrap_or_else(|| {

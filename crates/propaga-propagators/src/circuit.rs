@@ -83,8 +83,8 @@ mod tests {
         let x2 = engine.new_variable(IntervalDomain::new(0, 2));
         engine.add_propagator(Box::new(CircuitPropagator::new(vec![x0, x1, x2])));
         engine.propagate_all().unwrap();
-        assert!(!engine.domain(x0).contains(0));
-        assert!(!engine.domain(x1).contains(1));
-        assert!(!engine.domain(x2).contains(2));
+        assert!(!engine.hybrid_domain(x0).contains(0));
+        assert!(!engine.hybrid_domain(x1).contains(1));
+        assert!(!engine.hybrid_domain(x2).contains(2));
     }
 }

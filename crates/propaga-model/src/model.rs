@@ -470,6 +470,6 @@ mod tests {
         model.equal(left, right);
         model.engine_mut().fix_variable(left, 3).unwrap();
         model.propagate().unwrap();
-        assert_eq!(model.engine().domain(right).fixed_value(), Some(3));
+        assert_eq!(model.engine().hybrid_domain(right).fixed_value(), Some(3));
     }
 }

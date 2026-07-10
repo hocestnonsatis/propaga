@@ -118,6 +118,6 @@ mod tests {
         ])));
 
         engine.propagate_all().unwrap();
-        assert!(!engine.domain(b).contains(2));
+        assert!(!engine.hybrid_domain(b).contains(2));
     }
 }

@@ -107,7 +107,11 @@ fn objective_values(
         .map(|(var, _)| {
             map.get(var)
                 .copied()
-                .or_else(|| engine.domain(*var).fixed_value())
+                .or_else(|| {
+                    engine
+                        .int_domain(*var)
+                        .and_then(|domain| domain.fixed_value())
+                })
                 .unwrap_or(0)
         })
         .collect()

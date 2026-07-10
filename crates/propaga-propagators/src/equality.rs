@@ -101,7 +101,7 @@ mod tests {
         engine.add_propagator(Box::new(EqualityPropagator::new(left, right)));
 
         engine.propagate_all().unwrap();
-        assert_eq!(engine.domain(right).fixed_value(), Some(5));
+        assert_eq!(engine.hybrid_domain(right).fixed_value(), Some(5));
     }
 
     #[test]
@@ -112,9 +112,9 @@ mod tests {
         engine.add_propagator(Box::new(EqualityPropagator::new(left, right)));
 
         engine.propagate_all().unwrap();
-        assert_eq!(engine.domain(left).min(), Some(3));
-        assert_eq!(engine.domain(left).max(), Some(7));
-        assert_eq!(engine.domain(right).min(), Some(3));
-        assert_eq!(engine.domain(right).max(), Some(7));
+        assert_eq!(engine.hybrid_domain(left).min(), Some(3));
+        assert_eq!(engine.hybrid_domain(left).max(), Some(7));
+        assert_eq!(engine.hybrid_domain(right).min(), Some(3));
+        assert_eq!(engine.hybrid_domain(right).max(), Some(7));
     }
 }
