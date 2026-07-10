@@ -56,8 +56,8 @@ mod tests {
     #[test]
     fn propagates_float_le_bounds() {
         let mut engine = Engine::new();
-        let left = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 3.0)));
-        let right = engine.new_variable(AnyDomain::Float(FloatDomain::new(5.0, 10.0)));
+        let left = engine.new_variable(AnyDomain::Float(FloatDomain::new(5.0, 10.0)));
+        let right = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 4.0)));
         engine.add_propagator(Box::new(FloatLePropagator::new(left, right)));
         let status = engine.propagate_all().unwrap();
         assert!(status.is_failure());
