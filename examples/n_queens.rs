@@ -1,7 +1,7 @@
 use propaga_domains::IntervalDomain;
 use propaga_engine::Engine;
 use propaga_propagators::{AllDifferentPropagator, NotEqualOffsetPropagator};
-use propaga_search::DepthFirstSearch;
+use propaga_search::{DepthFirstSearch, assignment_int, solution_int_values};
 
 fn main() {
     let n: usize = 8;
@@ -33,15 +33,15 @@ fn main() {
         .expect("8-queens should have a solution");
 
     println!("{n}-Queens solution (row -> column):");
-    for (row, (_, column)) in solution.iter().enumerate() {
+    for (row, var) in queens.iter().enumerate() {
+        let column = assignment_int(&solution, *var).expect("assigned");
         println!("  row {row}: column {column}");
     }
 
-    assert_solution_valid(n, &solution);
+    assert_solution_valid(n, &solution_int_values(&solution));
 }
 
-fn assert_solution_valid(n: usize, solution: &[(propaga_core::VariableId, i32)]) {
-    let columns: Vec<i32> = solution.iter().map(|(_, column)| *column).collect();
+fn assert_solution_valid(n: usize, columns: &[i32]) {
     assert_eq!(columns.len(), n);
 
     for i in 0..columns.len() {

@@ -1,9 +1,9 @@
 //! Lexicographic multi-objective optimization.
 
 use crate::config::SearchConfig;
-use crate::dfs::Solution;
 use crate::optimize::{ObjectiveDirection, OptimizationSearch};
 use crate::stats::SearchStats;
+use crate::value::Solution;
 use propaga_core::VariableId;
 use propaga_domains::HybridDomain;
 use propaga_engine::Engine;
@@ -19,7 +19,7 @@ pub struct Objective {
 }
 
 /// Result of lexicographic optimization.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct LexicographicResult {
     /// Best solution found.
     pub solution: Option<Solution>,

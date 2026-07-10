@@ -1,7 +1,8 @@
 use crate::config::SearchConfig;
-use crate::dfs::{DepthFirstSearch, Solution};
+use crate::dfs::DepthFirstSearch;
 use crate::optimize::ObjectiveDirection;
 use crate::stats::SearchStats;
+use crate::value::{AssignmentValue, Solution};
 use propaga_core::VariableId;
 use propaga_engine::Engine;
 
@@ -28,7 +29,7 @@ pub fn dominates(a: &[i32], b: &[i32], directions: &[ObjectiveDirection]) -> boo
 }
 
 /// One non-dominated solution with objective vector.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ParetoSolution {
     /// Variable assignment.
     pub assignment: Solution,
@@ -37,7 +38,7 @@ pub struct ParetoSolution {
 }
 
 /// Result of Pareto front enumeration.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ParetoResult {
     /// Non-dominated solutions discovered.
     pub front: Vec<ParetoSolution>,
@@ -101,7 +102,13 @@ fn objective_values(
     objectives: &[(VariableId, ObjectiveDirection)],
     solution: &Solution,
 ) -> Vec<i32> {
-    let map: std::collections::HashMap<_, _> = solution.iter().copied().collect();
+    let map: std::collections::HashMap<_, _> = solution
+        .iter()
+        .filter_map(|(var, value)| match value {
+            AssignmentValue::Int(v) => Some((*var, *v)),
+            _ => None,
+        })
+        .collect();
     objectives
         .iter()
         .map(|(var, _)| {

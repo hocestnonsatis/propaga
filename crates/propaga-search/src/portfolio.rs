@@ -1,8 +1,9 @@
 //! Portfolio search over multiple search configurations.
 
 use crate::config::{RestartPolicy, SearchConfig, ValueOrdering, VariableOrdering};
-use crate::dfs::{DepthFirstSearch, Solution};
+use crate::dfs::DepthFirstSearch;
 use crate::stats::SearchStats;
+use crate::value::Solution;
 use propaga_core::VariableId;
 use propaga_engine::{Engine, EngineCheckpoint};
 use rayon::prelude::*;

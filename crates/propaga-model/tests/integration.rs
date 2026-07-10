@@ -38,3 +38,22 @@ fn pareto_minimize_two_objectives() {
     );
     assert!(result.front.len() >= 2);
 }
+
+#[test]
+fn set_cardinality_satisfiable() {
+    let mut model = Model::new();
+    let s = model.set_var(1, 3, 2, 2);
+    model.set_card(s);
+    let result = model.solve_subset(vec![s]);
+    assert!(result.is_some());
+}
+
+#[test]
+fn float_le_satisfiable() {
+    let mut model = Model::new();
+    let x = model.float_var(0.0, 5.0);
+    let y = model.float_var(3.0, 10.0);
+    model.float_le(x, y);
+    let result = model.solve_subset(vec![x, y]);
+    assert!(result.is_some());
+}

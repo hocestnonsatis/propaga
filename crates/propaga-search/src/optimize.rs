@@ -1,6 +1,7 @@
 use crate::config::SearchConfig;
-use crate::dfs::{DepthFirstSearch, Solution};
+use crate::dfs::DepthFirstSearch;
 use crate::stats::SearchStats;
+use crate::value::{AssignmentValue, Solution};
 use propaga_core::{DomainView, VariableId};
 use propaga_engine::Engine;
 use propaga_propagators::LessEqualPropagator;
@@ -15,7 +16,7 @@ pub enum ObjectiveDirection {
 }
 
 /// Result of an optimization search.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct OptimizationResult {
     /// Best solution found.
     pub solution: Option<Solution>,
@@ -171,7 +172,10 @@ fn objective_value_from_solution(
     solution
         .iter()
         .find(|(var, _)| *var == objective)
-        .map(|(_, value)| *value)
+        .and_then(|(_, value)| match value {
+            AssignmentValue::Int(value) => Some(*value),
+            _ => None,
+        })
         .or_else(|| {
             engine
                 .int_domain(objective)

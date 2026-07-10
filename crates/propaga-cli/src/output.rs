@@ -90,7 +90,7 @@ pub fn sudoku_result_json(
     }
 }
 
-type NQueensSolutionEntry = (Vec<(propaga_core::VariableId, i32)>, SearchStats, Duration);
+type NQueensSolutionEntry = (propaga_search::Solution, SearchStats, Duration);
 
 /// Prints N-Queens solutions according to `options`.
 pub fn print_n_queens_results(
@@ -158,14 +158,14 @@ fn print_sudoku_grid_plain(values: &[i32]) {
     println!("+-------+-------+-------+");
 }
 
-fn print_n_queens_plain(size: usize, solution: &[(propaga_core::VariableId, i32)]) {
+fn print_n_queens_plain(size: usize, solution: &propaga_search::Solution) {
     println!("{size}-Queens solution (row -> column):");
     for (row, column) in extract_columns(solution).into_iter().enumerate() {
         println!("  row {row}: column {column}");
     }
 }
 
-fn print_n_queens_board(size: usize, solution: &[(propaga_core::VariableId, i32)]) {
+fn print_n_queens_board(size: usize, solution: &propaga_search::Solution) {
     let columns = extract_columns(solution);
     println!("{size}-Queens board:");
     for row in 0..size {
@@ -209,7 +209,7 @@ pub(crate) fn print_flatzinc_result(
         return;
     }
 
-    let values: std::collections::HashMap<_, _> = solution.iter().copied().collect();
+    let values: std::collections::HashMap<_, _> = propaga_search::solution_int_map(solution);
     for var in order {
         let name = names.get(var).map(String::as_str).unwrap_or("var");
         if let Some(value) = values.get(var) {
@@ -227,7 +227,7 @@ pub(crate) fn format_output_directive(
 ) -> String {
     use propaga_flatzinc::OutputSegment;
 
-    let values: std::collections::HashMap<_, _> = solution.iter().copied().collect();
+    let values: std::collections::HashMap<_, _> = propaga_search::solution_int_map(solution);
     let name_to_var: std::collections::HashMap<_, _> = names
         .iter()
         .map(|(var, name)| (name.as_str(), *var))
@@ -273,7 +273,7 @@ pub(crate) fn print_flatzinc_json(
         return;
     };
 
-    let values: std::collections::HashMap<_, _> = solution.iter().copied().collect();
+    let values: std::collections::HashMap<_, _> = propaga_search::solution_int_map(solution);
     let variables: std::collections::HashMap<String, i32> = order
         .iter()
         .filter_map(|var| {
@@ -344,7 +344,7 @@ fn assignment_json(
     order: &[propaga_core::VariableId],
     solution: &propaga_search::Solution,
 ) -> std::collections::HashMap<String, i32> {
-    let values: std::collections::HashMap<_, _> = solution.iter().copied().collect();
+    let values: std::collections::HashMap<_, _> = propaga_search::solution_int_map(solution);
     order
         .iter()
         .filter_map(|var| {
@@ -400,7 +400,7 @@ fn schedule_task_entries(
     tasks: &[crate::schedule::ScheduleTaskSpec],
     solution: &propaga_search::Solution,
 ) -> Vec<ScheduleTaskJson> {
-    let values: std::collections::HashMap<_, _> = solution.iter().copied().collect();
+    let values: std::collections::HashMap<_, _> = propaga_search::solution_int_map(solution);
     let engine = model.engine();
     starts
         .iter()
@@ -521,6 +521,6 @@ fn to_grid(values: &[i32]) -> Vec<Vec<i32>> {
     values.chunks(9).map(<[i32]>::to_vec).collect()
 }
 
-fn extract_columns(solution: &[(propaga_core::VariableId, i32)]) -> Vec<i32> {
-    solution.iter().map(|(_, column)| *column).collect()
+fn extract_columns(solution: &propaga_search::Solution) -> Vec<i32> {
+    propaga_search::solution_int_values(solution)
 }

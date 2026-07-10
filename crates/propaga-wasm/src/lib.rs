@@ -2,7 +2,7 @@
 
 use propaga_core::VariableId;
 use propaga_model::Model;
-use propaga_search::SearchConfig;
+use propaga_search::{SearchConfig, assignment_int};
 use wasm_bindgen::prelude::*;
 
 /// Solves a 9x9 Sudoku puzzle from an 81-digit string (`0` for empty cells).
@@ -32,10 +32,10 @@ pub fn solve_sudoku(puzzle: &str) -> String {
     let _ = model.propagate();
     let solution = model.solve_subset(cells.clone());
     solution
-        .map(|values| {
+        .map(|solution| {
             let mut grid = vec![0; 81];
-            for (var, value) in values {
-                if let Some(index) = cells.iter().position(|cell| *cell == var) {
+            for (index, cell) in cells.iter().enumerate() {
+                if let Some(value) = assignment_int(&solution, *cell) {
                     grid[index] = value;
                 }
             }
@@ -65,10 +65,8 @@ pub fn solve_n_queens(size: u32) -> String {
         .solve_subset(queens.clone())
         .map(|solution| {
             let mut columns = vec![0; size];
-            for (var, value) in solution {
-                if let Some(index) = queens.iter().position(|queen| *queen == var) {
-                    columns[index] = value;
-                }
+            for (index, queen) in queens.iter().enumerate() {
+                columns[index] = assignment_int(&solution, *queen).unwrap_or(0);
             }
             columns
                 .iter()

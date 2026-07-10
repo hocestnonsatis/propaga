@@ -6,8 +6,8 @@ use propaga_core::{
     ChangeReason, DomainView, Explanation, PropagaError, PropagationStatus, Propagator,
     PropagatorId, VariableId,
 };
-use propaga_domains::AnyDomain;
-use propaga_domains::HybridDomain;
+use propaga_domains::{AnyDomain, HybridDomain};
+use propaga_domains::{FloatDomain, SetIntervalDomain};
 use slotmap::SlotMap;
 use std::collections::HashMap;
 
@@ -168,6 +168,174 @@ impl Engine {
             &mut self.explanation,
         );
         self.set_domain(var, AnyDomain::Int(HybridDomain::fix(value)));
+        self.schedule_propagators_for(var);
+        self.propagate()
+    }
+
+    /// Assigns a float `value` to `var`, schedules affected propagators, and propagates.
+    pub fn fix_float(
+        &mut self,
+        var: VariableId,
+        value: f64,
+    ) -> Result<PropagationStatus, PropagaError> {
+        let current = self
+            .domain(var)
+            .as_float()
+            .copied()
+            .ok_or(PropagaError::TypeMismatch {
+                variable: var,
+                expected: "float".to_string(),
+            })?;
+
+        if !current.contains(value) {
+            self.record_conflict(var);
+            return Ok(PropagationStatus::Failure);
+        }
+
+        if current.is_fixed() && (current.lower_bound() - value).abs() < f64::EPSILON {
+            return self.propagate();
+        }
+
+        self.trail.push(
+            var,
+            self.domain(var).clone(),
+            Some(ChangeReason::Branch {
+                variable: var,
+                value: 0,
+            }),
+            &mut self.explanation,
+        );
+        self.set_domain(var, AnyDomain::Float(FloatDomain::fix(value)));
+        self.schedule_propagators_for(var);
+        self.propagate()
+    }
+
+    /// Forces `value` into a set variable.
+    pub fn force_set_in(
+        &mut self,
+        var: VariableId,
+        value: i32,
+    ) -> Result<PropagationStatus, PropagaError> {
+        let current = self
+            .domain(var)
+            .as_set()
+            .cloned()
+            .ok_or(PropagaError::TypeMismatch {
+                variable: var,
+                expected: "set".to_string(),
+            })?;
+
+        let Some(next) = current.force_in(value) else {
+            self.record_conflict(var);
+            return Ok(PropagationStatus::Failure);
+        };
+
+        if current.is_fixed() {
+            return self.propagate();
+        }
+
+        self.trail.push(
+            var,
+            self.domain(var).clone(),
+            Some(ChangeReason::Branch {
+                variable: var,
+                value,
+            }),
+            &mut self.explanation,
+        );
+        self.set_domain(var, AnyDomain::Set(next));
+        self.schedule_propagators_for(var);
+        self.propagate()
+    }
+
+    /// Forces `value` out of a set variable.
+    pub fn force_set_out(
+        &mut self,
+        var: VariableId,
+        value: i32,
+    ) -> Result<PropagationStatus, PropagaError> {
+        let current = self
+            .domain(var)
+            .as_set()
+            .cloned()
+            .ok_or(PropagaError::TypeMismatch {
+                variable: var,
+                expected: "set".to_string(),
+            })?;
+
+        let Some(next) = current.force_out(value) else {
+            self.record_conflict(var);
+            return Ok(PropagationStatus::Failure);
+        };
+
+        self.trail.push(
+            var,
+            self.domain(var).clone(),
+            Some(ChangeReason::Branch {
+                variable: var,
+                value,
+            }),
+            &mut self.explanation,
+        );
+        self.set_domain(var, AnyDomain::Set(next));
+        self.schedule_propagators_for(var);
+        self.propagate()
+    }
+
+    /// Tightens a float variable's upper bound.
+    pub fn tighten_float_above(
+        &mut self,
+        var: VariableId,
+        bound: f64,
+    ) -> Result<PropagationStatus, PropagaError> {
+        let current = self
+            .domain(var)
+            .as_float()
+            .copied()
+            .ok_or(PropagaError::TypeMismatch {
+                variable: var,
+                expected: "float".to_string(),
+            })?;
+        let next = current.remove_above(bound);
+        if next.is_empty() {
+            self.record_conflict(var);
+            return Ok(PropagationStatus::Failure);
+        }
+        if next == current {
+            return self.propagate();
+        }
+        self.trail
+            .push(var, self.domain(var).clone(), None, &mut self.explanation);
+        self.set_domain(var, AnyDomain::Float(next));
+        self.schedule_propagators_for(var);
+        self.propagate()
+    }
+
+    /// Tightens a float variable's lower bound.
+    pub fn tighten_float_below(
+        &mut self,
+        var: VariableId,
+        bound: f64,
+    ) -> Result<PropagationStatus, PropagaError> {
+        let current = self
+            .domain(var)
+            .as_float()
+            .copied()
+            .ok_or(PropagaError::TypeMismatch {
+                variable: var,
+                expected: "float".to_string(),
+            })?;
+        let next = current.remove_below(bound);
+        if next.is_empty() {
+            self.record_conflict(var);
+            return Ok(PropagationStatus::Failure);
+        }
+        if next == current {
+            return self.propagate();
+        }
+        self.trail
+            .push(var, self.domain(var).clone(), None, &mut self.explanation);
+        self.set_domain(var, AnyDomain::Float(next));
         self.schedule_propagators_for(var);
         self.propagate()
     }

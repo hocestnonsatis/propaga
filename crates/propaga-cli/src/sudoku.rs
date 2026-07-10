@@ -125,11 +125,11 @@ fn post_sudoku_constraints(model: &mut Model, cells: &[VariableId]) {
     }
 }
 
-fn solution_to_grid(solution: &[(VariableId, i32)], cells: &[VariableId]) -> Vec<i32> {
+fn solution_to_grid(solution: &propaga_search::Solution, cells: &[VariableId]) -> Vec<i32> {
     let mut values = vec![0; 81];
-    for (var, value) in solution {
-        if let Some(index) = cells.iter().position(|cell| cell == var) {
-            values[index] = *value;
+    for (index, cell) in cells.iter().enumerate() {
+        if let Some(value) = propaga_search::assignment_int(solution, *cell) {
+            values[index] = value;
         }
     }
     values

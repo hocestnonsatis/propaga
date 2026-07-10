@@ -40,7 +40,9 @@ pub fn run(size: usize, options: GlobalOptions) -> Result<(), Box<dyn std::error
                     order_solution(&queens, &solution)
                         .into_iter()
                         .enumerate()
-                        .map(|(row, column)| (queens[row], column))
+                        .map(|(row, column)| {
+                            (queens[row], propaga_search::AssignmentValue::Int(column))
+                        })
                         .collect(),
                     stats,
                     elapsed_base,
@@ -56,10 +58,15 @@ pub fn run(size: usize, options: GlobalOptions) -> Result<(), Box<dyn std::error
             }
             return Err(format!("{size}-queens has no solution").into());
         };
-        let ordered: Vec<(VariableId, i32)> = queens
+        let ordered: propaga_search::Solution = queens
             .iter()
             .enumerate()
-            .map(|(row, var)| (*var, order_solution(&queens, &solution)[row]))
+            .map(|(row, var)| {
+                (
+                    *var,
+                    propaga_search::AssignmentValue::Int(order_solution(&queens, &solution)[row]),
+                )
+            })
             .collect();
         vec![(ordered, stats, solve_started.elapsed())]
     };
@@ -68,15 +75,11 @@ pub fn run(size: usize, options: GlobalOptions) -> Result<(), Box<dyn std::error
     Ok(())
 }
 
-fn order_solution(queens: &[VariableId], solution: &[(VariableId, i32)]) -> Vec<i32> {
+fn order_solution(queens: &[VariableId], solution: &propaga_search::Solution) -> Vec<i32> {
     queens
         .iter()
         .map(|var| {
-            solution
-                .iter()
-                .find(|(candidate, _)| candidate == var)
-                .map(|(_, value)| *value)
-                .expect("missing queen assignment")
+            propaga_search::assignment_int(solution, *var).expect("missing queen assignment")
         })
         .collect()
 }

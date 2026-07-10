@@ -2,15 +2,14 @@ use crate::config::SearchConfig;
 use crate::conflict::{ConflictAnalyzer, NogoodStore};
 use crate::lcg::ClauseStore;
 use crate::stats::{SearchStats, branch_assignments_from_explanation};
+use crate::value::{AssignmentValue, Solution};
 use propaga_core::{DomainView, NogoodLiteral, PropagationStatus, VariableId};
+use propaga_domains::DomainKind;
 use propaga_engine::Engine;
 use propaga_propagators::ClausePropagator;
 use propaga_propagators::NogoodPropagator;
 use std::collections::HashMap;
 use std::time::Instant;
-
-/// Assignment mapping variables to their chosen values.
-pub type Solution = Vec<(VariableId, i32)>;
 
 /// Depth-first search with MRV, nogood learning, and optional restarts.
 pub struct DepthFirstSearch {
@@ -222,10 +221,35 @@ impl DepthFirstSearch {
         }
 
         let var = self.select_variable(engine)?;
-        let values = self.ordered_values(engine, var);
+        if let Some(solution) = self.explore_variable(engine, var, &assignment) {
+            return Some(solution);
+        }
 
+        None
+    }
+
+    fn explore_variable(
+        &mut self,
+        engine: &mut Engine,
+        var: VariableId,
+        assignment: &[(VariableId, i32)],
+    ) -> Option<Solution> {
+        match engine.domain(var).kind() {
+            DomainKind::Int => self.explore_int(engine, var, assignment),
+            DomainKind::Set => self.explore_set(engine, var),
+            DomainKind::Float => self.explore_float(engine, var),
+        }
+    }
+
+    fn explore_int(
+        &mut self,
+        engine: &mut Engine,
+        var: VariableId,
+        assignment: &[(VariableId, i32)],
+    ) -> Option<Solution> {
+        let values = self.ordered_values(engine, var);
         for value in values {
-            if self.would_prune(&assignment, var, value) {
+            if self.would_prune(assignment, var, value) {
                 continue;
             }
 
@@ -250,6 +274,134 @@ impl DepthFirstSearch {
                     self.stats.record_backtrack();
                     engine.trail_backtrack(level);
                 }
+            }
+        }
+        None
+    }
+
+    fn explore_set(&mut self, engine: &mut Engine, var: VariableId) -> Option<Solution> {
+        let undecided = engine.domain(var).as_set()?.undecided();
+        if undecided.is_empty() {
+            return self.search(engine);
+        }
+        let value = undecided[0];
+
+        self.record_branch();
+        let level = engine.trail_mark();
+        match engine.force_set_in(var, value) {
+            Ok(PropagationStatus::Failure) => {
+                let jumped = self.handle_failure(engine, level);
+                if jumped {
+                    return None;
+                }
+            }
+            Ok(_) => {
+                if let Some(solution) = self.search(engine) {
+                    return Some(solution);
+                }
+                self.stats.record_backtrack();
+                engine.trail_backtrack(level);
+            }
+            Err(_) => {
+                self.stats.record_backtrack();
+                engine.trail_backtrack(level);
+            }
+        }
+
+        self.record_branch();
+        let level = engine.trail_mark();
+        match engine.force_set_out(var, value) {
+            Ok(PropagationStatus::Failure) => {
+                let jumped = self.handle_failure(engine, level);
+                if jumped {
+                    return None;
+                }
+            }
+            Ok(_) => {
+                if let Some(solution) = self.search(engine) {
+                    return Some(solution);
+                }
+                self.stats.record_backtrack();
+                engine.trail_backtrack(level);
+            }
+            Err(_) => {
+                self.stats.record_backtrack();
+                engine.trail_backtrack(level);
+            }
+        }
+
+        None
+    }
+
+    fn explore_float(&mut self, engine: &mut Engine, var: VariableId) -> Option<Solution> {
+        let float = engine.domain(var).as_float().copied()?;
+        if float.is_fixed() {
+            return self.search(engine);
+        }
+
+        let width = float.upper_bound() - float.lower_bound();
+        if width <= f64::EPSILON {
+            self.record_branch();
+            let level = engine.trail_mark();
+            match engine.fix_float(var, float.lower_bound()) {
+                Ok(PropagationStatus::Failure) => {
+                    let jumped = self.handle_failure(engine, level);
+                    if jumped {
+                        return None;
+                    }
+                }
+                Ok(_) => return self.search(engine),
+                Err(_) => {
+                    self.stats.record_backtrack();
+                    engine.trail_backtrack(level);
+                }
+            }
+            return None;
+        }
+
+        let mid = float.lower_bound() + width / 2.0;
+
+        self.record_branch();
+        let level = engine.trail_mark();
+        match engine.tighten_float_above(var, mid) {
+            Ok(PropagationStatus::Failure) => {
+                let jumped = self.handle_failure(engine, level);
+                if jumped {
+                    return None;
+                }
+            }
+            Ok(_) => {
+                if let Some(solution) = self.search(engine) {
+                    return Some(solution);
+                }
+                self.stats.record_backtrack();
+                engine.trail_backtrack(level);
+            }
+            Err(_) => {
+                self.stats.record_backtrack();
+                engine.trail_backtrack(level);
+            }
+        }
+
+        self.record_branch();
+        let level = engine.trail_mark();
+        match engine.tighten_float_below(var, mid) {
+            Ok(PropagationStatus::Failure) => {
+                let jumped = self.handle_failure(engine, level);
+                if jumped {
+                    return None;
+                }
+            }
+            Ok(_) => {
+                if let Some(solution) = self.search(engine) {
+                    return Some(solution);
+                }
+                self.stats.record_backtrack();
+                engine.trail_backtrack(level);
+            }
+            Err(_) => {
+                self.stats.record_backtrack();
+                engine.trail_backtrack(level);
             }
         }
 
@@ -290,22 +442,135 @@ impl DepthFirstSearch {
             return;
         };
 
-        let values = self.ordered_values(engine, var);
+        match engine.domain(var).kind() {
+            DomainKind::Int => {
+                self.collect_int_branches(engine, var, &assignment, solutions, limit);
+            }
+            DomainKind::Set => {
+                self.collect_set_branches(engine, var, solutions, limit);
+            }
+            DomainKind::Float => {
+                self.collect_float_branches(engine, var, solutions, limit);
+            }
+        }
+    }
 
-        for value in values {
-            if self.would_prune(&assignment, var, value) {
+    fn collect_int_branches(
+        &mut self,
+        engine: &mut Engine,
+        var: VariableId,
+        assignment: &[(VariableId, i32)],
+        solutions: &mut Vec<Solution>,
+        limit: Option<usize>,
+    ) {
+        for value in self.ordered_values(engine, var) {
+            if self.would_prune(assignment, var, value) {
                 continue;
             }
-
             self.record_branch();
             let level = engine.trail_mark();
             self.record_phase(var, value);
             match engine.fix_variable(var, value) {
                 Ok(PropagationStatus::Failure) => {
-                    let jumped = self.handle_failure(engine, level);
-                    if jumped {
+                    let _ = self.handle_failure(engine, level);
+                }
+                Ok(_) => {
+                    self.collect_all(engine, solutions, limit);
+                    if limit.is_some_and(|max| solutions.len() >= max) {
+                        self.stats.record_backtrack();
+                        engine.trail_backtrack(level);
                         return;
                     }
+                    self.stats.record_backtrack();
+                    engine.trail_backtrack(level);
+                }
+                Err(_) => {
+                    self.stats.record_backtrack();
+                    engine.trail_backtrack(level);
+                }
+            }
+        }
+    }
+
+    fn collect_set_branches(
+        &mut self,
+        engine: &mut Engine,
+        var: VariableId,
+        solutions: &mut Vec<Solution>,
+        limit: Option<usize>,
+    ) {
+        let Some(undecided) = engine.domain(var).as_set().map(|set| set.undecided()) else {
+            return;
+        };
+        if undecided.is_empty() {
+            self.collect_all(engine, solutions, limit);
+            return;
+        }
+        let value = undecided[0];
+        for branch in [
+            engine.force_set_in(var, value),
+            engine.force_set_out(var, value),
+        ] {
+            self.record_branch();
+            let level = engine.trail_mark();
+            match branch {
+                Ok(PropagationStatus::Failure) => {
+                    let _ = self.handle_failure(engine, level);
+                }
+                Ok(_) => {
+                    self.collect_all(engine, solutions, limit);
+                    if limit.is_some_and(|max| solutions.len() >= max) {
+                        self.stats.record_backtrack();
+                        engine.trail_backtrack(level);
+                        return;
+                    }
+                    self.stats.record_backtrack();
+                    engine.trail_backtrack(level);
+                }
+                Err(_) => {
+                    self.stats.record_backtrack();
+                    engine.trail_backtrack(level);
+                }
+            }
+        }
+    }
+
+    fn collect_float_branches(
+        &mut self,
+        engine: &mut Engine,
+        var: VariableId,
+        solutions: &mut Vec<Solution>,
+        limit: Option<usize>,
+    ) {
+        let Some(float) = engine.domain(var).as_float().copied() else {
+            return;
+        };
+        if float.is_fixed() {
+            self.collect_all(engine, solutions, limit);
+            return;
+        }
+        let width = float.upper_bound() - float.lower_bound();
+        if width <= f64::EPSILON {
+            self.record_branch();
+            let level = engine.trail_mark();
+            if let Ok(PropagationStatus::Failure) = engine.fix_float(var, float.lower_bound()) {
+                let _ = self.handle_failure(engine, level);
+            } else {
+                self.collect_all(engine, solutions, limit);
+                engine.trail_backtrack(level);
+            }
+            return;
+        }
+        let mid = float.lower_bound() + width / 2.0;
+        for branch in [
+            engine.tighten_float_above(var, mid),
+            engine.tighten_float_below(var, mid),
+        ] {
+            self.record_branch();
+            let level = engine.trail_mark();
+            match branch {
+                Ok(PropagationStatus::Failure) => {
+                    let _ = self.handle_failure(engine, level);
                 }
                 Ok(_) => {
                     self.collect_all(engine, solutions, limit);
@@ -543,15 +808,19 @@ impl DepthFirstSearch {
         self.variables
             .iter()
             .filter_map(|&var| {
-                engine.domain(var).is_fixed().then(|| {
-                    (
-                        var,
-                        engine
-                            .int_domain(var)
-                            .and_then(|domain| domain.min())
-                            .expect("fixed int domain"),
-                    )
-                })
+                if !engine.domain(var).is_fixed() {
+                    return None;
+                }
+                let value = match engine.domain(var) {
+                    propaga_domains::AnyDomain::Int(domain) => AssignmentValue::Int(domain.min()?),
+                    propaga_domains::AnyDomain::Set(domain) => {
+                        AssignmentValue::Set(domain.fixed_values()?)
+                    }
+                    propaga_domains::AnyDomain::Float(domain) => {
+                        AssignmentValue::Float(domain.lower_bound())
+                    }
+                };
+                Some((var, value))
             })
             .collect()
     }
@@ -574,7 +843,8 @@ fn weighted_score(engine: &Engine, var: VariableId, weight: Option<u32>) -> u64 
 mod tests {
     use super::*;
     use crate::config::RestartPolicy;
-    use propaga_domains::IntervalDomain;
+    use crate::value::AssignmentValue;
+    use propaga_domains::{AnyDomain, IntervalDomain, SetIntervalDomain};
     use propaga_propagators::{AllDifferentPropagator, DisjunctivePropagator, DisjunctiveTask};
     use std::time::Duration;
 
@@ -604,7 +874,7 @@ mod tests {
             },
         );
         let solution = search.solve(&mut engine).expect("solution exists");
-        assert_eq!(solution, vec![(start_b, 4)]);
+        assert_eq!(solution, vec![(start_b, AssignmentValue::Int(4))]);
         assert_eq!(search.stats().nodes, 1);
     }
 
@@ -619,7 +889,13 @@ mod tests {
         let mut search = DepthFirstSearch::new(vars.clone());
         let solution = search.solve(&mut engine).expect("solution exists");
 
-        let values: Vec<i32> = solution.into_iter().map(|(_, value)| value).collect();
+        let values: Vec<i32> = solution
+            .into_iter()
+            .filter_map(|(_, value)| match value {
+                AssignmentValue::Int(value) => Some(value),
+                _ => None,
+            })
+            .collect();
         let mut sorted = values.clone();
         sorted.sort_unstable();
         sorted.dedup();

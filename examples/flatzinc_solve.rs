@@ -15,7 +15,7 @@ fn main() {
             println!("SAT (nodes: {})", stats.nodes);
             for var in solve_vars {
                 if let Some(name) = names.get(&var) {
-                    if let Some((_, value)) = sol.iter().find(|(v, _)| *v == var) {
+                    if let Some(value) = propaga_search::assignment_int(&sol, var) {
                         println!("  {name} = {value}");
                     }
                 }

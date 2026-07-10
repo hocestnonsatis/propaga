@@ -13,13 +13,15 @@ mod optimize;
 mod pareto;
 mod portfolio;
 mod stats;
+mod value;
 
 pub use config::{RestartPolicy, SearchConfig, ValueOrdering, VariableOrdering, luby_sequence};
 pub use conflict::{ConflictAnalyzer, NogoodStore};
-pub use dfs::{DepthFirstSearch, Solution};
+pub use dfs::DepthFirstSearch;
 pub use lcg::{ClauseStore, LearnedClause};
 pub use lexicographic::{LexicographicOptimization, LexicographicResult, Objective};
 pub use optimize::{ObjectiveDirection, OptimizationResult, OptimizationSearch};
 pub use pareto::{ParetoOptimization, ParetoResult, ParetoSolution, dominates};
 pub use portfolio::{PortfolioConfig, PortfolioSearch};
 pub use stats::SearchStats;
+pub use value::{AssignmentValue, Solution, assignment_int, solution_int_map, solution_int_values};

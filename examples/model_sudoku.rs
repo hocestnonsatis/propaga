@@ -2,6 +2,7 @@
 
 use propaga_domains::IntervalDomain;
 use propaga_model::Model;
+use propaga_search::assignment_int;
 
 const PUZZLE: &str = "\
 534678912\
@@ -56,9 +57,9 @@ fn main() {
         .expect("sudoku puzzle should be solvable");
 
     let mut values = vec![0; 81];
-    for (var, value) in &solution {
-        if let Some(index) = cells.iter().position(|cell| cell == var) {
-            values[index] = *value;
+    for (index, cell) in cells.iter().enumerate() {
+        if let Some(value) = assignment_int(&solution, *cell) {
+            values[index] = value;
         }
     }
 

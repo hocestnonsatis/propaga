@@ -1,7 +1,7 @@
 use propaga_domains::IntervalDomain;
 use propaga_engine::Engine;
 use propaga_propagators::AllDifferentPropagator;
-use propaga_search::DepthFirstSearch;
+use propaga_search::{DepthFirstSearch, Solution, assignment_int};
 
 const PUZZLE: &str = "\
 534678912\
@@ -61,11 +61,11 @@ fn main() {
     print_grid(&solution, &cells);
 }
 
-fn print_grid(solution: &[(propaga_core::VariableId, i32)], cells: &[propaga_core::VariableId]) {
+fn print_grid(solution: &Solution, cells: &[propaga_core::VariableId]) {
     let mut values = vec![0; 81];
-    for (var, value) in solution {
-        if let Some(index) = cells.iter().position(|cell| cell == var) {
-            values[index] = *value;
+    for (index, cell) in cells.iter().enumerate() {
+        if let Some(value) = assignment_int(solution, *cell) {
+            values[index] = value;
         }
     }
 

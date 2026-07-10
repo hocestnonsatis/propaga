@@ -1,15 +1,15 @@
 use propaga_core::{PropagationStatus, VariableId};
-use propaga_domains::{HybridDomain, IntervalDomain};
+use propaga_domains::{AnyDomain, FloatDomain, HybridDomain, IntervalDomain, SetIntervalDomain};
 use propaga_engine::Engine;
 use propaga_propagators::{
     AllDifferentPropagator, CardinalityBound, CircuitPropagator, CumulativePropagator,
     DiffnPropagator, DisjunctivePropagator, DisjunctiveTask, ElementPropagator, EqualityPropagator,
-    GlobalCardinalityPropagator, InversePropagator, LessEqualPropagator, LessThanPropagator,
-    LinearEqPropagator, LinearScalarGePropagator, LinearScalarLePropagator,
-    NotEqualOffsetPropagator, RectangleSpec, RegularPropagator, ReifiedEqualityPropagator,
-    ReifiedLessEqualPropagator, ReifiedLessThanPropagator, ReifiedNotEqualPropagator,
-    ReifiedScalarEqPropagator, ReifiedScalarGePropagator, ReifiedScalarLePropagator,
-    TablePropagator, TaskSpec,
+    FloatEqPropagator, FloatLePropagator, GlobalCardinalityPropagator, InversePropagator,
+    LessEqualPropagator, LessThanPropagator, LinearEqPropagator, LinearScalarGePropagator,
+    LinearScalarLePropagator, NotEqualOffsetPropagator, RectangleSpec, RegularPropagator,
+    ReifiedEqualityPropagator, ReifiedLessEqualPropagator, ReifiedLessThanPropagator,
+    ReifiedNotEqualPropagator, ReifiedScalarEqPropagator, ReifiedScalarGePropagator,
+    ReifiedScalarLePropagator, SetCardPropagator, SetSubsetPropagator, TablePropagator, TaskSpec,
 };
 use propaga_search::{
     DepthFirstSearch, LexicographicOptimization, LexicographicResult, Objective,
@@ -82,6 +82,47 @@ impl Model {
         let var = self.engine.new_variable(domain);
         self.variables.push(var);
         var
+    }
+
+    /// Declares a set variable over `[low, high]` with cardinality bounds.
+    pub fn set_var(&mut self, low: i32, high: i32, card_min: usize, card_max: usize) -> VariableId {
+        let domain = SetIntervalDomain::universe(low..=high).with_cardinality(card_min, card_max);
+        let var = self.engine.new_variable(AnyDomain::Set(domain));
+        self.variables.push(var);
+        var
+    }
+
+    /// Declares a float variable with inclusive bounds.
+    pub fn float_var(&mut self, min: f64, max: f64) -> VariableId {
+        let var = self
+            .engine
+            .new_variable(AnyDomain::Float(FloatDomain::new(min, max)));
+        self.variables.push(var);
+        var
+    }
+
+    /// Posts set cardinality propagation on `set`.
+    pub fn set_card(&mut self, set: VariableId) {
+        self.engine
+            .add_propagator(Box::new(SetCardPropagator::new(set)));
+    }
+
+    /// Posts `subset ⊆ superset`.
+    pub fn set_subset(&mut self, subset: VariableId, superset: VariableId) {
+        self.engine
+            .add_propagator(Box::new(SetSubsetPropagator::new(subset, superset)));
+    }
+
+    /// Posts `left <= right` for float variables.
+    pub fn float_le(&mut self, left: VariableId, right: VariableId) {
+        self.engine
+            .add_propagator(Box::new(FloatLePropagator::new(left, right)));
+    }
+
+    /// Posts `left == right` for float variables.
+    pub fn float_eq(&mut self, left: VariableId, right: VariableId) {
+        self.engine
+            .add_propagator(Box::new(FloatEqPropagator::new(left, right)));
     }
 
     /// Posts `left == right`.
