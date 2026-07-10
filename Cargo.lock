@@ -503,7 +503,7 @@ dependencies = [
 
 [[package]]
 name = "propaga-cli"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "clap",
  "propaga-core",
@@ -518,7 +518,7 @@ dependencies = [
 
 [[package]]
 name = "propaga-core"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "dyn-clone",
  "slotmap",
@@ -527,14 +527,14 @@ dependencies = [
 
 [[package]]
 name = "propaga-domains"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "propaga-core",
 ]
 
 [[package]]
 name = "propaga-engine"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "dyn-clone",
  "priority-queue",
@@ -545,7 +545,7 @@ dependencies = [
 
 [[package]]
 name = "propaga-flatzinc"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "propaga-core",
  "propaga-model",
@@ -556,7 +556,7 @@ dependencies = [
 
 [[package]]
 name = "propaga-model"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "propaga-core",
  "propaga-domains",
@@ -567,7 +567,7 @@ dependencies = [
 
 [[package]]
 name = "propaga-propagators"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "criterion",
  "propaga-core",
@@ -577,7 +577,7 @@ dependencies = [
 
 [[package]]
 name = "propaga-search"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "propaga-core",
  "propaga-domains",
@@ -589,7 +589,7 @@ dependencies = [
 
 [[package]]
 name = "propaga-wasm"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "propaga-core",
  "propaga-model",

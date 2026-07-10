@@ -844,7 +844,7 @@ mod tests {
     use super::*;
     use crate::config::RestartPolicy;
     use crate::value::AssignmentValue;
-    use propaga_domains::{AnyDomain, IntervalDomain, SetIntervalDomain};
+    use propaga_domains::IntervalDomain;
     use propaga_propagators::{AllDifferentPropagator, DisjunctivePropagator, DisjunctiveTask};
     use std::time::Duration;
 

@@ -14,10 +14,10 @@ fn main() {
         Some(sol) => {
             println!("SAT (nodes: {})", stats.nodes);
             for var in solve_vars {
-                if let Some(name) = names.get(&var) {
-                    if let Some(value) = propaga_search::assignment_int(&sol, var) {
-                        println!("  {name} = {value}");
-                    }
+                if let Some(name) = names.get(&var)
+                    && let Some(value) = propaga_search::assignment_int(&sol, var)
+                {
+                    println!("  {name} = {value}");
                 }
             }
         }

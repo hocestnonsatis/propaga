@@ -1,8 +1,43 @@
 use crate::puzzle_io::OutputFormat;
+use propaga_core::VariableId;
 use propaga_model::Model;
-use propaga_search::SearchStats;
+use propaga_search::{AssignmentValue, SearchStats, Solution};
 use serde::Serialize;
 use std::time::Duration;
+
+#[derive(Serialize)]
+#[serde(tag = "type", content = "value")]
+pub(crate) enum AssignmentJson {
+    Int(i32),
+    Set(Vec<i32>),
+    Float(f64),
+}
+
+fn assignment_value_json(value: &AssignmentValue) -> AssignmentJson {
+    match value {
+        AssignmentValue::Int(value) => AssignmentJson::Int(*value),
+        AssignmentValue::Set(value) => AssignmentJson::Set(value.clone()),
+        AssignmentValue::Float(value) => AssignmentJson::Float(*value),
+    }
+}
+
+/// Serializes a mixed-domain solution to a JSON value map keyed by variable name.
+#[must_use]
+pub(crate) fn typed_assignment_json(
+    names: &std::collections::HashMap<VariableId, String>,
+    order: &[VariableId],
+    solution: &Solution,
+) -> std::collections::HashMap<String, AssignmentJson> {
+    let values: std::collections::HashMap<_, _> = solution.iter().cloned().collect();
+    order
+        .iter()
+        .filter_map(|var| {
+            let name = names.get(var)?.clone();
+            let value = values.get(var)?;
+            Some((name, assignment_value_json(value)))
+        })
+        .collect()
+}
 
 #[derive(Serialize)]
 struct StatsJson {
@@ -209,12 +244,27 @@ pub(crate) fn print_flatzinc_result(
         return;
     }
 
-    let values: std::collections::HashMap<_, _> = propaga_search::solution_int_map(solution);
+    let values: std::collections::HashMap<_, _> = solution.iter().cloned().collect();
     for var in order {
         let name = names.get(var).map(String::as_str).unwrap_or("var");
         if let Some(value) = values.get(var) {
-            println!("{name} = {value}");
+            println!("{name} = {}", format_assignment_value(value));
         }
+    }
+}
+
+fn format_assignment_value(value: &AssignmentValue) -> String {
+    match value {
+        AssignmentValue::Int(value) => value.to_string(),
+        AssignmentValue::Set(elements) => {
+            let body = elements
+                .iter()
+                .map(i32::to_string)
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("{{{body}}}")
+        }
+        AssignmentValue::Float(value) => value.to_string(),
     }
 }
 
@@ -227,7 +277,7 @@ pub(crate) fn format_output_directive(
 ) -> String {
     use propaga_flatzinc::OutputSegment;
 
-    let values: std::collections::HashMap<_, _> = propaga_search::solution_int_map(solution);
+    let values: std::collections::HashMap<_, _> = solution.iter().cloned().collect();
     let name_to_var: std::collections::HashMap<_, _> = names
         .iter()
         .map(|(var, name)| (name.as_str(), *var))
@@ -241,7 +291,7 @@ pub(crate) fn format_output_directive(
                 if let Some(&var) = name_to_var.get(name.as_str())
                     && let Some(value) = values.get(&var)
                 {
-                    rendered.push_str(&value.to_string());
+                    rendered.push_str(&format_assignment_value(value));
                 }
             }
         }
@@ -273,15 +323,7 @@ pub(crate) fn print_flatzinc_json(
         return;
     };
 
-    let values: std::collections::HashMap<_, _> = propaga_search::solution_int_map(solution);
-    let variables: std::collections::HashMap<String, i32> = order
-        .iter()
-        .filter_map(|var| {
-            let name = names.get(var)?.clone();
-            let value = *values.get(var)?;
-            Some((name, value))
-        })
-        .collect();
+    let variables = typed_assignment_json(names, order, solution);
 
     let formatted: Vec<String> = outputs
         .iter()
@@ -318,7 +360,7 @@ pub(crate) fn print_flatzinc_json(
                 .map(|entry| {
                     json!({
                         "objectives": entry.objective_values,
-                        "variables": assignment_json(names, order, &entry.assignment),
+                        "variables": typed_assignment_json(names, order, &entry.assignment),
                     })
                 })
                 .collect::<Vec<_>>()
@@ -337,22 +379,6 @@ pub(crate) fn print_flatzinc_json(
         });
     }
     println!("{}", payload);
-}
-
-fn assignment_json(
-    names: &std::collections::HashMap<propaga_core::VariableId, String>,
-    order: &[propaga_core::VariableId],
-    solution: &propaga_search::Solution,
-) -> std::collections::HashMap<String, i32> {
-    let values: std::collections::HashMap<_, _> = propaga_search::solution_int_map(solution);
-    order
-        .iter()
-        .filter_map(|var| {
-            let name = names.get(var)?.clone();
-            let value = *values.get(var)?;
-            Some((name, value))
-        })
-        .collect()
 }
 
 /// Prints the optimized objective value in plain text.
@@ -523,4 +549,17 @@ fn to_grid(values: &[i32]) -> Vec<Vec<i32>> {
 
 fn extract_columns(solution: &propaga_search::Solution) -> Vec<i32> {
     propaga_search::solution_int_values(solution)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn json_includes_set_assignment() {
+        let json = serde_json::to_string(&assignment_value_json(&AssignmentValue::Set(vec![1, 2])))
+            .expect("json");
+        assert!(json.contains("\"Set\""));
+        assert!(json.contains("[1,2]"));
+    }
 }

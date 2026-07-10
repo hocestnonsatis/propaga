@@ -13,7 +13,10 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `array [L..U] of var int: xs;` | Supported | |
 | `var bool: b;` | Supported | Modeled as `0..1` integer (Sprint 23) |
 | `array [L..U] of var bool: bs;` | Supported | Modeled as `0..1` integers |
-| Set / float variables | Not supported | Long-term roadmap |
+| `var set of L..U: x;` | Supported | Cardinality via `set_card` |
+| `var L..U: x;` (float bounds) | Supported | Interval domain |
+| `set_card`, `set_subset` | Supported | Set propagators |
+| `float_le`, `float_eq` | Supported | Interval propagation |
 
 ## Parameters
 

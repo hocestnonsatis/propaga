@@ -16,10 +16,14 @@ pub type Solution = Vec<(VariableId, AssignmentValue)>;
 #[must_use]
 pub fn assignment_int(solution: &Solution, var: VariableId) -> Option<i32> {
     solution.iter().find_map(|(candidate, value)| {
-        (*candidate == var).then(|| match value {
-            AssignmentValue::Int(value) => Some(*value),
-            _ => None,
-        })?
+        if *candidate == var {
+            match value {
+                AssignmentValue::Int(value) => Some(*value),
+                _ => None,
+            }
+        } else {
+            None
+        }
     })
 }
 

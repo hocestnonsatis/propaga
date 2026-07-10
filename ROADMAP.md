@@ -1,10 +1,20 @@
 # Propaga Roadmap
 
-Forward-looking ideas beyond v0.4.0. See [README.md](README.md) for what ships today.
+Forward-looking ideas beyond v0.5.0. See [README.md](README.md) for what ships today.
 
 ## Long term
 
-- Full engine integration for set and float variable domains
+- Float global constraints (`float_times`, trigonometric)
+- Set globals (`set_union`, `set_intersect`)
+- Nested FlatZinc predicate calls in predicate bodies
+- Incremental Pareto enumeration
+
+## Shipped in v0.5.0
+
+- Set and float variable domains integrated into the propagation engine
+- `SetIntervalDomain`, set/float propagators, and Model API
+- Typed search branching with `AssignmentValue`
+- FlatZinc subset for set/float variables and constraints
 
 ## Shipped in v0.4.0
 

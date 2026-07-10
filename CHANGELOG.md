@@ -5,6 +5,25 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-07-10
+
+### Added
+
+- `AnyDomain` engine storage for int, set, and float variables.
+- `SetIntervalDomain` with GLB/LUB/cardinality representation.
+- Set propagators: `SetCardPropagator`, `SetSubsetPropagator`.
+- Float propagators: `FloatLePropagator`, `FloatEqPropagator`.
+- Model API: `set_var`, `float_var`, `set_card`, `set_subset`, `float_le`, `float_eq`.
+- Typed search branching and `AssignmentValue` in solutions.
+- FlatZinc subset: set/float variables and `set_card`, `set_subset`, `float_le`, `float_eq`.
+- Benchmarks: `set_cardinality.fzn`, `float_bounds.fzn`.
+
+### Known limitations
+
+- Optimization (minimize/maximize/Pareto) remains int-only.
+- Float propagation is interval-only (no global float constraints).
+- Set globals beyond `set_card`/`set_subset` not yet supported.
+
 ## [0.4.0] - 2026-07-10
 
 ### Added

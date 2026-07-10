@@ -245,6 +245,7 @@ mod extended_tests {
     use super::*;
     use crate::Engine;
     use propaga_core::{PropagationStatus, Propagator};
+    use propaga_domains::{AnyDomain, FloatDomain};
 
     #[derive(Clone)]
     struct FloatLowerBound {
