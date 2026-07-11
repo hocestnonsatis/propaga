@@ -16,7 +16,9 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `var set of L..U: x;` | Supported | Cardinality via `set_card` |
 | `var L..U: x;` (float bounds) | Supported | Interval domain |
 | `set_card`, `set_subset` | Supported | Set propagators |
+| `set_union`, `set_intersect` | Supported | Set union/intersection propagators |
 | `float_le`, `float_eq` | Supported | Interval propagation |
+| `float_times` | Supported | Interval multiplication |
 
 ## Parameters
 

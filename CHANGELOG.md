@@ -5,6 +5,23 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-07-11
+
+### Added
+
+- Set global propagators: `set_union`, `set_intersect`.
+- Float global propagator: `float_times` with interval arithmetic.
+- Model API: `set_union`, `set_intersect`, `float_times`.
+- FlatZinc: `set_union`, `set_intersect`, `float_times` constraints.
+- Benchmarks: `set_union.fzn`, `set_intersect.fzn`, `float_times.fzn`.
+- `FloatDomain::times` and `FloatDomain::divide` interval helpers.
+
+### Known limitations
+
+- Set/float optimization objectives remain int-only.
+- Float globals beyond `float_times` not yet supported.
+- Set globals beyond union/intersect/card/subset not yet supported.
+
 ## [0.5.0] - 2026-07-10
 
 ### Added

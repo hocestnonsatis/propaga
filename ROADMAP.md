@@ -1,13 +1,18 @@
 # Propaga Roadmap
 
-Forward-looking ideas beyond v0.5.0. See [README.md](README.md) for what ships today.
+Forward-looking ideas beyond v0.6.0. See [README.md](README.md) for what ships today.
 
 ## Long term
 
-- Float global constraints (`float_times`, trigonometric)
-- Set globals (`set_union`, `set_intersect`)
+- Trigonometric and additional float global constraints
 - Nested FlatZinc predicate calls in predicate bodies
 - Incremental Pareto enumeration
+
+## Shipped in v0.6.0
+
+- Set globals: `set_union`, `set_intersect`
+- Float global: `float_times` with interval propagation
+- FlatZinc compile support for the above constraints
 
 ## Shipped in v0.5.0
 
