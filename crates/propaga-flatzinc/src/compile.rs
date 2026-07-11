@@ -536,6 +536,24 @@ fn post_constraint(
             let right = resolve_var(env, right)?;
             model.float_eq(left, right);
         }
+        Constraint::SetUnion(left, right, result) => {
+            let left = resolve_var(env, left)?;
+            let right = resolve_var(env, right)?;
+            let result = resolve_var(env, result)?;
+            model.set_union(left, right, result);
+        }
+        Constraint::SetIntersect(left, right, result) => {
+            let left = resolve_var(env, left)?;
+            let right = resolve_var(env, right)?;
+            let result = resolve_var(env, result)?;
+            model.set_intersect(left, right, result);
+        }
+        Constraint::FloatTimes(a, b, c) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            let c = resolve_var(env, c)?;
+            model.float_times(a, b, c);
+        }
         Constraint::PredicateCall { .. } => {
             return Err(FlatZincError::Unsupported(
                 "unexpanded predicate call".to_string(),

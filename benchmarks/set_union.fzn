@@ -1,0 +1,8 @@
+var set of 1..3: a;
+var set of 1..3: b;
+var set of 1..3: u;
+constraint set_card(a, 2);
+constraint set_card(b, 2);
+constraint set_union(a, b, u);
+constraint set_card(u, 3);
+solve satisfy;

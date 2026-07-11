@@ -288,6 +288,12 @@ pub enum Constraint {
     FloatLe(Expr, Expr),
     /// `float_eq(left, right)`
     FloatEq(Expr, Expr),
+    /// `set_union(x, y, r)`
+    SetUnion(Expr, Expr, Expr),
+    /// `set_intersect(x, y, r)`
+    SetIntersect(Expr, Expr, Expr),
+    /// `float_times(a, b, c)`
+    FloatTimes(Expr, Expr, Expr),
 }
 
 /// A parsed user-defined predicate with one or more constraint bodies.
@@ -1119,6 +1125,30 @@ impl Parser {
                 self.expect_symbol(",")?;
                 let right = self.parse_expr()?;
                 Constraint::FloatEq(left, right)
+            }
+            "set_union" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let result = self.parse_expr()?;
+                Constraint::SetUnion(left, right, result)
+            }
+            "set_intersect" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let result = self.parse_expr()?;
+                Constraint::SetIntersect(left, right, result)
+            }
+            "float_times" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let c = self.parse_expr()?;
+                Constraint::FloatTimes(a, b, c)
             }
             other => {
                 let args = self.parse_expr_list()?;

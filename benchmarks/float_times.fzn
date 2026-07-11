@@ -1,0 +1,5 @@
+var 2.0..3.0: a;
+var 4.0..5.0: b;
+var 0.0..100.0: c;
+constraint float_times(a, b, c);
+solve satisfy;

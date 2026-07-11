@@ -84,3 +84,46 @@ fn compiles_float_bounds_instance() {
     let instance = compile(program).expect("compile float instance");
     assert!(instance.model.decision_variables().len() >= 2);
 }
+
+#[test]
+fn compiles_set_union_instance() {
+    let source = include_str!("../../../benchmarks/set_union.fzn");
+    let program = parse(source).expect("parse set_union");
+    compile(program).expect("compile set_union");
+}
+
+#[test]
+fn compiles_set_intersect_instance() {
+    let source = include_str!("../../../benchmarks/set_intersect.fzn");
+    let program = parse(source).expect("parse set_intersect");
+    compile(program).expect("compile set_intersect");
+}
+
+#[test]
+fn compiles_float_times_instance() {
+    let source = include_str!("../../../benchmarks/float_times.fzn");
+    let program = parse(source).expect("parse float_times");
+    compile(program).expect("compile float_times");
+}
+
+#[test]
+fn solves_set_union_benchmark() {
+    let source = include_str!("../../../benchmarks/set_union.fzn");
+    let program = parse(source).expect("parse");
+    let instance = compile(program).expect("compile");
+    let mut model = instance.model;
+    let vars = model.decision_variables().to_vec();
+    let solution = model.solve_subset(vars);
+    assert!(solution.is_some());
+}
+
+#[test]
+fn solves_float_times_benchmark() {
+    let source = include_str!("../../../benchmarks/float_times.fzn");
+    let program = parse(source).expect("parse");
+    let instance = compile(program).expect("compile");
+    let mut model = instance.model;
+    let vars = model.decision_variables().to_vec();
+    let solution = model.solve_subset(vars);
+    assert!(solution.is_some());
+}
