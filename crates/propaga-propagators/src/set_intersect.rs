@@ -82,7 +82,7 @@ impl Propagator for SetIntersectPropagator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use propaga_domains::{AnyDomain, SetIntervalDomain};
+    use propaga_domains::{AnyDomain, IntervalDomain, SetIntervalDomain};
     use propaga_engine::Engine;
 
     #[test]
@@ -110,5 +110,235 @@ mod tests {
             engine.domain(r).as_set().unwrap().fixed_values(),
             Some(vec![2])
         );
+    }
+
+    #[test]
+    fn already_satisfied_no_change() {
+        let mut engine = Engine::new();
+        let left = SetIntervalDomain::universe(1..=3)
+            .with_cardinality(1, 2)
+            .force_in(1)
+            .unwrap();
+        let right = SetIntervalDomain::universe(1..=3)
+            .with_cardinality(1, 2)
+            .force_in(1)
+            .unwrap();
+        let result = SetIntervalDomain::universe(1..=3)
+            .with_cardinality(1, 1)
+            .force_in(1)
+            .unwrap();
+        let x = engine.new_variable(AnyDomain::Set(left));
+        let y = engine.new_variable(AnyDomain::Set(right));
+        let r = engine.new_variable(AnyDomain::Set(result));
+        engine.add_propagator(Box::new(SetIntersectPropagator::new(x, y, r)));
+        assert_eq!(
+            engine.propagate_all().unwrap(),
+            PropagationStatus::OkNoChange
+        );
+    }
+
+    #[test]
+    fn no_extended_context_returns_ok_no_change() {
+        use crate::test_support::NoExtendedCtx;
+        use propaga_domains::{IntervalDomain, SetIntervalDomain};
+
+        let mut engine = Engine::new();
+        let _ = engine.new_variable(IntervalDomain::new(1, 5));
+        let left = SetIntervalDomain::universe(1..=2).with_cardinality(1, 2);
+        let right = SetIntervalDomain::universe(1..=2).with_cardinality(1, 2);
+        let result = SetIntervalDomain::universe(1..=2).with_cardinality(1, 2);
+        let x = engine.new_variable(AnyDomain::Set(left));
+        let y = engine.new_variable(AnyDomain::Set(right));
+        let r = engine.new_variable(AnyDomain::Set(result));
+        let mut prop = SetIntersectPropagator::new(x, y, r);
+        let mut ctx = NoExtendedCtx::new(&mut engine);
+        assert_eq!(prop.propagate(&mut ctx), PropagationStatus::OkNoChange);
+    }
+
+    #[test]
+    fn propagation_empties_operand_domain_fails() {
+        let mut engine = Engine::new();
+        let left = SetIntervalDomain::universe(1..=2).with_cardinality(3, 3);
+        let right = SetIntervalDomain::universe(1..=2).with_cardinality(1, 2);
+        let result = SetIntervalDomain::universe(1..=2).with_cardinality(1, 2);
+        let x = engine.new_variable(AnyDomain::Set(left));
+        let y = engine.new_variable(AnyDomain::Set(right));
+        let r = engine.new_variable(AnyDomain::Set(result));
+        engine.add_propagator(Box::new(SetIntersectPropagator::new(x, y, r)));
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn integer_variables_fail() {
+        use propaga_domains::IntervalDomain;
+
+        let mut engine = Engine::new();
+        let left = engine.new_variable(IntervalDomain::new(1, 3));
+        let right = engine.new_variable(IntervalDomain::new(1, 3));
+        let result = engine.new_variable(IntervalDomain::new(1, 3));
+        engine.add_propagator(Box::new(SetIntersectPropagator::new(left, right, result)));
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn empty_set_domain_fails() {
+        let mut engine = Engine::new();
+        let left = SetIntervalDomain::universe(1..=2).with_cardinality(3, 3);
+        let right = SetIntervalDomain::universe(1..=2).with_cardinality(1, 2);
+        let result = SetIntervalDomain::universe(1..=2).with_cardinality(1, 2);
+        let x = engine.new_variable(AnyDomain::Set(left));
+        let y = engine.new_variable(AnyDomain::Set(right));
+        let r = engine.new_variable(AnyDomain::Set(result));
+        engine.add_propagator(Box::new(SetIntersectPropagator::new(x, y, r)));
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn prunes_result_outside_operand_lub() {
+        let mut engine = Engine::new();
+        let left = SetIntervalDomain::universe(1..=2).with_cardinality(1, 2);
+        let right = SetIntervalDomain::universe(1..=2).with_cardinality(1, 2);
+        let result = SetIntervalDomain::universe(1..=3)
+            .with_cardinality(1, 2)
+            .force_in(3)
+            .unwrap();
+        let x = engine.new_variable(AnyDomain::Set(left));
+        let y = engine.new_variable(AnyDomain::Set(right));
+        let r = engine.new_variable(AnyDomain::Set(result));
+        engine.add_propagator(Box::new(SetIntersectPropagator::new(x, y, r)));
+        engine.propagate_all().unwrap();
+        assert!(!engine.domain(r).as_set().unwrap().lub().contains(&3));
+    }
+
+    #[test]
+    fn propagation_empties_result_domain_fails() {
+        let mut engine = Engine::new();
+        let left = SetIntervalDomain::universe(1..=2)
+            .with_cardinality(1, 1)
+            .force_in(1)
+            .unwrap();
+        let right = SetIntervalDomain::universe(1..=2)
+            .with_cardinality(1, 1)
+            .force_in(2)
+            .unwrap();
+        let result = SetIntervalDomain::universe(1..=2)
+            .with_cardinality(2, 2)
+            .force_in(1)
+            .unwrap()
+            .force_in(2)
+            .unwrap();
+        let x = engine.new_variable(AnyDomain::Set(left));
+        let y = engine.new_variable(AnyDomain::Set(right));
+        let r = engine.new_variable(AnyDomain::Set(result));
+        engine.add_propagator(Box::new(SetIntersectPropagator::new(x, y, r)));
+        engine.set_domain(
+            r,
+            AnyDomain::Set(SetIntervalDomain::universe(1..=2).with_cardinality(3, 3)),
+        );
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn mock_missing_set_snapshot_fails() {
+        use crate::test_support::MockSetCtx;
+        use propaga_core::SetDomainSnapshot;
+
+        let mut engine = Engine::new();
+        let left = engine.new_variable(IntervalDomain::new(0, 0));
+        let right = engine.new_variable(IntervalDomain::new(0, 0));
+        let result = engine.new_variable(IntervalDomain::new(0, 0));
+        let mut ctx = MockSetCtx::new().with_set(
+            left,
+            SetDomainSnapshot {
+                glb: vec![1],
+                lub: vec![1, 2],
+                card_min: 1,
+                card_max: 2,
+            },
+        );
+        let mut prop = SetIntersectPropagator::new(left, right, result);
+        assert_eq!(prop.propagate(&mut ctx), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn mock_inconsistent_initial_snapshot_fails() {
+        use crate::test_support::MockSetCtx;
+        use propaga_core::SetDomainSnapshot;
+
+        let mut engine = Engine::new();
+        let left = engine.new_variable(IntervalDomain::new(0, 0));
+        let right = engine.new_variable(IntervalDomain::new(0, 0));
+        let result = engine.new_variable(IntervalDomain::new(0, 0));
+        let mut ctx = MockSetCtx::new()
+            .with_set(
+                left,
+                SetDomainSnapshot {
+                    glb: vec![1],
+                    lub: vec![1, 2],
+                    card_min: 1,
+                    card_max: 2,
+                },
+            )
+            .with_set(
+                right,
+                SetDomainSnapshot {
+                    glb: vec![],
+                    lub: vec![1, 2],
+                    card_min: 1,
+                    card_max: 2,
+                },
+            )
+            .with_set(
+                result,
+                SetDomainSnapshot {
+                    glb: vec![],
+                    lub: vec![1, 2],
+                    card_min: 3,
+                    card_max: 2,
+                },
+            );
+        let mut prop = SetIntersectPropagator::new(left, right, result);
+        assert_eq!(prop.propagate(&mut ctx), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn mock_propagation_empties_operand_domain_fails() {
+        use crate::test_support::MockSetCtx;
+        use propaga_core::SetDomainSnapshot;
+
+        let mut engine = Engine::new();
+        let left = engine.new_variable(IntervalDomain::new(0, 0));
+        let right = engine.new_variable(IntervalDomain::new(0, 0));
+        let result = engine.new_variable(IntervalDomain::new(0, 0));
+        let mut ctx = MockSetCtx::new()
+            .with_set(
+                left,
+                SetDomainSnapshot {
+                    glb: vec![1],
+                    lub: vec![1, 2],
+                    card_min: 1,
+                    card_max: 1,
+                },
+            )
+            .with_set(
+                right,
+                SetDomainSnapshot {
+                    glb: vec![2],
+                    lub: vec![2],
+                    card_min: 1,
+                    card_max: 1,
+                },
+            )
+            .with_set(
+                result,
+                SetDomainSnapshot {
+                    glb: vec![],
+                    lub: vec![1, 2],
+                    card_min: 0,
+                    card_max: 0,
+                },
+            );
+        let mut prop = SetIntersectPropagator::new(left, right, result);
+        assert_eq!(prop.propagate(&mut ctx), PropagationStatus::Failure);
     }
 }

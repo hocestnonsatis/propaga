@@ -131,4 +131,40 @@ mod tests {
         let status = engine.propagate_all().unwrap();
         assert_eq!(status, PropagationStatus::Failure);
     }
+
+    #[test]
+    fn empty_variables_no_change() {
+        let mut engine = Engine::new();
+        engine.add_propagator(Box::new(TablePropagator::new(
+            Vec::<VariableId>::new(),
+            vec![vec![1, 2]],
+        )));
+
+        assert_eq!(
+            engine.propagate_all().unwrap(),
+            PropagationStatus::OkNoChange
+        );
+    }
+
+    #[test]
+    fn already_satisfied_no_change() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(IntervalDomain::fix(1));
+        let y = engine.new_variable(IntervalDomain::fix(2));
+        engine.add_propagator(Box::new(TablePropagator::new(vec![x, y], vec![vec![1, 2]])));
+
+        assert_eq!(
+            engine.propagate_all().unwrap(),
+            PropagationStatus::OkNoChange
+        );
+    }
+
+    #[test]
+    fn prune_to_empty_domain_fails() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(IntervalDomain::new(1, 2));
+        engine.add_propagator(Box::new(TablePropagator::new(vec![x], vec![vec![3]])));
+
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
 }

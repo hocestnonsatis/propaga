@@ -120,8 +120,40 @@ fn tighten_to_point(ctx: &mut dyn PropagationContext, var: VariableId, value: i3
 #[cfg(test)]
 mod tests {
     use super::*;
+    use propaga_core::DomainView;
     use propaga_domains::IntervalDomain;
     use propaga_engine::Engine;
+
+    #[test]
+    fn prunes_negative_and_out_of_range_forward_values() {
+        let mut engine = Engine::new();
+        let f0 = engine.new_variable(IntervalDomain::new(-2, 4));
+        let f1 = engine.new_variable(IntervalDomain::new(0, 0));
+        let f2 = engine.new_variable(IntervalDomain::new(0, 0));
+        let t0 = engine.new_variable(IntervalDomain::fix(0));
+        let t1 = engine.new_variable(IntervalDomain::fix(1));
+        let t2 = engine.new_variable(IntervalDomain::fix(2));
+        engine.add_propagator(Box::new(InversePropagator::new(
+            vec![f0, f1, f2],
+            vec![t0, t1, t2],
+        )));
+
+        engine.propagate_all().unwrap();
+        assert!(!engine.hybrid_domain(f0).contains(-1));
+        assert!(!engine.hybrid_domain(f0).contains(3));
+        assert!(!engine.hybrid_domain(f0).contains(4));
+    }
+
+    #[test]
+    fn empty_forward_domain_fails() {
+        let mut engine = Engine::new();
+        let f0 = engine.new_variable(IntervalDomain::new(1, 0));
+        let f1 = engine.new_variable(IntervalDomain::new(0, 2));
+        let t0 = engine.new_variable(IntervalDomain::new(0, 2));
+        let t1 = engine.new_variable(IntervalDomain::new(0, 2));
+        engine.add_propagator(Box::new(InversePropagator::new(vec![f0, f1], vec![t0, t1])));
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
 
     #[test]
     fn fixed_forward_propagates_backward() {
@@ -139,5 +171,60 @@ mod tests {
         engine.fix_variable(f0, 1).unwrap();
         engine.propagate_all().unwrap();
         assert_eq!(engine.hybrid_domain(t1).fixed_value(), Some(0));
+    }
+
+    #[test]
+    fn prunes_unsupported_forward_values() {
+        let mut engine = Engine::new();
+        let f0 = engine.new_variable(IntervalDomain::new(0, 2));
+        let f1 = engine.new_variable(IntervalDomain::new(0, 2));
+        let f2 = engine.new_variable(IntervalDomain::new(0, 2));
+        let t0 = engine.new_variable(IntervalDomain::fix(0));
+        let t1 = engine.new_variable(IntervalDomain::fix(2));
+        let t2 = engine.new_variable(IntervalDomain::fix(0));
+        engine.add_propagator(Box::new(InversePropagator::new(
+            vec![f0, f1, f2],
+            vec![t0, t1, t2],
+        )));
+
+        engine.propagate_all().unwrap();
+        assert!(!engine.hybrid_domain(f1).contains(1));
+    }
+
+    #[test]
+    fn already_satisfied_no_change() {
+        let mut engine = Engine::new();
+        let f0 = engine.new_variable(IntervalDomain::fix(1));
+        let f1 = engine.new_variable(IntervalDomain::fix(2));
+        let f2 = engine.new_variable(IntervalDomain::fix(0));
+        let t0 = engine.new_variable(IntervalDomain::fix(2));
+        let t1 = engine.new_variable(IntervalDomain::fix(0));
+        let t2 = engine.new_variable(IntervalDomain::fix(1));
+        engine.add_propagator(Box::new(InversePropagator::new(
+            vec![f0, f1, f2],
+            vec![t0, t1, t2],
+        )));
+
+        assert_eq!(
+            engine.propagate_all().unwrap(),
+            PropagationStatus::OkNoChange
+        );
+    }
+
+    #[test]
+    fn inconsistent_inverse_fails() {
+        let mut engine = Engine::new();
+        let f0 = engine.new_variable(IntervalDomain::fix(1));
+        let f1 = engine.new_variable(IntervalDomain::fix(1));
+        let f2 = engine.new_variable(IntervalDomain::fix(0));
+        let t0 = engine.new_variable(IntervalDomain::fix(2));
+        let t1 = engine.new_variable(IntervalDomain::fix(0));
+        let t2 = engine.new_variable(IntervalDomain::fix(1));
+        engine.add_propagator(Box::new(InversePropagator::new(
+            vec![f0, f1, f2],
+            vec![t0, t1, t2],
+        )));
+
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
     }
 }

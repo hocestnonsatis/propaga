@@ -307,4 +307,43 @@ mod tests {
         assert!(literals.iter().any(|(var, _)| *var == c));
         assert!(!literals.iter().any(|(var, _)| *var == b));
     }
+
+    #[test]
+    fn task_spec_with_variable_spec() {
+        use propaga_domains::IntervalDomain;
+        use propaga_engine::Engine;
+
+        let mut engine = Engine::new();
+        let start = engine.new_variable(IntervalDomain::new(0, 10));
+        let end = engine.new_variable(IntervalDomain::new(1, 20));
+        let duration_var = engine.new_variable(IntervalDomain::new(1, 5));
+        let demand_var = engine.new_variable(IntervalDomain::new(1, 3));
+
+        let task =
+            TaskSpec::with_variable_spec(start, end, 2, Some(duration_var), 1, Some(demand_var));
+
+        assert_eq!(task.start, start);
+        assert_eq!(task.end, end);
+        assert_eq!(task.duration, 2);
+        assert_eq!(task.demand, 1);
+        assert_eq!(task.duration_var, Some(duration_var));
+        assert_eq!(task.demand_var, Some(demand_var));
+    }
+
+    #[test]
+    fn lst_computes_latest_start() {
+        assert_eq!(lst(10, 3), 7);
+    }
+
+    #[test]
+    fn mandatory_interval_none_when_empty() {
+        assert_eq!(mandatory_interval(5, 3, 4), None);
+    }
+
+    #[test]
+    fn find_overload_time_nonpositive_capacity() {
+        let intervals = vec![(MandatoryInterval { start: 0, end: 2 }, 1)];
+        assert_eq!(find_overload_time(&intervals, 0, 3, 5), Some(3));
+        assert_eq!(find_overload_time(&[], 0, 3, 5), None);
+    }
 }

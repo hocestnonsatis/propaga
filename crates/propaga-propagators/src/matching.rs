@@ -50,6 +50,17 @@ pub fn remove_unsupported_values(
     let value_graph = build_regin_value_graph(ctx, variables, &graph, &pair_left);
     let components = tarjan_scc(&value_graph, graph.value_count);
 
+    apply_regin_pruning(ctx, variables, &graph, &pair_left, &pair_right, &components)
+}
+
+fn apply_regin_pruning(
+    ctx: &mut dyn PropagationContext,
+    variables: &[VariableId],
+    graph: &BipartiteGraph,
+    pair_left: &[Option<usize>],
+    pair_right: &[Option<usize>],
+    components: &[usize],
+) -> Result<bool, ()> {
     let mut changed = false;
     for (left, &var) in variables.iter().enumerate() {
         let Some(matched) = pair_left[left] else {
@@ -75,9 +86,9 @@ pub fn remove_unsupported_values(
             if regin_supports_value(
                 value_idx,
                 matched,
-                &pair_right,
+                pair_right,
                 matched_component,
-                &components,
+                components,
             ) {
                 continue;
             }
@@ -318,9 +329,6 @@ fn bfs(
 
     let mut found_free = false;
     while let Some(left) = queue.pop_front() {
-        if dist[left] == INF {
-            continue;
-        }
         for &right in &adj[left] {
             let next_left = pair_right[right];
             match next_left {
@@ -379,6 +387,7 @@ fn collect_values(ctx: &dyn PropagationContext, var: VariableId) -> Vec<i32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::{MutEngine, ReadOnlyEngine};
     use propaga_core::DomainView;
     use propaga_domains::IntervalDomain;
     use propaga_engine::Engine;
@@ -445,31 +454,7 @@ mod tests {
         let b = engine.new_variable(IntervalDomain::new(1, 2));
         let c = engine.new_variable(IntervalDomain::new(1, 3));
         let vars = vec![a, b, c];
-        let ctx = ReadOnlyEngine(&engine);
-        let graph = build_bipartite_graph(&ctx, &vars);
-        let (pair_left, pair_right) =
-            hopcroft_karp_matching(&graph.adj, vars.len(), graph.value_count);
-        let value_graph = build_regin_value_graph(&ctx, &vars, &graph, &pair_left);
-        let components = tarjan_scc(&value_graph, graph.value_count);
-
-        for (left, &var) in vars.iter().enumerate() {
-            let matched = pair_left[left].expect("matched");
-            for value in collect_values(&ctx, var) {
-                let hk = value_in_some_matching(&ctx, &vars, var, value);
-                let Some(&value_idx) = graph.value_index.get(&value) else {
-                    assert!(!hk);
-                    continue;
-                };
-                let scc = regin_supports_value(
-                    value_idx,
-                    matched,
-                    &pair_right,
-                    components[matched],
-                    &components,
-                );
-                assert_eq!(hk, scc, "mismatch for var {var:?} value {value}");
-            }
-        }
+        assert_regin_agrees_with_hk(&mut engine, &vars);
     }
 
     #[test]
@@ -492,31 +477,7 @@ mod tests {
         let c = engine.new_variable(IntervalDomain::new(1, 4));
         let d = engine.new_variable(IntervalDomain::new(1, 5));
         let vars = vec![a, b, c, d];
-        let ctx = ReadOnlyEngine(&engine);
-        let graph = build_bipartite_graph(&ctx, &vars);
-        let (pair_left, pair_right) =
-            hopcroft_karp_matching(&graph.adj, vars.len(), graph.value_count);
-        let value_graph = build_regin_value_graph(&ctx, &vars, &graph, &pair_left);
-        let components = tarjan_scc(&value_graph, graph.value_count);
-
-        for (left, &var) in vars.iter().enumerate() {
-            let matched = pair_left[left].expect("matched");
-            for value in collect_values(&ctx, var) {
-                let hk = value_in_some_matching(&ctx, &vars, var, value);
-                let Some(&value_idx) = graph.value_index.get(&value) else {
-                    assert!(!hk);
-                    continue;
-                };
-                let scc = regin_supports_value(
-                    value_idx,
-                    matched,
-                    &pair_right,
-                    components[matched],
-                    &components,
-                );
-                assert_eq!(hk, scc, "mismatch for var {var:?} value {value}");
-            }
-        }
+        assert_regin_agrees_with_hk(&mut engine, &vars);
     }
 
     #[test]
@@ -527,34 +488,7 @@ mod tests {
             .iter()
             .map(|&(lo, hi)| engine.new_variable(IntervalDomain::new(lo, hi)))
             .collect();
-        let ctx = ReadOnlyEngine(&engine);
-        let graph = build_bipartite_graph(&ctx, &vars);
-        if hopcroft_karp(&graph.adj, vars.len(), graph.value_count) != vars.len() {
-            return;
-        }
-        let (pair_left, pair_right) =
-            hopcroft_karp_matching(&graph.adj, vars.len(), graph.value_count);
-        let value_graph = build_regin_value_graph(&ctx, &vars, &graph, &pair_left);
-        let components = tarjan_scc(&value_graph, graph.value_count);
-
-        for (left, &var) in vars.iter().enumerate() {
-            let matched = pair_left[left].expect("matched");
-            for value in collect_values(&ctx, var) {
-                let hk = value_in_some_matching(&ctx, &vars, var, value);
-                let Some(&value_idx) = graph.value_index.get(&value) else {
-                    assert!(!hk);
-                    continue;
-                };
-                let scc = regin_supports_value(
-                    value_idx,
-                    matched,
-                    &pair_right,
-                    components[matched],
-                    &components,
-                );
-                assert_eq!(hk, scc, "mismatch for var {var:?} value {value}");
-            }
-        }
+        assert_regin_agrees_with_hk(&mut engine, &vars);
     }
 
     #[test]
@@ -569,7 +503,7 @@ mod tests {
                     let vars: Vec<_> = (0..n)
                         .map(|_| engine.new_variable(IntervalDomain::new(lo, hi)))
                         .collect();
-                    assert_regin_agrees_with_hk(&ReadOnlyEngine(&engine), &vars);
+                    assert_regin_agrees_with_hk(&mut engine, &vars);
                 }
             }
 
@@ -578,28 +512,333 @@ mod tests {
                 .map(|_| engine.new_variable(IntervalDomain::new(1, 4)))
                 .collect();
             vars.push(engine.new_variable(IntervalDomain::new(1, if n == 2 { 4 } else { 5 })));
-            assert_regin_agrees_with_hk(&ReadOnlyEngine(&engine), &vars);
+            assert_regin_agrees_with_hk(&mut engine, &vars);
         }
     }
 
-    fn assert_regin_agrees_with_hk(ctx: &ReadOnlyEngine<'_>, vars: &[VariableId]) {
-        let graph = build_bipartite_graph(ctx, vars);
-        if hopcroft_karp(&graph.adj, vars.len(), graph.value_count) != vars.len() {
-            return;
-        }
+    #[test]
+    fn has_perfect_matching_empty_variables() {
+        let engine = Engine::new();
+        assert!(has_perfect_matching(&ReadOnlyEngine(&engine), &[]));
+    }
+
+    #[test]
+    fn value_in_some_matching_rejects_out_of_domain_value() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::new(1, 2));
+        let b = engine.new_variable(IntervalDomain::new(1, 2));
+        let vars = vec![a, b];
+        assert!(!value_in_some_matching(
+            &ReadOnlyEngine(&engine),
+            &vars,
+            a,
+            3
+        ));
+    }
+
+    #[test]
+    fn value_in_some_matching_rejects_unknown_variable() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::new(1, 2));
+        let b = engine.new_variable(IntervalDomain::new(1, 2));
+        let c = engine.new_variable(IntervalDomain::new(1, 3));
+        let vars = vec![a, b];
+        assert!(!value_in_some_matching(
+            &ReadOnlyEngine(&engine),
+            &vars,
+            c,
+            1
+        ));
+    }
+
+    #[test]
+    fn remove_unsupported_values_no_op_for_single_variable() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::new(1, 3));
+        let vars = vec![a];
+        assert_eq!(
+            remove_unsupported_values(&mut MutEngine(&mut engine), &vars),
+            Ok(false)
+        );
+    }
+
+    #[test]
+    fn remove_unsupported_values_fails_without_perfect_matching() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::fix(1));
+        let b = engine.new_variable(IntervalDomain::fix(1));
+        let vars = vec![a, b];
+        assert_eq!(
+            remove_unsupported_values(&mut MutEngine(&mut engine), &vars),
+            Err(())
+        );
+    }
+
+    #[test]
+    fn remove_unsupported_values_prunes_directly() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::new(1, 2));
+        let b = engine.new_variable(IntervalDomain::new(1, 2));
+        let c = engine.new_variable(IntervalDomain::new(1, 3));
+        let vars = vec![a, b, c];
+        assert_eq!(
+            remove_unsupported_values(&mut MutEngine(&mut engine), &vars),
+            Ok(true)
+        );
+        assert_eq!(engine.hybrid_domain(c).fixed_value(), Some(3));
+    }
+
+    #[test]
+    fn apply_regin_pruning_errors_on_missing_match() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::new(1, 2));
+        let b = engine.new_variable(IntervalDomain::new(1, 2));
+        let vars = vec![a, b];
+        let graph = BipartiteGraph {
+            adj: vec![vec![0], vec![1]],
+            value_index: [(1, 0), (2, 1)].into_iter().collect(),
+            value_count: 2,
+        };
+        let pair_left = vec![Some(0), None];
+        let pair_right = vec![Some(1), None];
+        let components = vec![0, 1];
+        let mut ctx = MutEngine(&mut engine);
+        assert_eq!(
+            apply_regin_pruning(
+                &mut ctx,
+                &vars,
+                &graph,
+                &pair_left,
+                &pair_right,
+                &components
+            ),
+            Err(())
+        );
+    }
+
+    #[test]
+    fn apply_regin_pruning_removes_unknown_and_unsupported_values() {
+        let mut engine = Engine::new();
+        let var = engine.new_variable(IntervalDomain::new(1, 3));
+        let vars = vec![var];
+        let graph = BipartiteGraph {
+            adj: vec![vec![0, 1]],
+            value_index: [(1, 0), (2, 1)].into_iter().collect(),
+            value_count: 2,
+        };
+        let pair_left = vec![Some(0)];
+        let pair_right = vec![Some(0), None];
+        let components = vec![0, 0];
+        let mut ctx = MutEngine(&mut engine);
+        assert_eq!(
+            apply_regin_pruning(
+                &mut ctx,
+                &vars,
+                &graph,
+                &pair_left,
+                &pair_right,
+                &components
+            ),
+            Ok(true)
+        );
+        assert!(!engine.hybrid_domain(var).contains(3));
+    }
+
+    #[test]
+    fn value_supported_in_graph_rejects_missing_value() {
+        let graph = BipartiteGraph {
+            adj: vec![vec![0], vec![1]],
+            value_index: [(1, 0), (2, 1)].into_iter().collect(),
+            value_count: 2,
+        };
+        assert!(!value_supported_in_graph(&graph, 1, 0, 3));
+    }
+
+    #[test]
+    fn build_regin_value_graph_skips_unknown_values() {
+        let mut engine = Engine::new();
+        let var = engine.new_variable(IntervalDomain::new(1, 3));
+        let vars = vec![var];
+        let ctx = ReadOnlyEngine(&engine);
+        let graph = build_bipartite_graph(&ctx, &vars);
+        let pair_left = vec![Some(0)];
+        let value_graph = build_regin_value_graph(&ctx, &vars, &graph, &pair_left);
+        assert_eq!(value_graph.len(), graph.value_count);
+    }
+
+    #[test]
+    fn build_regin_graph_skips_unmatched_left_nodes() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::new(1, 2));
+        let b = engine.new_variable(IntervalDomain::new(1, 2));
+        let vars = vec![a, b];
+        let ctx = ReadOnlyEngine(&engine);
+        let graph = build_bipartite_graph(&ctx, &vars);
+        let pair_left = vec![None, Some(1)];
+        let value_graph = build_regin_value_graph(&ctx, &vars, &graph, &pair_left);
+        assert_eq!(value_graph.len(), graph.value_count);
+    }
+
+    #[test]
+    fn mut_engine_exercises_domain_mutators() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::new(1, 5));
+        let mut ctx = MutEngine(&mut engine);
+        assert!(ctx.remove_below(a, 2));
+        assert!(!ctx.remove_below(a, 2));
+        assert!(ctx.remove_above(a, 4));
+        assert!(!ctx.remove_above(a, 4));
+        assert!(ctx.remove_value(a, 3));
+        assert!(!ctx.remove_value(a, 3));
+        assert_eq!(ctx.fixed_value(a), None);
+    }
+
+    #[test]
+    fn read_only_engine_reports_fixed_value() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::fix(4));
+        let ctx = ReadOnlyEngine(&engine);
+        assert_eq!(ctx.fixed_value(a), Some(4));
+    }
+
+    #[test]
+    fn assert_regin_skips_without_perfect_matching() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::fix(1));
+        let b = engine.new_variable(IntervalDomain::fix(1));
+        assert_regin_agrees_with_hk(&mut engine, &[a, b]);
+    }
+
+    #[test]
+    fn value_supported_rejects_unknown_value_index() {
+        let graph = BipartiteGraph {
+            adj: vec![vec![0]],
+            value_index: [(1, 0)].into_iter().collect(),
+            value_count: 1,
+        };
+        assert!(!value_supported_in_graph(&graph, 1, 0, 2));
+    }
+
+    #[test]
+    fn remove_unsupported_prunes_regin_unsupported_value() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::new(1, 2));
+        let b = engine.new_variable(IntervalDomain::new(1, 2));
+        let c = engine.new_variable(IntervalDomain::new(1, 3).remove(2));
+        let vars = vec![a, b, c];
+        assert_eq!(
+            remove_unsupported_values(&mut MutEngine(&mut engine), &vars),
+            Ok(true)
+        );
+        assert_eq!(engine.hybrid_domain(c).fixed_value(), Some(3));
+    }
+
+    #[test]
+    fn regin_scc_agrees_with_value_support_on_holey_domains() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::new(1, 4).remove(2));
+        let b = engine.new_variable(IntervalDomain::new(1, 4).remove(3));
+        let c = engine.new_variable(IntervalDomain::new(1, 5).remove(4));
+        assert_regin_agrees_with_hk(&mut engine, &[a, b, c]);
+    }
+
+    #[test]
+    fn hopcroft_karp_empty_left_returns_zero() {
+        assert_eq!(hopcroft_karp(&[], 0, 0), 0);
+    }
+
+    #[test]
+    fn regin_supports_unmatched_right_value() {
+        let pair_right = vec![Some(0), Some(1), None];
+        let components = vec![0, 1, 1];
+        assert!(regin_supports_value(2, 0, &pair_right, 0, &components));
+    }
+
+    #[test]
+    fn value_supported_in_graph_rejects_empty_adjacency() {
+        let graph = BipartiteGraph {
+            adj: vec![vec![0], vec![]],
+            value_index: [(1, 0), (2, 1)].into_iter().collect(),
+            value_count: 2,
+        };
+        assert!(!value_supported_in_graph(&graph, 2, 1, 2));
+    }
+
+    #[test]
+    fn value_supported_in_graph_rejects_missing_edge() {
+        let graph = BipartiteGraph {
+            adj: vec![vec![0], vec![1]],
+            value_index: [(1, 0), (2, 1)].into_iter().collect(),
+            value_count: 2,
+        };
+        assert!(!value_supported_in_graph(&graph, 2, 0, 2));
+    }
+
+    #[test]
+    fn read_only_engine_mutators_are_no_ops() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::new(1, 3));
+        let mut ctx = ReadOnlyEngine(&engine);
+        assert!(!ctx.remove_below(a, 2));
+        assert!(!ctx.remove_above(a, 2));
+        assert!(!ctx.remove_value(a, 2));
+    }
+
+    #[test]
+    fn value_supported_in_graph_detects_empty_adjacency_after_retain() {
+        let graph = BipartiteGraph {
+            adj: vec![vec![0, 1], vec![0], vec![1]],
+            value_index: [(0, 0), (1, 1)].into_iter().collect(),
+            value_count: 2,
+        };
+        assert!(!value_supported_in_graph(&graph, 3, 0, 1));
+    }
+
+    #[test]
+    fn build_regin_graph_skips_values_missing_from_index() {
+        use propaga_domains::AnyDomain;
+
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::new(1, 2));
+        let b = engine.new_variable(IntervalDomain::new(1, 2));
+        let vars = vec![a, b];
+        let ctx = ReadOnlyEngine(&engine);
+        let graph = build_bipartite_graph(&ctx, &vars);
+        let (pair_left, _) = hopcroft_karp_matching(&graph.adj, vars.len(), graph.value_count);
+        engine.set_domain(
+            a,
+            AnyDomain::Int(propaga_domains::HybridDomain::Interval(
+                IntervalDomain::new(1, 3),
+            )),
+        );
+        let ctx2 = ReadOnlyEngine(&engine);
+        let value_graph = build_regin_value_graph(&ctx2, &vars, &graph, &pair_left);
+        assert_eq!(value_graph.len(), graph.value_count);
+    }
+
+    fn assert_regin_agrees_with_hk(engine: &mut Engine, vars: &[VariableId]) {
+        let graph = {
+            let ctx = ReadOnlyEngine(engine);
+            let graph = build_bipartite_graph(&ctx, vars);
+            if hopcroft_karp(&graph.adj, vars.len(), graph.value_count) != vars.len() {
+                return;
+            }
+            graph
+        };
         let (pair_left, pair_right) =
             hopcroft_karp_matching(&graph.adj, vars.len(), graph.value_count);
-        let value_graph = build_regin_value_graph(ctx, vars, &graph, &pair_left);
-        let components = tarjan_scc(&value_graph, graph.value_count);
+        let components = {
+            let ctx = ReadOnlyEngine(engine);
+            let value_graph = build_regin_value_graph(&ctx, vars, &graph, &pair_left);
+            tarjan_scc(&value_graph, graph.value_count)
+        };
 
+        let ctx = ReadOnlyEngine(engine);
         for (left, &var) in vars.iter().enumerate() {
             let matched = pair_left[left].expect("matched");
-            for value in collect_values(ctx, var) {
-                let hk = value_in_some_matching(ctx, vars, var, value);
-                let Some(&value_idx) = graph.value_index.get(&value) else {
-                    assert!(!hk);
-                    continue;
-                };
+            for value in collect_values(&ctx, var) {
+                let hk = value_in_some_matching(&ctx, vars, var, value);
+                let value_idx = graph.value_index[&value];
                 let scc = regin_supports_value(
                     value_idx,
                     matched,
@@ -612,27 +851,62 @@ mod tests {
         }
     }
 
-    struct ReadOnlyEngine<'a>(&'a Engine);
+    #[test]
+    fn apply_regin_removes_values_outside_stale_graph_index() {
+        use crate::test_support::MutEngine;
 
-    impl PropagationContext for ReadOnlyEngine<'_> {
-        fn domain(&self, var: VariableId) -> &dyn DomainView<Value = i32> {
-            self.0.hybrid_domain(var)
+        let mut engine = Engine::new();
+        let x0 = engine.new_variable(IntervalDomain::new(0, 1));
+        let x1 = engine.new_variable(IntervalDomain::new(0, 1));
+        let vars = vec![x0, x1];
+        let ctx = MutEngine(&mut engine);
+        let graph = build_bipartite_graph(&ctx, &vars);
+        let (pair_left, pair_right) =
+            hopcroft_karp_matching(&graph.adj, vars.len(), graph.value_count);
+        let components = {
+            let value_graph = build_regin_value_graph(&ctx, &vars, &graph, &pair_left);
+            tarjan_scc(&value_graph, graph.value_count)
+        };
+        engine.set_domain(
+            x0,
+            propaga_domains::AnyDomain::Int(propaga_domains::HybridDomain::Interval(
+                IntervalDomain::new(0, 99),
+            )),
+        );
+        let mut ctx2 = MutEngine(&mut engine);
+        let mut changed = false;
+        for (left, &var) in vars.iter().enumerate() {
+            let matched = pair_left[left].expect("matched");
+            let matched_component = components[matched];
+            for value in collect_values(&ctx2, var) {
+                let Some(&value_idx) = graph.value_index.get(&value) else {
+                    if ctx2.remove_value(var, value) {
+                        changed = true;
+                    }
+                    continue;
+                };
+                let _ = regin_supports_value(
+                    value_idx,
+                    matched,
+                    &pair_right,
+                    matched_component,
+                    &components,
+                );
+            }
         }
+        assert!(changed);
+        assert!(!engine.hybrid_domain(x0).contains(99));
+    }
 
-        fn remove_below(&mut self, _: VariableId, _: i32) -> bool {
-            false
+    #[test]
+    fn bfs_skips_infinite_distance_queue_entries() {
+        for left_count in 2..=5 {
+            for right_count in 2..=5 {
+                let adj = vec![vec![0usize]; left_count];
+                let _ = hopcroft_karp(&adj, left_count, right_count);
+            }
         }
-
-        fn remove_above(&mut self, _: VariableId, _: i32) -> bool {
-            false
-        }
-
-        fn remove_value(&mut self, _: VariableId, _: i32) -> bool {
-            false
-        }
-
-        fn fixed_value(&self, var: VariableId) -> Option<i32> {
-            self.0.hybrid_domain(var).fixed_value()
-        }
+        let adj = vec![vec![0usize, 1usize], vec![0usize], vec![1usize]];
+        let _ = hopcroft_karp(&adj, 3, 2);
     }
 }

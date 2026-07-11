@@ -18,7 +18,7 @@ pub struct FlatZincProgram {
 }
 
 /// A FlatZinc parameter declaration.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ParamDecl {
     /// Scalar integer parameter.
     Int {
@@ -33,6 +33,20 @@ pub enum ParamDecl {
         name: String,
         /// Values in index order.
         values: Vec<i32>,
+    },
+    /// Scalar boolean parameter (0 or 1).
+    Bool {
+        /// Parameter name.
+        name: String,
+        /// Parameter value.
+        value: i32,
+    },
+    /// Scalar float parameter.
+    Float {
+        /// Parameter name.
+        name: String,
+        /// Parameter value.
+        value: f64,
     },
 }
 
@@ -294,6 +308,35 @@ pub enum Constraint {
     SetIntersect(Expr, Expr, Expr),
     /// `float_times(a, b, c)`
     FloatTimes(Expr, Expr, Expr),
+    /// `int_abs(a, b)` — b = |a|
+    IntAbs(Expr, Expr),
+    /// `int_times(a, b, c)`
+    IntTimes(Expr, Expr, Expr),
+    /// `int_div(a, b, c)`
+    IntDiv(Expr, Expr, Expr),
+    /// `int_mod(a, b, c)`
+    IntMod(Expr, Expr, Expr),
+    /// `bool_not(a, b)`
+    BoolNot(Expr, Expr),
+    /// `bool_and(a, b, c)`
+    BoolAnd(Expr, Expr, Expr),
+    /// `bool_or(a, b, c)`
+    BoolOr(Expr, Expr, Expr),
+    /// `automaton(vars, symbols, states, transitions, start, accepting)`
+    Automaton {
+        /// Sequence variables.
+        vars: Vec<Expr>,
+        /// Alphabet size.
+        num_symbols: i32,
+        /// Number of states.
+        num_states: i32,
+        /// Transition matrix parameter name.
+        transitions: String,
+        /// Start state.
+        start: i32,
+        /// Accepting states.
+        accepting: Vec<i32>,
+    },
 }
 
 /// A parsed user-defined predicate with one or more constraint bodies.
@@ -558,6 +601,10 @@ impl Parser {
                 }
             } else if self.peek_is_ident("int") {
                 params.push(self.parse_param_decl()?);
+            } else if self.peek_is_ident("bool") {
+                params.push(self.parse_bool_param()?);
+            } else if self.peek_is_ident("float") {
+                params.push(self.parse_float_param()?);
             } else if self.peek_is_ident("constraint") {
                 constraints.push(self.parse_constraint()?);
             } else if self.peek_is_ident("solve") {
@@ -579,6 +626,8 @@ impl Parser {
                 return Err(FlatZincError::Unsupported(
                     "test declarations are not supported".to_string(),
                 ));
+            } else if self.peek_is_ident("annotation") {
+                self.skip_until_semicolon_or_eof();
             } else {
                 let found = match self.peek() {
                     Some(Token::Ident(name)) => name.clone(),
@@ -648,6 +697,40 @@ impl Parser {
         let values = self.parse_int_list()?;
         self.expect_symbol("]")?;
         Ok(ParamDecl::IntArray { name, values })
+    }
+
+    fn parse_bool_param(&mut self) -> Result<ParamDecl, FlatZincError> {
+        self.expect_ident("bool")?;
+        self.expect_symbol(":")?;
+        let name = self.expect_ident_token()?;
+        self.expect_symbol("=")?;
+        let value = if self.peek_is_ident("true") {
+            self.expect_ident("true")?;
+            1
+        } else {
+            self.expect_ident("false")?;
+            0
+        };
+        Ok(ParamDecl::Bool { name, value })
+    }
+
+    fn parse_float_param(&mut self) -> Result<ParamDecl, FlatZincError> {
+        self.expect_ident("float")?;
+        self.expect_symbol(":")?;
+        let name = self.expect_ident_token()?;
+        self.expect_symbol("=")?;
+        let value = self
+            .expect_float_text()?
+            .parse::<f64>()
+            .map_err(|_| FlatZincError::Unsupported("invalid float literal".into()))?;
+        Ok(ParamDecl::Float { name, value })
+    }
+
+    fn skip_until_semicolon_or_eof(&mut self) {
+        while !self.is_eof() && !self.peek_is_symbol(";") {
+            self.pos += 1;
+        }
+        self.consume_optional_semicolon();
     }
 
     fn parse_var_decl(&mut self) -> Result<VarDecl, FlatZincError> {
@@ -1150,6 +1233,105 @@ impl Parser {
                 let c = self.parse_expr()?;
                 Constraint::FloatTimes(a, b, c)
             }
+            "int_abs" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                Constraint::IntAbs(a, b)
+            }
+            "int_times" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let c = self.parse_expr()?;
+                Constraint::IntTimes(a, b, c)
+            }
+            "int_div" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let c = self.parse_expr()?;
+                Constraint::IntDiv(a, b, c)
+            }
+            "int_mod" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let c = self.parse_expr()?;
+                Constraint::IntMod(a, b, c)
+            }
+            "bool_not" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                Constraint::BoolNot(a, b)
+            }
+            "bool_and" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let c = self.parse_expr()?;
+                Constraint::BoolAnd(a, b, c)
+            }
+            "bool_or" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let c = self.parse_expr()?;
+                Constraint::BoolOr(a, b, c)
+            }
+            "automaton" => {
+                let vars_expr = self.parse_expr()?;
+                let vars = match vars_expr {
+                    Expr::List(items) => items,
+                    other => vec![other],
+                };
+                self.expect_symbol(",")?;
+                let num_symbols = self.expect_int()?;
+                self.expect_symbol(",")?;
+                let num_states = self.expect_int()?;
+                self.expect_symbol(",")?;
+                let transitions = self.expect_ident_token()?;
+                self.expect_symbol(",")?;
+                let start = self.expect_int()?;
+                self.expect_symbol(",")?;
+                let accepting = if self.peek_is_symbol("{") {
+                    self.expect_symbol("{")?;
+                    let mut states = Vec::new();
+                    states.push(self.expect_int()?);
+                    while self.peek_is_symbol(",") {
+                        self.expect_symbol(",")?;
+                        states.push(self.expect_int()?);
+                    }
+                    self.expect_symbol("}")?;
+                    states
+                } else if self.peek_is_symbol("[") {
+                    self.expect_symbol("[")?;
+                    let mut states = Vec::new();
+                    states.push(self.expect_int()?);
+                    while self.peek_is_symbol(",") {
+                        self.expect_symbol(",")?;
+                        states.push(self.expect_int()?);
+                    }
+                    self.expect_symbol("]")?;
+                    states
+                } else {
+                    vec![self.expect_int()?]
+                };
+                Constraint::Automaton {
+                    vars,
+                    num_symbols,
+                    num_states,
+                    transitions,
+                    start,
+                    accepting,
+                }
+            }
             other => {
                 let args = self.parse_expr_list()?;
                 Constraint::PredicateCall {
@@ -1202,11 +1384,6 @@ impl Parser {
             self.expect_symbol("(")?;
             let constraint = self.parse_constraint_by_name(&name)?;
             self.expect_symbol(")")?;
-            if matches!(constraint, Constraint::PredicateCall { .. }) {
-                return Err(FlatZincError::Unsupported(
-                    "nested predicate calls in predicate bodies are not supported".to_string(),
-                ));
-            }
             constraints.push(constraint);
             if self.peek_is_symbol("/") {
                 self.expect_symbol("/")?;
@@ -1824,14 +2001,16 @@ mod tests {
     }
 
     #[test]
-    fn rejects_unknown_top_level_statement() {
+    fn skips_annotation_top_level_statement() {
         let source = r#"
-            var 1..3: x;
             annotation foo;
+            var 1..3: x;
+            constraint int_eq(x, 1);
             solve satisfy;
         "#;
-        let err = parse(source).unwrap_err();
-        assert!(err.to_string().contains("unsupported top-level"));
+        let program = parse(source).expect("annotation should be skipped");
+        assert_eq!(program.variables.len(), 1);
+        assert_eq!(program.constraints.len(), 1);
     }
 
     #[test]

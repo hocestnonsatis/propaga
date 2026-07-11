@@ -128,8 +128,57 @@ fn propagate_pair(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use propaga_core::DomainView;
     use propaga_domains::IntervalDomain;
     use propaga_engine::Engine;
+
+    #[test]
+    fn empty_coordinate_domain_fails() {
+        let mut engine = Engine::new();
+        let x0 = engine.new_variable(IntervalDomain::new(1, 0));
+        let y0 = engine.new_variable(IntervalDomain::new(0, 5));
+        let x1 = engine.new_variable(IntervalDomain::new(0, 5));
+        let y1 = engine.new_variable(IntervalDomain::new(0, 5));
+        engine.add_propagator(Box::new(DiffnPropagator::new(vec![
+            RectangleSpec {
+                x: x0,
+                y: y0,
+                width: 2,
+                height: 2,
+            },
+            RectangleSpec {
+                x: x1,
+                y: y1,
+                width: 2,
+                height: 2,
+            },
+        ])));
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn missing_y_bounds_returns_failure() {
+        let mut engine = Engine::new();
+        let x0 = engine.new_variable(IntervalDomain::new(0, 1));
+        let y0 = engine.new_variable(IntervalDomain::new(1, 0));
+        let x1 = engine.new_variable(IntervalDomain::new(0, 1));
+        let y1 = engine.new_variable(IntervalDomain::new(0, 10));
+        engine.add_propagator(Box::new(DiffnPropagator::new(vec![
+            RectangleSpec {
+                x: x0,
+                y: y0,
+                width: 2,
+                height: 2,
+            },
+            RectangleSpec {
+                x: x1,
+                y: y1,
+                width: 2,
+                height: 2,
+            },
+        ])));
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
 
     #[test]
     fn separated_fixed_positions_do_not_fail() {
@@ -154,5 +203,195 @@ mod tests {
         ])));
         let status = engine.propagate_all().unwrap();
         assert!(!status.is_failure());
+    }
+
+    #[test]
+    fn overlapping_x_forces_y_separation() {
+        let mut engine = Engine::new();
+        let x0 = engine.new_variable(IntervalDomain::new(0, 1));
+        let y0 = engine.new_variable(IntervalDomain::new(0, 10));
+        let x1 = engine.new_variable(IntervalDomain::new(0, 1));
+        let y1 = engine.new_variable(IntervalDomain::new(0, 10));
+        engine.add_propagator(Box::new(DiffnPropagator::new(vec![
+            RectangleSpec {
+                x: x0,
+                y: y0,
+                width: 2,
+                height: 2,
+            },
+            RectangleSpec {
+                x: x1,
+                y: y1,
+                width: 2,
+                height: 2,
+            },
+        ])));
+
+        engine.propagate_all().unwrap();
+        assert_eq!(engine.hybrid_domain(y0).min(), Some(9));
+        assert_eq!(engine.hybrid_domain(y1).min(), Some(9));
+    }
+
+    #[test]
+    fn overlapping_y_forces_x_separation() {
+        let mut engine = Engine::new();
+        let x0 = engine.new_variable(IntervalDomain::new(0, 10));
+        let y0 = engine.new_variable(IntervalDomain::new(0, 1));
+        let x1 = engine.new_variable(IntervalDomain::new(0, 10));
+        let y1 = engine.new_variable(IntervalDomain::new(0, 1));
+        engine.add_propagator(Box::new(DiffnPropagator::new(vec![
+            RectangleSpec {
+                x: x0,
+                y: y0,
+                width: 2,
+                height: 2,
+            },
+            RectangleSpec {
+                x: x1,
+                y: y1,
+                width: 2,
+                height: 2,
+            },
+        ])));
+
+        engine.propagate_all().unwrap();
+        assert_eq!(engine.hybrid_domain(x0).min(), Some(9));
+        assert_eq!(engine.hybrid_domain(x1).min(), Some(9));
+    }
+
+    #[test]
+    fn empty_coordinate_after_propagation_fails() {
+        let mut engine = Engine::new();
+        let x0 = engine.new_variable(IntervalDomain::new(0, 5));
+        let y0 = engine.new_variable(IntervalDomain::new(1, 0));
+        let x1 = engine.new_variable(IntervalDomain::new(10, 15));
+        let y1 = engine.new_variable(IntervalDomain::new(0, 5));
+        engine.add_propagator(Box::new(DiffnPropagator::new(vec![
+            RectangleSpec {
+                x: x0,
+                y: y0,
+                width: 2,
+                height: 2,
+            },
+            RectangleSpec {
+                x: x1,
+                y: y1,
+                width: 2,
+                height: 2,
+            },
+        ])));
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn missing_bounds_skips_pair() {
+        use crate::test_support::MutEngine;
+
+        let mut engine = Engine::new();
+        let x0 = engine.new_variable(IntervalDomain::new(1, 0));
+        let y0 = engine.new_variable(IntervalDomain::new(0, 5));
+        let x1 = engine.new_variable(IntervalDomain::new(0, 5));
+        let y1 = engine.new_variable(IntervalDomain::new(0, 5));
+        let mut ctx = MutEngine(&mut engine);
+        assert!(!propagate_pair(
+            &mut ctx,
+            RectangleSpec {
+                x: x0,
+                y: y0,
+                width: 2,
+                height: 2,
+            },
+            RectangleSpec {
+                x: x1,
+                y: y1,
+                width: 2,
+                height: 2,
+            },
+        ));
+    }
+
+    #[test]
+    fn missing_right_x_bounds_skips_pair() {
+        use crate::test_support::MutEngine;
+
+        let mut engine = Engine::new();
+        let x0 = engine.new_variable(IntervalDomain::new(0, 5));
+        let y0 = engine.new_variable(IntervalDomain::new(0, 5));
+        let x1 = engine.new_variable(IntervalDomain::new(1, 0));
+        let y1 = engine.new_variable(IntervalDomain::new(0, 5));
+        let mut ctx = MutEngine(&mut engine);
+        assert!(!propagate_pair(
+            &mut ctx,
+            RectangleSpec {
+                x: x0,
+                y: y0,
+                width: 2,
+                height: 2,
+            },
+            RectangleSpec {
+                x: x1,
+                y: y1,
+                width: 2,
+                height: 2,
+            },
+        ));
+    }
+
+    #[test]
+    fn propagation_returns_ok_changed() {
+        let mut engine = Engine::new();
+        let x0 = engine.new_variable(IntervalDomain::new(0, 1));
+        let y0 = engine.new_variable(IntervalDomain::new(0, 10));
+        let x1 = engine.new_variable(IntervalDomain::new(0, 1));
+        let y1 = engine.new_variable(IntervalDomain::new(0, 10));
+        engine.add_propagator(Box::new(DiffnPropagator::new(vec![
+            RectangleSpec {
+                x: x0,
+                y: y0,
+                width: 2,
+                height: 2,
+            },
+            RectangleSpec {
+                x: x1,
+                y: y1,
+                width: 2,
+                height: 2,
+            },
+        ])));
+        assert_eq!(
+            engine.propagate_all().unwrap(),
+            PropagationStatus::OkChanged
+        );
+    }
+
+    #[test]
+    fn mock_propagation_empties_coordinate_domain_fails() {
+        use crate::test_support::MockIntCtx;
+
+        let mut engine = Engine::new();
+        let x0 = engine.new_variable(IntervalDomain::new(0, 0));
+        let y0 = engine.new_variable(IntervalDomain::new(0, 0));
+        let x1 = engine.new_variable(IntervalDomain::new(0, 0));
+        let y1 = engine.new_variable(IntervalDomain::new(0, 0));
+        let mut ctx = MockIntCtx::new()
+            .with_domain(x0, vec![0, 1])
+            .with_domain(y0, vec![0, 10])
+            .with_domain(x1, vec![0, 1])
+            .with_domain(y1, vec![]);
+        let mut prop = DiffnPropagator::new(vec![
+            RectangleSpec {
+                x: x0,
+                y: y0,
+                width: 2,
+                height: 2,
+            },
+            RectangleSpec {
+                x: x1,
+                y: y1,
+                width: 2,
+                height: 2,
+            },
+        ]);
+        assert_eq!(prop.propagate(&mut ctx), PropagationStatus::Failure);
     }
 }

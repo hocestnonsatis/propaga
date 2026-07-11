@@ -1,0 +1,7 @@
+var 1..5: x;
+var 1..5: y;
+var 1..25: z;
+constraint int_times(x, y, z);
+constraint int_eq(x, 3);
+constraint int_eq(y, 4);
+solve satisfy;

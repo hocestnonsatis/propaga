@@ -1,12 +1,21 @@
 # Propaga Roadmap
 
-Forward-looking ideas beyond v0.6.0. See [README.md](README.md) for what ships today.
+Forward-looking ideas beyond v0.7.0. See [README.md](README.md) for what ships today.
 
 ## Long term
 
 - Trigonometric and additional float global constraints
-- Nested FlatZinc predicate calls in predicate bodies
+- Float parameters in float constraint expressions
 - Incremental Pareto enumeration
+
+## Shipped in v0.7.0
+
+- FlatZinc primitives: `int_abs`, `int_times`, `int_div`, `int_mod`, `bool_not`, `bool_and`, `bool_or`
+- FlatZinc `automaton` global
+- `bool` / `float` parameters
+- Nested FlatZinc predicate calls
+- `annotation` top-level skip; `incomplete` search tolerance
+- MiniZinc model corpus + compatibility report script
 
 ## Shipped in v0.6.0
 

@@ -85,4 +85,54 @@ mod tests {
         assert!((c_domain.lower_bound() - 8.0).abs() < f64::EPSILON);
         assert!((c_domain.upper_bound() - 15.0).abs() < f64::EPSILON);
     }
+
+    #[test]
+    fn already_satisfied_no_change() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(AnyDomain::Float(FloatDomain::fix(2.0)));
+        let b = engine.new_variable(AnyDomain::Float(FloatDomain::fix(3.0)));
+        let c = engine.new_variable(AnyDomain::Float(FloatDomain::fix(6.0)));
+        engine.add_propagator(Box::new(FloatTimesPropagator::new(a, b, c)));
+        assert_eq!(
+            engine.propagate_all().unwrap(),
+            PropagationStatus::OkNoChange
+        );
+    }
+
+    #[test]
+    fn no_extended_context_returns_ok_no_change() {
+        use crate::test_support::NoExtendedCtx;
+        use propaga_domains::IntervalDomain;
+
+        let mut engine = Engine::new();
+        let _ = engine.new_variable(IntervalDomain::new(1, 5));
+        let a = engine.new_variable(AnyDomain::Float(FloatDomain::new(1.0, 10.0)));
+        let b = engine.new_variable(AnyDomain::Float(FloatDomain::new(1.0, 10.0)));
+        let c = engine.new_variable(AnyDomain::Float(FloatDomain::new(1.0, 10.0)));
+        let mut prop = FloatTimesPropagator::new(a, b, c);
+        let mut ctx = NoExtendedCtx::new(&mut engine);
+        assert_eq!(prop.propagate(&mut ctx), PropagationStatus::OkNoChange);
+    }
+
+    #[test]
+    fn empty_float_domain_after_propagation_fails() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 0.0)));
+        let b = engine.new_variable(AnyDomain::Float(FloatDomain::new(2.0, 3.0)));
+        let c = engine.new_variable(AnyDomain::Float(FloatDomain::new(1.0, 100.0)));
+        engine.add_propagator(Box::new(FloatTimesPropagator::new(a, b, c)));
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn integer_variables_fail() {
+        use propaga_domains::IntervalDomain;
+
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::new(1, 3));
+        let b = engine.new_variable(IntervalDomain::new(1, 3));
+        let c = engine.new_variable(IntervalDomain::new(1, 9));
+        engine.add_propagator(Box::new(FloatTimesPropagator::new(a, b, c)));
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
 }

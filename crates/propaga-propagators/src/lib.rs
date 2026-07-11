@@ -4,6 +4,9 @@
 //! inference for equality, linear, ordering, reified, all-different, GCC, table,
 //! element, cumulative, and disjunctive constraints.
 
+#[cfg(test)]
+mod test_support;
+
 mod all_different;
 mod circuit;
 mod clause;

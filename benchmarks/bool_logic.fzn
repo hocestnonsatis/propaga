@@ -1,0 +1,7 @@
+var 0..1: a;
+var 0..1: b;
+var 0..1: c;
+constraint bool_not(a, b);
+constraint bool_eq(a, 1);
+constraint bool_and(b, b, c);
+solve satisfy;

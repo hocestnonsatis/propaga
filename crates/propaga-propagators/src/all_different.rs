@@ -92,6 +92,16 @@ mod tests {
     use propaga_engine::Engine;
 
     #[test]
+    fn empty_domain_after_pruning_fails() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::new(1, 2));
+        let b = engine.new_variable(IntervalDomain::new(1, 2));
+        let c = engine.new_variable(IntervalDomain::new(1, 0));
+        engine.add_propagator(Box::new(AllDifferentPropagator::new(vec![a, b, c])));
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
+
+    #[test]
     fn fixed_values_are_removed_from_other_variables() {
         let mut engine = Engine::new();
         let a = engine.new_variable(IntervalDomain::fix(2));
@@ -115,5 +125,67 @@ mod tests {
         engine.propagate_all().unwrap();
         assert_eq!(engine.hybrid_domain(c).size(), 1);
         assert_eq!(engine.hybrid_domain(c).min(), Some(3));
+    }
+
+    #[test]
+    fn single_variable_no_change() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::new(1, 3));
+        engine.add_propagator(Box::new(AllDifferentPropagator::new(vec![a])));
+
+        assert_eq!(
+            engine.propagate_all().unwrap(),
+            PropagationStatus::OkNoChange
+        );
+    }
+
+    #[test]
+    fn impossible_matching_fails() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::fix(1));
+        let b = engine.new_variable(IntervalDomain::fix(1));
+        let c = engine.new_variable(IntervalDomain::fix(1));
+        engine.add_propagator(Box::new(AllDifferentPropagator::new(vec![a, b, c])));
+
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn empty_domain_after_loop_returns_failure() {
+        use crate::test_support::MutEngine;
+        use propaga_domains::AnyDomain;
+
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::new(1, 2));
+        let b = engine.new_variable(IntervalDomain::new(1, 2));
+        engine.propagate_all().unwrap();
+        engine.set_domain(
+            b,
+            AnyDomain::Int(propaga_domains::HybridDomain::Interval(
+                IntervalDomain::new(1, 0),
+            )),
+        );
+        let mut prop = AllDifferentPropagator::new(vec![a, b]);
+        let mut ctx = MutEngine(&mut engine);
+        assert_eq!(prop.propagate(&mut ctx), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn single_empty_variable_returns_failure() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::new(1, 0));
+        engine.add_propagator(Box::new(AllDifferentPropagator::new(vec![a])));
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn mock_single_empty_variable_returns_failure_after_loop() {
+        use crate::test_support::MockIntCtx;
+
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::new(0, 0));
+        let mut ctx = MockIntCtx::new().with_domain(a, vec![]);
+        let mut prop = AllDifferentPropagator::new(vec![a]);
+        assert_eq!(prop.propagate(&mut ctx), PropagationStatus::Failure);
     }
 }

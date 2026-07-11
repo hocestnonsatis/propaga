@@ -127,3 +127,77 @@ fn solves_float_times_benchmark() {
     let solution = model.solve_subset(vars);
     assert!(solution.is_some());
 }
+
+#[test]
+fn int_abs_instance_yields_two() {
+    use propaga_search::assignment_int;
+
+    let source = include_str!("../../../benchmarks/int_abs.fzn");
+    let program = parse(source).expect("parse");
+    let mut instance = compile(program).expect("compile");
+    let (solution, _) = instance.model.solve_subset_with_stats(instance.solve_vars);
+    let y = instance
+        .names
+        .iter()
+        .find(|(_, name)| *name == "y")
+        .map(|(var, _)| *var)
+        .expect("y");
+    assert_eq!(solution.and_then(|s| assignment_int(&s, y)), Some(2));
+}
+
+#[test]
+fn bool_logic_not_and() {
+    let source = include_str!("../../../benchmarks/bool_logic.fzn");
+    let program = parse(source).expect("parse");
+    let mut instance = compile(program).expect("compile");
+    let (solution, _) = instance.model.solve_subset_with_stats(instance.solve_vars);
+    assert!(solution.is_some());
+}
+
+#[test]
+fn int_times_instance() {
+    let source = include_str!("../../../benchmarks/int_times.fzn");
+    let program = parse(source).expect("parse");
+    let mut instance = compile(program).expect("compile");
+    let (solution, _) = instance.model.solve_subset_with_stats(instance.solve_vars);
+    assert!(solution.is_some());
+}
+
+#[test]
+fn nested_predicate_expands() {
+    let source = include_str!("../../../benchmarks/nested_predicate.fzn");
+    let program = parse(source).expect("parse");
+    let mut instance = compile(program).expect("compile");
+    let (solution, _) = instance.model.solve_subset_with_stats(instance.solve_vars);
+    assert!(solution.is_some());
+}
+
+#[test]
+fn automaton_chain_compiles() {
+    let source = include_str!("../../../benchmarks/automaton_chain.fzn");
+    let program = parse(source).expect("parse");
+    compile(program).expect("compile automaton");
+}
+
+#[test]
+fn compiles_bool_parameter() {
+    let source = r#"
+        bool: flag = true;
+        var 0..1: x;
+        constraint int_eq(x, flag);
+        solve satisfy;
+    "#;
+    let program = parse(source).expect("parse bool param");
+    compile(program).expect("compile bool param");
+}
+
+#[test]
+fn compiles_float_parameter() {
+    let source = r#"
+        float: pi = 3.14;
+        var 3.0..4.0: x;
+        solve satisfy;
+    "#;
+    let program = parse(source).expect("parse float param");
+    compile(program).expect("compile float param");
+}

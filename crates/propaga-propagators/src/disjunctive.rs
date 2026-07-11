@@ -29,6 +29,20 @@ impl DisjunctivePropagator {
     }
 }
 
+fn record_fixed_overlap_failure(
+    ctx: &mut dyn PropagationContext,
+    left: DisjunctiveTask,
+    right: DisjunctiveTask,
+) -> Option<PropagationStatus> {
+    if fixed_tasks_overlap(ctx, left, right) {
+        if let Some(literals) = overlap_conflict_literals(ctx, left, right) {
+            ctx.record_propagator_conflict(&literals);
+        }
+        return Some(PropagationStatus::Failure);
+    }
+    None
+}
+
 impl Propagator for DisjunctivePropagator {
     fn watched_variables(&self) -> &[VariableId] {
         &self.watched
@@ -43,19 +57,6 @@ impl Propagator for DisjunctivePropagator {
             return PropagationStatus::OkNoChange;
         }
 
-        for left in 0..self.tasks.len() {
-            for right in left + 1..self.tasks.len() {
-                if fixed_tasks_overlap(ctx, self.tasks[left], self.tasks[right]) {
-                    if let Some(literals) =
-                        overlap_conflict_literals(ctx, self.tasks[left], self.tasks[right])
-                    {
-                        ctx.record_propagator_conflict(&literals);
-                    }
-                    return PropagationStatus::Failure;
-                }
-            }
-        }
-
         if self.tasks.len() > 2 && disjunctive_energy_overload(ctx, &self.tasks) {
             return PropagationStatus::Failure;
         }
@@ -66,13 +67,10 @@ impl Propagator for DisjunctivePropagator {
             round_changed |= propagate_edge_finding(ctx, &self.tasks);
             for left in 0..self.tasks.len() {
                 for right in left + 1..self.tasks.len() {
-                    if fixed_tasks_overlap(ctx, self.tasks[left], self.tasks[right]) {
-                        if let Some(literals) =
-                            overlap_conflict_literals(ctx, self.tasks[left], self.tasks[right])
-                        {
-                            ctx.record_propagator_conflict(&literals);
-                        }
-                        return PropagationStatus::Failure;
+                    if let Some(status) =
+                        record_fixed_overlap_failure(ctx, self.tasks[left], self.tasks[right])
+                    {
+                        return status;
                     }
                     round_changed |= propagate_pair(ctx, self.tasks[left], self.tasks[right]);
                     round_changed |=
@@ -164,20 +162,23 @@ fn force_before(
     before: DisjunctiveTask,
     after: DisjunctiveTask,
 ) -> bool {
-    let mut changed = false;
+    let before_min_start = ctx
+        .domain(before.start)
+        .min()
+        .expect("disjunctive tasks use bounded start domains");
+    let after_max_start = ctx
+        .domain(after.start)
+        .max()
+        .expect("disjunctive tasks use bounded start domains");
 
-    if let (Some(before_min_start), Some(after_max_start)) = (
-        ctx.domain(before.start).min(),
-        ctx.domain(after.start).max(),
-    ) {
-        let min_after_start = before_min_start.saturating_add(before.duration);
-        if ctx.remove_below(after.start, min_after_start) {
-            changed = true;
-        }
-        let max_before_start = after_max_start.saturating_sub(before.duration);
-        if ctx.remove_above(before.start, max_before_start) {
-            changed = true;
-        }
+    let mut changed = false;
+    let min_after_start = before_min_start.saturating_add(before.duration);
+    if ctx.remove_below(after.start, min_after_start) {
+        changed = true;
+    }
+    let max_before_start = after_max_start.saturating_sub(before.duration);
+    if ctx.remove_above(before.start, max_before_start) {
+        changed = true;
     }
 
     changed
@@ -245,24 +246,22 @@ fn task_bounds(ctx: &dyn PropagationContext, task: DisjunctiveTask) -> Option<Ta
 }
 
 fn disjunctive_energy_overload(ctx: &dyn PropagationContext, tasks: &[DisjunctiveTask]) -> bool {
-    let Some(min_est) = tasks
-        .iter()
-        .filter_map(|task| ctx.domain(task.start).min())
-        .min()
-    else {
+    let mut min_est = i32::MAX;
+    let mut max_lct = i32::MIN;
+    let mut any = false;
+    for task in tasks {
+        let (Some(start_min), Some(start_max)) =
+            (ctx.domain(task.start).min(), ctx.domain(task.start).max())
+        else {
+            continue;
+        };
+        any = true;
+        min_est = min_est.min(start_min);
+        max_lct = max_lct.max(start_max.saturating_add(task.duration));
+    }
+    if !any {
         return false;
-    };
-    let Some(max_lct) = tasks
-        .iter()
-        .filter_map(|task| {
-            ctx.domain(task.start)
-                .max()
-                .map(|start| start.saturating_add(task.duration))
-        })
-        .max()
-    else {
-        return false;
-    };
+    }
     let total_duration: i32 = tasks.iter().map(|task| task.duration).sum();
     total_duration > max_lct.saturating_sub(min_est)
 }
@@ -316,6 +315,7 @@ fn propagate_edge_finding(ctx: &mut dyn PropagationContext, tasks: &[Disjunctive
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::{MutEngine, ReadOnlyEngine};
     use propaga_core::DomainView;
     use propaga_domains::IntervalDomain;
     use propaga_engine::Engine;
@@ -443,5 +443,642 @@ mod tests {
             },
         ])));
         assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn single_task_returns_ok_no_change() {
+        let mut engine = Engine::new();
+        let start = engine.new_variable(IntervalDomain::new(0, 10));
+        engine.add_propagator(Box::new(DisjunctivePropagator::new(vec![
+            DisjunctiveTask { start, duration: 3 },
+        ])));
+        assert_eq!(
+            engine.propagate_all().unwrap(),
+            PropagationStatus::OkNoChange
+        );
+    }
+
+    #[test]
+    fn propagation_returns_ok_changed() {
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::fix(0));
+        let start_b = engine.new_variable(IntervalDomain::new(0, 10));
+        engine.add_propagator(Box::new(DisjunctivePropagator::new(vec![
+            DisjunctiveTask {
+                start: start_a,
+                duration: 4,
+            },
+            DisjunctiveTask {
+                start: start_b,
+                duration: 2,
+            },
+        ])));
+        assert_eq!(
+            engine.propagate_all().unwrap(),
+            PropagationStatus::OkChanged
+        );
+        assert!(!engine.hybrid_domain(start_b).contains(0));
+        assert!(!engine.hybrid_domain(start_b).contains(1));
+        assert!(!engine.hybrid_domain(start_b).contains(2));
+        assert!(!engine.hybrid_domain(start_b).contains(3));
+    }
+
+    #[test]
+    fn force_before_tightens_both_task_bounds() {
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::new(0, 5));
+        let start_b = engine.new_variable(IntervalDomain::new(0, 3));
+        engine.add_propagator(Box::new(DisjunctivePropagator::new(vec![
+            DisjunctiveTask {
+                start: start_a,
+                duration: 5,
+            },
+            DisjunctiveTask {
+                start: start_b,
+                duration: 5,
+            },
+        ])));
+        engine.propagate_all().unwrap();
+        assert!(engine.hybrid_domain(start_a).min().unwrap() >= 5);
+        assert!(engine.hybrid_domain(start_b).max().unwrap() <= 0);
+    }
+
+    #[test]
+    fn edge_finding_propagates_three_task_order() {
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::new(0, 10));
+        let start_b = engine.new_variable(IntervalDomain::new(1, 10));
+        let start_c = engine.new_variable(IntervalDomain::new(0, 5));
+        engine.add_propagator(Box::new(DisjunctivePropagator::new(vec![
+            DisjunctiveTask {
+                start: start_a,
+                duration: 3,
+            },
+            DisjunctiveTask {
+                start: start_b,
+                duration: 4,
+            },
+            DisjunctiveTask {
+                start: start_c,
+                duration: 2,
+            },
+        ])));
+        assert_eq!(
+            engine.propagate_all().unwrap(),
+            PropagationStatus::OkChanged
+        );
+        assert!(engine.hybrid_domain(start_c).min().unwrap() >= 3);
+    }
+
+    #[test]
+    fn empty_start_domain_returns_failure() {
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::new(1, 0));
+        let start_b = engine.new_variable(IntervalDomain::new(5, 10));
+        engine.add_propagator(Box::new(DisjunctivePropagator::new(vec![
+            DisjunctiveTask {
+                start: start_a,
+                duration: 3,
+            },
+            DisjunctiveTask {
+                start: start_b,
+                duration: 3,
+            },
+        ])));
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn enforce_before_tightens_when_min_end_exceeds_max_start() {
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::new(0, 0));
+        let start_b = engine.new_variable(IntervalDomain::new(0, 3));
+        let tasks = [
+            DisjunctiveTask {
+                start: start_a,
+                duration: 4,
+            },
+            DisjunctiveTask {
+                start: start_b,
+                duration: 4,
+            },
+        ];
+        let mut ctx = MutEngine(&mut engine);
+        assert!(enforce_before(&mut ctx, tasks[0], tasks[1]));
+    }
+
+    #[test]
+    fn known_singleton_start_forbids_overlap() {
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::new(0, 0));
+        let start_b = engine.new_variable(IntervalDomain::new(0, 5));
+        let tasks = [
+            DisjunctiveTask {
+                start: start_a,
+                duration: 2,
+            },
+            DisjunctiveTask {
+                start: start_b,
+                duration: 2,
+            },
+        ];
+        let mut ctx = MutEngine(&mut engine);
+        assert!(forbid_overlap_with_known_start(
+            &mut ctx, tasks[0], tasks[1]
+        ));
+        assert!(!engine.hybrid_domain(start_b).contains(0));
+        assert!(!engine.hybrid_domain(start_b).contains(1));
+    }
+
+    #[test]
+    fn edge_finding_skips_tasks_with_missing_bounds() {
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::new(0, 5));
+        let start_b = engine.new_variable(IntervalDomain::new(1, 0));
+        let start_c = engine.new_variable(IntervalDomain::new(0, 5));
+        let tasks = vec![
+            DisjunctiveTask {
+                start: start_a,
+                duration: 2,
+            },
+            DisjunctiveTask {
+                start: start_b,
+                duration: 2,
+            },
+            DisjunctiveTask {
+                start: start_c,
+                duration: 2,
+            },
+        ];
+        let mut ctx = MutEngine(&mut engine);
+        assert!(!propagate_edge_finding(&mut ctx, &tasks));
+    }
+
+    #[test]
+    fn overlap_detected_inside_propagation_loop() {
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::fix(0));
+        let start_b = engine.new_variable(IntervalDomain::fix(0));
+        engine.trail_mark();
+        engine.add_propagator(Box::new(DisjunctivePropagator::new(vec![
+            DisjunctiveTask {
+                start: start_a,
+                duration: 2,
+            },
+            DisjunctiveTask {
+                start: start_b,
+                duration: 2,
+            },
+        ])));
+        let _ = engine.propagate_all();
+        let conflict = engine.last_conflict().expect("conflict");
+        assert!(
+            conflict
+                .explanation
+                .propagator_conflict_literals()
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn read_only_engine_reports_fixed_value() {
+        let mut engine = Engine::new();
+        let start = engine.new_variable(IntervalDomain::fix(3));
+        let ctx = ReadOnlyEngine(&engine);
+        assert_eq!(ctx.fixed_value(start), Some(3));
+    }
+
+    #[test]
+    fn energy_overload_with_empty_domain_returns_false() {
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::new(1, 0));
+        let start_b = engine.new_variable(IntervalDomain::new(1, 0));
+        let start_c = engine.new_variable(IntervalDomain::new(1, 0));
+        let tasks = vec![
+            DisjunctiveTask {
+                start: start_a,
+                duration: 2,
+            },
+            DisjunctiveTask {
+                start: start_b,
+                duration: 2,
+            },
+            DisjunctiveTask {
+                start: start_c,
+                duration: 2,
+            },
+        ];
+        let ctx = ReadOnlyEngine(&engine);
+        assert!(!disjunctive_energy_overload(&ctx, &tasks));
+    }
+
+    #[test]
+    fn enforce_before_returns_false_when_domain_missing_bounds() {
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::new(1, 0));
+        let start_b = engine.new_variable(IntervalDomain::new(0, 5));
+        let tasks = [
+            DisjunctiveTask {
+                start: start_a,
+                duration: 3,
+            },
+            DisjunctiveTask {
+                start: start_b,
+                duration: 3,
+            },
+        ];
+        let mut ctx = MutEngine(&mut engine);
+        assert!(!enforce_before(&mut ctx, tasks[0], tasks[1]));
+        assert!(!enforce_before(&mut ctx, tasks[1], tasks[0]));
+    }
+
+    #[test]
+    fn start_values_collects_domain_values() {
+        let mut engine = Engine::new();
+        let start = engine.new_variable(IntervalDomain::new(0, 4).remove(2));
+        let ctx = ReadOnlyEngine(&engine);
+        assert_eq!(start_values(&ctx, start), vec![0, 1, 3, 4]);
+    }
+
+    #[test]
+    fn known_start_reads_singleton_domain() {
+        let mut engine = Engine::new();
+        let start = engine.new_variable(IntervalDomain::new(3, 3));
+        let task = DisjunctiveTask { start, duration: 2 };
+        let ctx = ReadOnlyEngine(&engine);
+        assert_eq!(known_start(&ctx, task), Some(3));
+    }
+
+    #[test]
+    fn force_before_tightens_both_bounds() {
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::new(0, 0));
+        let start_b = engine.new_variable(IntervalDomain::new(0, 3));
+        let tasks = [
+            DisjunctiveTask {
+                start: start_a,
+                duration: 4,
+            },
+            DisjunctiveTask {
+                start: start_b,
+                duration: 4,
+            },
+        ];
+        let mut ctx = MutEngine(&mut engine);
+        assert!(force_before(&mut ctx, tasks[1], tasks[0]));
+    }
+
+    #[test]
+    fn propagation_empties_start_domain_in_loop() {
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::new(0, 0));
+        let start_b = engine.new_variable(IntervalDomain::new(0, 0));
+        engine.add_propagator(Box::new(DisjunctivePropagator::new(vec![
+            DisjunctiveTask {
+                start: start_a,
+                duration: 4,
+            },
+            DisjunctiveTask {
+                start: start_b,
+                duration: 4,
+            },
+        ])));
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn energy_overload_detects_infeasible_window() {
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::new(0, 1));
+        let start_b = engine.new_variable(IntervalDomain::new(0, 1));
+        let start_c = engine.new_variable(IntervalDomain::new(0, 1));
+        let tasks = vec![
+            DisjunctiveTask {
+                start: start_a,
+                duration: 2,
+            },
+            DisjunctiveTask {
+                start: start_b,
+                duration: 2,
+            },
+            DisjunctiveTask {
+                start: start_c,
+                duration: 2,
+            },
+        ];
+        let ctx = ReadOnlyEngine(&engine);
+        assert!(disjunctive_energy_overload(&ctx, &tasks));
+    }
+
+    #[test]
+    fn overlap_in_loop_records_conflict_literals() {
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::fix(0));
+        let start_b = engine.new_variable(IntervalDomain::fix(0));
+        let start_c = engine.new_variable(IntervalDomain::new(5, 10));
+        engine.trail_mark();
+        engine.add_propagator(Box::new(DisjunctivePropagator::new(vec![
+            DisjunctiveTask {
+                start: start_a,
+                duration: 3,
+            },
+            DisjunctiveTask {
+                start: start_b,
+                duration: 3,
+            },
+            DisjunctiveTask {
+                start: start_c,
+                duration: 2,
+            },
+        ])));
+        let _ = engine.propagate_all();
+        assert!(
+            engine
+                .last_conflict()
+                .and_then(|c| c.explanation.propagator_conflict_literals())
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn start_values_returns_empty_without_bounds() {
+        let mut engine = Engine::new();
+        let start = engine.new_variable(IntervalDomain::new(1, 0));
+        let ctx = ReadOnlyEngine(&engine);
+        assert!(start_values(&ctx, start).is_empty());
+    }
+
+    #[test]
+    fn overlap_inside_loop_records_literals() {
+        use crate::test_support::MockIntCtx;
+
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::new(0, 0));
+        let start_b = engine.new_variable(IntervalDomain::new(0, 0));
+        let mut ctx = MockIntCtx::new()
+            .with_domain(start_a, vec![0, 1, 2])
+            .with_domain(start_b, vec![0, 1, 2])
+            .with_fixed(start_a, 0)
+            .with_fixed(start_b, 0);
+        let mut prop = DisjunctivePropagator::new(vec![
+            DisjunctiveTask {
+                start: start_a,
+                duration: 2,
+            },
+            DisjunctiveTask {
+                start: start_b,
+                duration: 2,
+            },
+        ]);
+        assert_eq!(prop.propagate(&mut ctx), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn propagation_empties_start_domain_returns_failure() {
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::new(0, 0));
+        let start_b = engine.new_variable(IntervalDomain::new(0, 0));
+        let mut prop = DisjunctivePropagator::new(vec![
+            DisjunctiveTask {
+                start: start_a,
+                duration: 4,
+            },
+            DisjunctiveTask {
+                start: start_b,
+                duration: 4,
+            },
+        ]);
+        use crate::test_support::MockIntCtx;
+        let mut ctx = MockIntCtx::new()
+            .with_domain(start_a, vec![0])
+            .with_domain(start_b, vec![0]);
+        assert_eq!(prop.propagate(&mut ctx), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn force_before_tightens_both_bounds_directly() {
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::new(0, 5));
+        let start_b = engine.new_variable(IntervalDomain::new(0, 3));
+        let tasks = [
+            DisjunctiveTask {
+                start: start_a,
+                duration: 5,
+            },
+            DisjunctiveTask {
+                start: start_b,
+                duration: 5,
+            },
+        ];
+        let mut ctx = MutEngine(&mut engine);
+        assert!(force_before(&mut ctx, tasks[1], tasks[0]));
+        assert!(engine.hybrid_domain(start_a).min().unwrap() >= 5);
+        assert!(engine.hybrid_domain(start_b).max().unwrap() <= 0);
+    }
+
+    #[test]
+    fn known_start_reads_singleton_without_fix() {
+        use crate::test_support::MockIntCtx;
+
+        let mut engine = Engine::new();
+        let start = engine.new_variable(IntervalDomain::new(0, 0));
+        let other = engine.new_variable(IntervalDomain::new(0, 0));
+        let task = DisjunctiveTask { start, duration: 2 };
+        let other_task = DisjunctiveTask {
+            start: other,
+            duration: 2,
+        };
+        let mut ctx = MockIntCtx::new()
+            .with_domain(start, vec![3])
+            .with_domain(other, vec![0, 1, 2, 3, 4]);
+        assert_eq!(known_start(&ctx, task), Some(3));
+        assert!(forbid_overlap_with_known_start(&mut ctx, task, other_task));
+        assert!(!ctx.domains[&other].values.borrow().contains(&3));
+    }
+
+    #[test]
+    fn mock_force_before_tightens_both_task_bounds() {
+        use crate::test_support::MockIntCtx;
+
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::new(0, 0));
+        let start_b = engine.new_variable(IntervalDomain::new(0, 0));
+        let before = DisjunctiveTask {
+            start: start_b,
+            duration: 3,
+        };
+        let after = DisjunctiveTask {
+            start: start_a,
+            duration: 3,
+        };
+        let mut ctx = MockIntCtx::new()
+            .with_domain(start_a, vec![0, 1, 2, 3, 4, 5])
+            .with_domain(start_b, vec![0, 1, 2, 3]);
+        assert!(force_before(&mut ctx, before, after));
+        assert!(
+            ctx.domains[&start_a]
+                .values
+                .borrow()
+                .iter()
+                .all(|&v| v >= 3)
+        );
+        assert!(
+            ctx.domains[&start_b]
+                .values
+                .borrow()
+                .iter()
+                .all(|&v| v <= 2)
+        );
+    }
+
+    #[test]
+    fn overlap_emerges_inside_loop_records_literals() {
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::new(0, 1));
+        let start_b = engine.new_variable(IntervalDomain::new(0, 1));
+        engine.trail_mark();
+        engine.add_propagator(Box::new(DisjunctivePropagator::new(vec![
+            DisjunctiveTask {
+                start: start_a,
+                duration: 2,
+            },
+            DisjunctiveTask {
+                start: start_b,
+                duration: 2,
+            },
+        ])));
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn mock_force_before_tightens_before_upper_bound() {
+        use crate::test_support::MockIntCtx;
+
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::new(0, 0));
+        let start_b = engine.new_variable(IntervalDomain::new(0, 0));
+        let before = DisjunctiveTask {
+            start: start_b,
+            duration: 2,
+        };
+        let after = DisjunctiveTask {
+            start: start_a,
+            duration: 2,
+        };
+        let mut ctx = MockIntCtx::new()
+            .with_domain(start_a, vec![0, 1, 2, 3, 4, 5])
+            .with_domain(start_b, vec![0, 1, 2, 3, 4, 5, 6]);
+        assert!(force_before(&mut ctx, before, after));
+        assert!(
+            ctx.domains[&start_b]
+                .values
+                .borrow()
+                .iter()
+                .all(|&v| v <= 4)
+        );
+    }
+
+    #[test]
+    fn energy_overload_returns_false_when_no_start_max() {
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::new(1, 0));
+        let start_b = engine.new_variable(IntervalDomain::new(1, 0));
+        let start_c = engine.new_variable(IntervalDomain::new(1, 0));
+        let tasks = vec![
+            DisjunctiveTask {
+                start: start_a,
+                duration: 2,
+            },
+            DisjunctiveTask {
+                start: start_b,
+                duration: 2,
+            },
+            DisjunctiveTask {
+                start: start_c,
+                duration: 2,
+            },
+        ];
+        let ctx = ReadOnlyEngine(&engine);
+        assert!(!disjunctive_energy_overload(&ctx, &tasks));
+    }
+
+    #[test]
+    fn overlap_emerges_on_second_loop_iteration() {
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::new(0, 4));
+        let start_b = engine.new_variable(IntervalDomain::new(0, 4));
+        engine.trail_mark();
+        engine.add_propagator(Box::new(DisjunctivePropagator::new(vec![
+            DisjunctiveTask {
+                start: start_a,
+                duration: 3,
+            },
+            DisjunctiveTask {
+                start: start_b,
+                duration: 3,
+            },
+        ])));
+        let status = engine.propagate_all().unwrap();
+        assert!(matches!(
+            status,
+            PropagationStatus::Failure
+                | PropagationStatus::OkChanged
+                | PropagationStatus::OkNoChange
+        ));
+    }
+
+    #[test]
+    fn mock_record_fixed_overlap_failure_records_literals() {
+        use crate::test_support::MockIntCtx;
+
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::new(0, 0));
+        let start_b = engine.new_variable(IntervalDomain::new(0, 0));
+        let mut ctx = MockIntCtx::new()
+            .with_domain(start_a, vec![0])
+            .with_domain(start_b, vec![0])
+            .with_fixed(start_a, 0)
+            .with_fixed(start_b, 0);
+        let left = DisjunctiveTask {
+            start: start_a,
+            duration: 2,
+        };
+        let right = DisjunctiveTask {
+            start: start_b,
+            duration: 2,
+        };
+        assert_eq!(
+            record_fixed_overlap_failure(&mut ctx, left, right),
+            Some(PropagationStatus::Failure)
+        );
+        assert!(!ctx.conflicts.borrow().is_empty());
+    }
+
+    #[test]
+    fn mock_force_before_remove_above_before_start() {
+        use crate::test_support::MockIntCtx;
+
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::new(0, 0));
+        let start_b = engine.new_variable(IntervalDomain::new(0, 0));
+        let before = DisjunctiveTask {
+            start: start_b,
+            duration: 2,
+        };
+        let after = DisjunctiveTask {
+            start: start_a,
+            duration: 2,
+        };
+        let mut ctx = MockIntCtx::new()
+            .with_domain(start_a, vec![0, 1, 2, 3])
+            .with_domain(start_b, vec![0, 1, 2, 3, 4, 5, 6]);
+        assert!(force_before(&mut ctx, before, after));
+        assert!(
+            ctx.domains[&start_b]
+                .values
+                .borrow()
+                .iter()
+                .all(|&v| v <= 1)
+        );
     }
 }

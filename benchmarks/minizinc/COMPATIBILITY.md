@@ -19,6 +19,9 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `set_union`, `set_intersect` | Supported | Set union/intersection propagators |
 | `float_le`, `float_eq` | Supported | Interval propagation |
 | `float_times` | Supported | Interval multiplication |
+| `int_abs`, `int_times`, `int_div`, `int_mod` | Supported | Table/reified decomposition (v0.7.0) |
+| `bool_not`, `bool_and`, `bool_or` | Supported | Table decomposition (v0.7.0) |
+| `automaton` | Supported | Compiled via `regular` propagator (v0.7.0) |
 
 ## Parameters
 
@@ -26,7 +29,9 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 |------|--------|
 | `int: n = N;` | Supported |
 | `array [L..U] of int: xs = [...];` | Supported |
-| Bool / float / set parameters | Not supported |
+| `bool: flag = true;` | Supported (v0.7.0) |
+| `float: pi = 3.14;` | Supported (v0.7.0) |
+| Set parameters | Not supported |
 
 ## Constraints
 
@@ -48,7 +53,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `inverse` | Supported | Inverse array propagator |
 | `diffn` | Supported | Non-overlap rectangles (fixed width/height) |
 | `regular` | Supported | DFA compiled to table propagator |
-| Other globals (`automaton`, …) | Not supported | Parse error: `Unsupported constraint` |
+| Other globals (`automaton` without transition table, …) | Partial / unsupported | See primitive table above |
 
 ### Partial support
 
@@ -60,8 +65,9 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `solve :: restart_constant(scale)` | Supported | Constant node budget between restarts |
 | `solve :: restart_geometric(base, scale)` | Supported | Geometric node budget; `base` may be a FlatZinc float literal |
 | `solve :: restart_none` | Supported | With or without `()` |
-| `predicate` declarations | Supported subset | Multi-constraint bodies (`/\` or `;` chains); inline expansion |
-| Unknown top-level statements (`annotation`, etc.) | **Rejected** | Parse error: unsupported top-level statement |
+| `predicate` declarations | Supported subset | Multi-constraint bodies; nested predicate calls (v0.7.0) |
+| `annotation` top-level | Skipped | Ignored during parse (v0.7.0) |
+| Unknown top-level statements (`function`, `test`, …) | **Rejected** | Parse error: unsupported top-level statement |
 
 ## Solve directives
 
@@ -118,7 +124,7 @@ Supported `int_search` value selectors: `indomain_min`, `indomain_max`, `indomai
 
 `bool_search` is supported with the same selector vocabulary as `int_search`.
 
-`incomplete` search is not supported. Supported restart policies include `restart_linear` and `restart_on_solution`.
+`incomplete` search is tolerated (mapped to complete). Supported restart policies include `restart_linear` and `restart_on_solution`.
 
 ## Performance benchmarks
 

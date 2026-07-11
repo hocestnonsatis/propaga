@@ -66,4 +66,25 @@ mod tests {
         engine.propagate_all().unwrap();
         assert!(!engine.hybrid_domain(left).contains(2));
     }
+
+    #[test]
+    fn fixed_left_removes_conflicting_right_value() {
+        let mut engine = Engine::new();
+        let left = engine.new_variable(IntervalDomain::fix(3));
+        let right = engine.new_variable(IntervalDomain::new(1, 3));
+        engine.add_propagator(Box::new(NotEqualOffsetPropagator::new(left, right, 1)));
+
+        engine.propagate_all().unwrap();
+        assert!(!engine.hybrid_domain(right).contains(2));
+    }
+
+    #[test]
+    fn empty_domain_after_prune_fails() {
+        let mut engine = Engine::new();
+        let left = engine.new_variable(IntervalDomain::fix(2));
+        let right = engine.new_variable(IntervalDomain::fix(1));
+        engine.add_propagator(Box::new(NotEqualOffsetPropagator::new(left, right, 1)));
+
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
 }

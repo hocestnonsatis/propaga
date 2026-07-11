@@ -17,6 +17,7 @@
 //! ```
 
 mod compile;
+mod decompose;
 mod error;
 mod parse;
 

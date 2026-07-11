@@ -7,6 +7,9 @@ cd "$ROOT"
 echo "==> cargo test --workspace"
 cargo test --workspace
 
+echo "==> FlatZinc compile corpus"
+cargo test -q -p propaga-flatzinc all_handwritten_fzn_instances_compile
+
 echo "==> FlatZinc benchmarks"
 cargo run -q -p propaga-cli -- solve --dir benchmarks --quiet
 

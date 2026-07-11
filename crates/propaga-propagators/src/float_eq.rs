@@ -46,3 +46,71 @@ impl Propagator for FloatEqPropagator {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use propaga_domains::{AnyDomain, FloatDomain};
+    use propaga_engine::Engine;
+
+    #[test]
+    fn propagates_float_eq_bounds() {
+        let mut engine = Engine::new();
+        let left = engine.new_variable(AnyDomain::Float(FloatDomain::new(1.0, 10.0)));
+        let right = engine.new_variable(AnyDomain::Float(FloatDomain::new(3.0, 7.0)));
+        engine.add_propagator(Box::new(FloatEqPropagator::new(left, right)));
+        engine.propagate_all().unwrap();
+        let left_domain = engine.domain(left).as_float().unwrap();
+        let right_domain = engine.domain(right).as_float().unwrap();
+        assert_eq!(left_domain.lower_bound(), 3.0);
+        assert_eq!(left_domain.upper_bound(), 7.0);
+        assert_eq!(right_domain.lower_bound(), 3.0);
+        assert_eq!(right_domain.upper_bound(), 7.0);
+    }
+
+    #[test]
+    fn already_equal_no_change() {
+        let mut engine = Engine::new();
+        let left = engine.new_variable(AnyDomain::Float(FloatDomain::fix(4.0)));
+        let right = engine.new_variable(AnyDomain::Float(FloatDomain::fix(4.0)));
+        engine.add_propagator(Box::new(FloatEqPropagator::new(left, right)));
+        assert_eq!(
+            engine.propagate_all().unwrap(),
+            PropagationStatus::OkNoChange
+        );
+    }
+
+    #[test]
+    fn disjoint_float_intervals_fail() {
+        let mut engine = Engine::new();
+        let left = engine.new_variable(AnyDomain::Float(FloatDomain::new(5.0, 10.0)));
+        let right = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 4.0)));
+        engine.add_propagator(Box::new(FloatEqPropagator::new(left, right)));
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn no_extended_context_returns_ok_no_change() {
+        use crate::test_support::NoExtendedCtx;
+        use propaga_domains::IntervalDomain;
+
+        let mut engine = Engine::new();
+        let _ = engine.new_variable(IntervalDomain::new(1, 5));
+        let left = engine.new_variable(AnyDomain::Float(FloatDomain::new(1.0, 10.0)));
+        let right = engine.new_variable(AnyDomain::Float(FloatDomain::new(1.0, 10.0)));
+        let mut prop = FloatEqPropagator::new(left, right);
+        let mut ctx = NoExtendedCtx::new(&mut engine);
+        assert_eq!(prop.propagate(&mut ctx), PropagationStatus::OkNoChange);
+    }
+
+    #[test]
+    fn integer_variables_fail() {
+        use propaga_domains::IntervalDomain;
+
+        let mut engine = Engine::new();
+        let left = engine.new_variable(IntervalDomain::new(1, 10));
+        let right = engine.new_variable(IntervalDomain::new(1, 10));
+        engine.add_propagator(Box::new(FloatEqPropagator::new(left, right)));
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
+}

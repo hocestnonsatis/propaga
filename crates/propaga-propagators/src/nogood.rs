@@ -120,4 +120,120 @@ mod tests {
         engine.propagate_all().unwrap();
         assert!(!engine.hybrid_domain(b).contains(2));
     }
+
+    #[test]
+    fn mismatched_fixed_value_no_change() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::fix(2));
+        let b = engine.new_variable(IntervalDomain::new(1, 3));
+        engine.add_propagator(Box::new(NogoodPropagator::new(vec![
+            NogoodLiteral {
+                variable: a,
+                value: 1,
+            },
+            NogoodLiteral {
+                variable: b,
+                value: 2,
+            },
+        ])));
+
+        assert_eq!(
+            engine.propagate_all().unwrap(),
+            PropagationStatus::OkNoChange
+        );
+    }
+
+    #[test]
+    fn multiple_open_literals_no_change() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::new(1, 3));
+        let b = engine.new_variable(IntervalDomain::new(1, 3));
+        let c = engine.new_variable(IntervalDomain::new(1, 3));
+        engine.add_propagator(Box::new(NogoodPropagator::new(vec![
+            NogoodLiteral {
+                variable: a,
+                value: 1,
+            },
+            NogoodLiteral {
+                variable: b,
+                value: 2,
+            },
+            NogoodLiteral {
+                variable: c,
+                value: 3,
+            },
+        ])));
+
+        assert_eq!(
+            engine.propagate_all().unwrap(),
+            PropagationStatus::OkNoChange
+        );
+    }
+
+    #[test]
+    fn prune_singleton_to_empty_domain_fails() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::fix(1));
+        let b = engine.new_variable(IntervalDomain::new(2, 2));
+        let mut prop = NogoodPropagator::new(vec![
+            NogoodLiteral {
+                variable: a,
+                value: 1,
+            },
+            NogoodLiteral {
+                variable: b,
+                value: 2,
+            },
+        ]);
+        use crate::test_support::MutEngine;
+        let mut ctx = MutEngine(&mut engine);
+        assert_eq!(prop.propagate(&mut ctx), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn prune_to_empty_domain_fails() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::fix(1));
+        let b = engine.new_variable(IntervalDomain::fix(2));
+        engine.add_propagator(Box::new(NogoodPropagator::new(vec![
+            NogoodLiteral {
+                variable: a,
+                value: 1,
+            },
+            NogoodLiteral {
+                variable: b,
+                value: 2,
+            },
+        ])));
+
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn mock_prune_singleton_to_empty_domain_fails() {
+        use crate::test_support::MockIntCtx;
+
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::new(0, 0));
+        let b = engine.new_variable(IntervalDomain::new(0, 0));
+        let literals = vec![
+            NogoodLiteral {
+                variable: a,
+                value: 1,
+            },
+            NogoodLiteral {
+                variable: b,
+                value: 2,
+            },
+        ];
+        let mut ctx = MockIntCtx::new()
+            .with_domain(a, vec![1])
+            .with_domain(b, vec![2])
+            .with_fixed(a, 1);
+        assert_eq!(
+            propagate_nogood_literals(&literals, &mut ctx),
+            PropagationStatus::Failure
+        );
+        assert!(ctx.domains[&b].values.borrow().is_empty());
+    }
 }

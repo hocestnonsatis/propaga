@@ -1,3 +1,4 @@
+use crate::reified::propagate_equal;
 use propaga_core::{PropagationContext, PropagationStatus, Propagator, VariableId};
 
 /// Propagates `left == right` using bound consistency.
@@ -23,23 +24,7 @@ impl Propagator for EqualityPropagator {
 
     fn propagate(&mut self, ctx: &mut dyn PropagationContext) -> PropagationStatus {
         let [left, right] = self.watched;
-        let mut changed = false;
-
-        if let Some(value) = ctx.fixed_value(left)
-            && tighten_to_point(ctx, right, value)
-        {
-            changed = true;
-        }
-
-        if let Some(value) = ctx.fixed_value(right)
-            && tighten_to_point(ctx, left, value)
-        {
-            changed = true;
-        }
-
-        if sync_bounds(ctx, left, right) {
-            changed = true;
-        }
+        let changed = propagate_equal(ctx, left, right);
 
         if ctx.domain(left).is_empty() || ctx.domain(right).is_empty() {
             PropagationStatus::Failure
@@ -51,44 +36,10 @@ impl Propagator for EqualityPropagator {
     }
 }
 
-fn tighten_to_point(ctx: &mut dyn PropagationContext, var: VariableId, value: i32) -> bool {
-    let mut changed = false;
-    if ctx.remove_below(var, value) {
-        changed = true;
-    }
-    if ctx.remove_above(var, value) {
-        changed = true;
-    }
-    changed
-}
-
-fn sync_bounds(ctx: &mut dyn PropagationContext, left: VariableId, right: VariableId) -> bool {
-    let mut changed = false;
-
-    if let (Some(min), Some(max)) = (ctx.domain(left).min(), ctx.domain(left).max()) {
-        if ctx.remove_below(right, min) {
-            changed = true;
-        }
-        if ctx.remove_above(right, max) {
-            changed = true;
-        }
-    }
-
-    if let (Some(min), Some(max)) = (ctx.domain(right).min(), ctx.domain(right).max()) {
-        if ctx.remove_below(left, min) {
-            changed = true;
-        }
-        if ctx.remove_above(left, max) {
-            changed = true;
-        }
-    }
-
-    changed
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::reified::propagate_equal;
     use propaga_core::DomainView;
     use propaga_domains::IntervalDomain;
     use propaga_engine::Engine;
@@ -116,5 +67,126 @@ mod tests {
         assert_eq!(engine.hybrid_domain(left).max(), Some(7));
         assert_eq!(engine.hybrid_domain(right).min(), Some(3));
         assert_eq!(engine.hybrid_domain(right).max(), Some(7));
+    }
+
+    #[test]
+    fn fixed_right_fixes_left() {
+        let mut engine = Engine::new();
+        let left = engine.new_variable(IntervalDomain::new(1, 10));
+        let right = engine.new_variable(IntervalDomain::fix(5));
+        engine.add_propagator(Box::new(EqualityPropagator::new(left, right)));
+
+        engine.propagate_all().unwrap();
+        assert_eq!(engine.hybrid_domain(left).fixed_value(), Some(5));
+    }
+
+    #[test]
+    fn already_satisfied_no_change() {
+        let mut engine = Engine::new();
+        let left = engine.new_variable(IntervalDomain::fix(4));
+        let right = engine.new_variable(IntervalDomain::fix(4));
+        engine.add_propagator(Box::new(EqualityPropagator::new(left, right)));
+
+        assert_eq!(
+            engine.propagate_all().unwrap(),
+            PropagationStatus::OkNoChange
+        );
+    }
+
+    #[test]
+    fn sync_bounds_from_right_tightens_left() {
+        let mut engine = Engine::new();
+        let left = engine.new_variable(IntervalDomain::new(0, 10));
+        let right = engine.new_variable(IntervalDomain::new(4, 6));
+        engine.add_propagator(Box::new(EqualityPropagator::new(left, right)));
+
+        engine.propagate_all().unwrap();
+        assert_eq!(engine.hybrid_domain(left).min(), Some(4));
+        assert_eq!(engine.hybrid_domain(left).max(), Some(6));
+    }
+
+    #[test]
+    fn sync_bounds_right_to_left_via_mock_ctx() {
+        use crate::test_support::MockIntCtx;
+
+        let mut engine = Engine::new();
+        let left = engine.new_variable(IntervalDomain::new(0, 0));
+        let right = engine.new_variable(IntervalDomain::new(0, 0));
+        let mut ctx = MockIntCtx::new()
+            .with_domain(left, vec![4, 5, 6, 10])
+            .with_domain(right, vec![4, 5, 6]);
+        let mut prop = EqualityPropagator::new(left, right);
+        assert_eq!(prop.propagate(&mut ctx), PropagationStatus::OkChanged);
+        assert_eq!(ctx.domains[&left].values.borrow().as_slice(), &[4, 5, 6]);
+    }
+
+    #[test]
+    fn propagate_equal_direct_helper_tightens_both_operands() {
+        use crate::test_support::MockIntCtx;
+
+        let mut engine = Engine::new();
+        let left = engine.new_variable(IntervalDomain::new(0, 0));
+        let right = engine.new_variable(IntervalDomain::new(0, 0));
+        let mut ctx = MockIntCtx::new()
+            .with_domain(left, vec![4, 5, 6])
+            .with_domain(right, vec![4, 5, 6, 10]);
+        assert!(propagate_equal(&mut ctx, left, right));
+        assert_eq!(ctx.domain_values(left), vec![4, 5, 6]);
+        assert_eq!(ctx.domain_values(right), vec![4, 5, 6]);
+    }
+
+    #[test]
+    fn empty_domain_returns_failure_status() {
+        use crate::test_support::MockIntCtx;
+
+        let mut engine = Engine::new();
+        let left = engine.new_variable(IntervalDomain::new(0, 0));
+        let right = engine.new_variable(IntervalDomain::new(0, 0));
+        let mut ctx = MockIntCtx::new()
+            .with_domain(left, vec![])
+            .with_domain(right, vec![1, 2, 3]);
+        let mut prop = EqualityPropagator::new(left, right);
+        assert_eq!(prop.propagate(&mut ctx), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn propagate_equal_no_change_returns_false() {
+        use crate::test_support::MockIntCtx;
+
+        let mut engine = Engine::new();
+        let left = engine.new_variable(IntervalDomain::new(0, 0));
+        let right = engine.new_variable(IntervalDomain::new(0, 0));
+        let mut ctx = MockIntCtx::new()
+            .with_domain(left, vec![4, 5, 6])
+            .with_domain(right, vec![4, 5, 6]);
+        assert!(!propagate_equal(&mut ctx, left, right));
+    }
+
+    #[test]
+    fn mock_propagate_equal_right_only_tightens_left() {
+        use crate::test_support::MockIntCtx;
+
+        let mut engine = Engine::new();
+        let left = engine.new_variable(IntervalDomain::new(0, 0));
+        let right = engine.new_variable(IntervalDomain::new(0, 0));
+        let mut ctx = MockIntCtx::new()
+            .with_domain(left, vec![1, 2, 3, 4, 5, 6])
+            .with_domain(right, vec![4, 5]);
+        assert!(propagate_equal(&mut ctx, left, right));
+        assert_eq!(ctx.domain_values(left), vec![4, 5]);
+    }
+
+    #[test]
+    fn mock_propagate_equal_remove_above_left_from_right_max() {
+        use crate::test_support::MockIntCtx;
+
+        let mut engine = Engine::new();
+        let left = engine.new_variable(IntervalDomain::new(0, 0));
+        let right = engine.new_variable(IntervalDomain::new(0, 0));
+        let mut ctx = MockIntCtx::new()
+            .with_domain(left, vec![4, 5, 6, 9])
+            .with_domain(right, vec![4, 5, 6]);
+        assert!(propagate_equal(&mut ctx, left, right));
+        assert_eq!(ctx.domain_values(left), vec![4, 5, 6]);
     }
 }

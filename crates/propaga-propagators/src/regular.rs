@@ -111,6 +111,7 @@ fn dfs_tuple(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use propaga_core::VariableId;
     use propaga_domains::IntervalDomain;
     use propaga_engine::Engine;
 
@@ -129,5 +130,38 @@ mod tests {
         )));
         let status = engine.propagate_all().unwrap();
         assert_ne!(status, propaga_core::PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn zero_length_accepts_start_state() {
+        let mut engine = Engine::new();
+        let transitions = vec![vec![2, 0], vec![0, 2]];
+        engine.add_propagator(Box::new(RegularPropagator::new(
+            Vec::<VariableId>::new(),
+            2,
+            transitions,
+            1,
+            &[1],
+        )));
+        assert_eq!(
+            engine.propagate_all().unwrap(),
+            PropagationStatus::OkNoChange
+        );
+    }
+
+    #[test]
+    fn invalid_transition_state_yields_no_tuples() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(IntervalDomain::new(1, 2));
+        let b = engine.new_variable(IntervalDomain::new(1, 2));
+        let transitions = vec![vec![2, 0], vec![0, 2]];
+        engine.add_propagator(Box::new(RegularPropagator::new(
+            vec![a, b],
+            3,
+            transitions,
+            3,
+            &[2],
+        )));
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
     }
 }

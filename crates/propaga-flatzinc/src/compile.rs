@@ -65,6 +65,12 @@ pub fn compile(program: FlatZincProgram) -> Result<CompiledInstance, FlatZincErr
             ParamDecl::IntArray { name, values } => {
                 env.insert(name, Binding::ParamArray(values));
             }
+            ParamDecl::Bool { name, value } => {
+                env.insert(name, Binding::Param(value));
+            }
+            ParamDecl::Float { name, value } => {
+                env.insert(name, Binding::FloatParam(value));
+            }
         }
     }
 
@@ -129,7 +135,7 @@ pub fn compile(program: FlatZincProgram) -> Result<CompiledInstance, FlatZincErr
         }
     }
 
-    for constraint in expand_predicates(program.constraints, &program.predicates) {
+    for constraint in expand_predicates(program.constraints, &program.predicates)? {
         post_constraint(&mut model, &env, constraint)?;
     }
 
@@ -190,6 +196,7 @@ fn compile_objectives(
 enum Binding {
     Param(i32),
     ParamArray(Vec<i32>),
+    FloatParam(f64),
     Var(VariableId),
     Array(HashMap<i32, VariableId>),
 }
@@ -210,11 +217,7 @@ fn compile_search_config(
         .or(annotations.bool_search.as_ref());
 
     let (variable_ordering, value_ordering) = if let Some(search) = search_annotation {
-        if !search.complete {
-            return Err(FlatZincError::Unsupported(
-                "incomplete search is not supported".to_string(),
-            ));
-        }
+        let _ = search.complete;
         (
             map_var_choice(&search.var_choice)?,
             map_value_choice(&search.value_choice)?,
@@ -327,6 +330,19 @@ fn post_constraint(
                         .map_err(|_| {
                             FlatZincError::Unsupported("failed to fix variable".to_string())
                         })?;
+                }
+                Expr::Name(name) => {
+                    if let Some(Binding::Param(value)) = env.get(&name) {
+                        model
+                            .engine_mut()
+                            .fix_variable(left_var, *value)
+                            .map_err(|_| {
+                                FlatZincError::Unsupported("failed to fix variable".to_string())
+                            })?;
+                    } else {
+                        let right_var = resolve_var(env, Expr::Name(name))?;
+                        model.equal(left_var, right_var);
+                    }
                 }
                 other => {
                     let right_var = resolve_var(env, other)?;
@@ -554,10 +570,69 @@ fn post_constraint(
             let c = resolve_var(env, c)?;
             model.float_times(a, b, c);
         }
-        Constraint::PredicateCall { .. } => {
-            return Err(FlatZincError::Unsupported(
-                "unexpanded predicate call".to_string(),
-            ));
+        Constraint::IntAbs(a, b) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            crate::decompose::int_abs(model, a, b);
+        }
+        Constraint::IntTimes(a, b, c) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            let c = resolve_var(env, c)?;
+            crate::decompose::int_times(model, a, b, c).map_err(FlatZincError::Unsupported)?;
+        }
+        Constraint::IntDiv(a, b, c) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            let c = resolve_var(env, c)?;
+            crate::decompose::int_div(model, a, b, c).map_err(FlatZincError::Unsupported)?;
+        }
+        Constraint::IntMod(a, b, c) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            let c = resolve_var(env, c)?;
+            crate::decompose::int_mod(model, a, b, c).map_err(FlatZincError::Unsupported)?;
+        }
+        Constraint::BoolNot(a, b) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            crate::decompose::bool_not(model, a, b);
+        }
+        Constraint::BoolAnd(a, b, c) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            let c = resolve_var(env, c)?;
+            crate::decompose::bool_and(model, a, b, c);
+        }
+        Constraint::BoolOr(a, b, c) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            let c = resolve_var(env, c)?;
+            crate::decompose::bool_or(model, a, b, c);
+        }
+        Constraint::Automaton {
+            vars,
+            num_symbols,
+            num_states,
+            transitions,
+            start,
+            accepting,
+        } => {
+            post_automaton(
+                model,
+                env,
+                vars,
+                num_symbols,
+                num_states,
+                transitions,
+                start,
+                accepting,
+            )?;
+        }
+        Constraint::PredicateCall { name, .. } => {
+            return Err(FlatZincError::Unsupported(format!(
+                "unexpanded predicate call `{name}`"
+            )));
         }
     }
     Ok(())
@@ -566,24 +641,31 @@ fn post_constraint(
 fn expand_predicates(
     constraints: Vec<Constraint>,
     predicates: &[PredicateDecl],
-) -> Vec<Constraint> {
+) -> Result<Vec<Constraint>, FlatZincError> {
     let lookup: HashMap<_, _> = predicates
         .iter()
         .map(|predicate| (predicate.name.as_str(), predicate))
         .collect();
-    constraints
-        .into_iter()
-        .flat_map(|constraint| match constraint {
+    let mut pending = constraints;
+    let mut expanded = Vec::new();
+    while let Some(constraint) = pending.pop() {
+        match constraint {
             Constraint::PredicateCall { name, args } => {
                 if let Some(predicate) = lookup.get(name.as_str()) {
-                    substitute_predicate(predicate, &args)
+                    for substituted in substitute_predicate(predicate, &args) {
+                        pending.push(substituted);
+                    }
                 } else {
-                    vec![Constraint::PredicateCall { name, args }]
+                    return Err(FlatZincError::Unsupported(format!(
+                        "unknown predicate `{name}`"
+                    )));
                 }
             }
-            other => vec![other],
-        })
-        .collect()
+            other => expanded.push(other),
+        }
+    }
+    expanded.reverse();
+    Ok(expanded)
 }
 
 fn substitute_predicate(predicate: &PredicateDecl, args: &[Expr]) -> Vec<Constraint> {
@@ -604,25 +686,197 @@ fn substitute_constraint(
     constraint: &Constraint,
     substitutions: &HashMap<String, Expr>,
 ) -> Constraint {
+    let map = |expr: &Expr| substitute_expr(expr, substitutions);
+    let map_list = |exprs: &[Expr]| exprs.iter().map(map).collect();
     match constraint {
-        Constraint::IntEq(left, right) => Constraint::IntEq(
-            substitute_expr(left, substitutions),
-            substitute_expr(right, substitutions),
-        ),
-        Constraint::IntNe(left, right) => Constraint::IntNe(
-            substitute_expr(left, substitutions),
-            substitute_expr(right, substitutions),
-        ),
-        Constraint::IntLe(left, right) => Constraint::IntLe(
-            substitute_expr(left, substitutions),
-            substitute_expr(right, substitutions),
-        ),
-        Constraint::AllDifferent(vars) => Constraint::AllDifferent(
-            vars.iter()
-                .map(|expr| substitute_expr(expr, substitutions))
-                .collect(),
-        ),
-        other => other.clone(),
+        Constraint::AllDifferent(vars) => Constraint::AllDifferent(map_list(vars)),
+        Constraint::IntEq(left, right) => Constraint::IntEq(map(left), map(right)),
+        Constraint::IntLinEq { coeffs, vars, rhs } => Constraint::IntLinEq {
+            coeffs: coeffs.clone(),
+            vars: map_list(vars),
+            rhs: *rhs,
+        },
+        Constraint::IntLinLe { coeffs, vars, rhs } => Constraint::IntLinLe {
+            coeffs: coeffs.clone(),
+            vars: map_list(vars),
+            rhs: *rhs,
+        },
+        Constraint::IntLinGe { coeffs, vars, rhs } => Constraint::IntLinGe {
+            coeffs: coeffs.clone(),
+            vars: map_list(vars),
+            rhs: *rhs,
+        },
+        Constraint::IntLinLeReif {
+            coeffs,
+            vars,
+            rhs,
+            reif,
+        } => Constraint::IntLinLeReif {
+            coeffs: coeffs.clone(),
+            vars: map_list(vars),
+            rhs: *rhs,
+            reif: map(reif),
+        },
+        Constraint::IntLinGeReif {
+            coeffs,
+            vars,
+            rhs,
+            reif,
+        } => Constraint::IntLinGeReif {
+            coeffs: coeffs.clone(),
+            vars: map_list(vars),
+            rhs: *rhs,
+            reif: map(reif),
+        },
+        Constraint::IntLinEqReif {
+            coeffs,
+            vars,
+            rhs,
+            reif,
+        } => Constraint::IntLinEqReif {
+            coeffs: coeffs.clone(),
+            vars: map_list(vars),
+            rhs: *rhs,
+            reif: map(reif),
+        },
+        Constraint::IntNe(left, right) => Constraint::IntNe(map(left), map(right)),
+        Constraint::IntLe(left, right) => Constraint::IntLe(map(left), map(right)),
+        Constraint::IntLt(left, right) => Constraint::IntLt(map(left), map(right)),
+        Constraint::IntGe(left, right) => Constraint::IntGe(map(left), map(right)),
+        Constraint::IntGt(left, right) => Constraint::IntGt(map(left), map(right)),
+        Constraint::IntEqReif(left, right, reif) => {
+            Constraint::IntEqReif(map(left), map(right), map(reif))
+        }
+        Constraint::IntNeReif(left, right, reif) => {
+            Constraint::IntNeReif(map(left), map(right), map(reif))
+        }
+        Constraint::IntLeReif(left, right, reif) => {
+            Constraint::IntLeReif(map(left), map(right), map(reif))
+        }
+        Constraint::IntLtReif(left, right, reif) => {
+            Constraint::IntLtReif(map(left), map(right), map(reif))
+        }
+        Constraint::IntGeReif(left, right, reif) => {
+            Constraint::IntGeReif(map(left), map(right), map(reif))
+        }
+        Constraint::IntGtReif(left, right, reif) => {
+            Constraint::IntGtReif(map(left), map(right), map(reif))
+        }
+        Constraint::Element {
+            array,
+            index,
+            value,
+        } => Constraint::Element {
+            array: map(array),
+            index: map(index),
+            value: map(value),
+        },
+        Constraint::Cumulative {
+            starts,
+            durations,
+            ends,
+            heights,
+            capacity,
+        } => Constraint::Cumulative {
+            starts: map(starts),
+            durations: durations.clone(),
+            ends: map(ends),
+            heights: heights.clone(),
+            capacity: *capacity,
+        },
+        Constraint::Disjunctive { starts, durations } => Constraint::Disjunctive {
+            starts: map(starts),
+            durations: durations.clone(),
+        },
+        Constraint::GlobalCardinality {
+            vars,
+            cover,
+            lbound,
+            ubound,
+        } => Constraint::GlobalCardinality {
+            vars: map(vars),
+            cover: map(cover),
+            lbound: lbound.as_ref().map(map),
+            ubound: ubound.as_ref().map(map),
+        },
+        Constraint::Table { vars, tuples } => Constraint::Table {
+            vars: map(vars),
+            tuples: tuples.clone(),
+        },
+        Constraint::BoolEq(left, right) => Constraint::BoolEq(map(left), map(right)),
+        Constraint::Bool2Int(bool_expr, int_expr) => {
+            Constraint::Bool2Int(map(bool_expr), map(int_expr))
+        }
+        Constraint::Circuit(successors) => Constraint::Circuit(map(successors)),
+        Constraint::Inverse { forward, backward } => Constraint::Inverse {
+            forward: map(forward),
+            backward: map(backward),
+        },
+        Constraint::Diffn {
+            xs,
+            ys,
+            widths,
+            heights,
+        } => Constraint::Diffn {
+            xs: map(xs),
+            ys: map(ys),
+            widths: widths.clone(),
+            heights: heights.clone(),
+        },
+        Constraint::PredicateCall { name, args } => Constraint::PredicateCall {
+            name: name.clone(),
+            args: map_list(args),
+        },
+        Constraint::Regular {
+            vars,
+            num_symbols,
+            num_states,
+            transitions,
+            start,
+            accepting,
+        } => Constraint::Regular {
+            vars: map_list(vars),
+            num_symbols: *num_symbols,
+            num_states: *num_states,
+            transitions: transitions.clone(),
+            start: *start,
+            accepting: accepting.clone(),
+        },
+        Constraint::SetCard(set, card) => Constraint::SetCard(map(set), *card),
+        Constraint::SetSubset(subset, superset) => {
+            Constraint::SetSubset(map(subset), map(superset))
+        }
+        Constraint::FloatLe(left, right) => Constraint::FloatLe(map(left), map(right)),
+        Constraint::FloatEq(left, right) => Constraint::FloatEq(map(left), map(right)),
+        Constraint::SetUnion(left, right, result) => {
+            Constraint::SetUnion(map(left), map(right), map(result))
+        }
+        Constraint::SetIntersect(left, right, result) => {
+            Constraint::SetIntersect(map(left), map(right), map(result))
+        }
+        Constraint::FloatTimes(a, b, c) => Constraint::FloatTimes(map(a), map(b), map(c)),
+        Constraint::IntAbs(a, b) => Constraint::IntAbs(map(a), map(b)),
+        Constraint::IntTimes(a, b, c) => Constraint::IntTimes(map(a), map(b), map(c)),
+        Constraint::IntDiv(a, b, c) => Constraint::IntDiv(map(a), map(b), map(c)),
+        Constraint::IntMod(a, b, c) => Constraint::IntMod(map(a), map(b), map(c)),
+        Constraint::BoolNot(a, b) => Constraint::BoolNot(map(a), map(b)),
+        Constraint::BoolAnd(a, b, c) => Constraint::BoolAnd(map(a), map(b), map(c)),
+        Constraint::BoolOr(a, b, c) => Constraint::BoolOr(map(a), map(b), map(c)),
+        Constraint::Automaton {
+            vars,
+            num_symbols,
+            num_states,
+            transitions,
+            start,
+            accepting,
+        } => Constraint::Automaton {
+            vars: map_list(vars),
+            num_symbols: *num_symbols,
+            num_states: *num_states,
+            transitions: transitions.clone(),
+            start: *start,
+            accepting: accepting.clone(),
+        },
     }
 }
 
@@ -727,6 +981,28 @@ fn post_regular(
     Ok(())
 }
 
+fn post_automaton(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    vars: Vec<Expr>,
+    num_symbols: i32,
+    num_states: i32,
+    transitions: String,
+    start: i32,
+    accepting: Vec<i32>,
+) -> Result<(), FlatZincError> {
+    post_regular(
+        model,
+        env,
+        vars,
+        num_symbols,
+        num_states,
+        transitions,
+        start,
+        accepting,
+    )
+}
+
 fn post_cumulative(
     model: &mut Model,
     env: &HashMap<String, Binding>,
@@ -822,6 +1098,9 @@ fn resolve_duration_binding(
             }
             Some(Binding::Param(_)) => Err(FlatZincError::Unsupported(format!(
                 "scalar `{name}` used as duration array"
+            ))),
+            Some(Binding::FloatParam(_)) => Err(FlatZincError::Unsupported(format!(
+                "float parameter `{name}` used as duration array"
             ))),
             Some(Binding::Var(_)) => Err(FlatZincError::Unsupported(format!(
                 "scalar variable `{name}` used as duration array"
@@ -1221,6 +1500,9 @@ fn resolve_int_array(
             Some(Binding::Var(_)) | Some(Binding::Array(_)) => Err(FlatZincError::Unsupported(
                 format!("variable `{name}` used as integer array"),
             )),
+            Some(Binding::FloatParam(_)) => Err(FlatZincError::Unsupported(format!(
+                "float parameter `{name}` used as integer array"
+            ))),
             None => Err(FlatZincError::UnknownIdentifier(name)),
         },
         Expr::Int(value) => Ok(vec![value]),
@@ -1240,6 +1522,9 @@ fn resolve_duration_values(
             Some(Binding::ParamArray(values)) => Ok(values.clone()),
             Some(Binding::Param(_)) => Err(FlatZincError::Unsupported(format!(
                 "scalar `{name}` used as duration array"
+            ))),
+            Some(Binding::FloatParam(_)) => Err(FlatZincError::Unsupported(format!(
+                "float parameter `{name}` used as duration array"
             ))),
             Some(Binding::Var(_)) | Some(Binding::Array(_)) => Err(FlatZincError::Unsupported(
                 format!("variable `{name}` used as duration array"),
@@ -1297,6 +1582,9 @@ fn resolve_var_list(
             Some(Binding::Param(_)) | Some(Binding::ParamArray(_)) => Err(
                 FlatZincError::Unsupported(format!("parameter `{name}` used as decision variable")),
             ),
+            Some(Binding::FloatParam(_)) => Err(FlatZincError::Unsupported(format!(
+                "float parameter `{name}` used as decision variable"
+            ))),
             None => Err(FlatZincError::UnknownIdentifier(name)),
         },
         other => resolve_var(env, other).map(|var| vec![var]),
@@ -1315,6 +1603,9 @@ fn resolve_var(env: &HashMap<String, Binding>, expr: Expr) -> Result<VariableId,
             ))),
             Some(Binding::Array(_)) => Err(FlatZincError::Unsupported(format!(
                 "array `{name}` requires an index"
+            ))),
+            Some(Binding::FloatParam(_)) => Err(FlatZincError::Unsupported(format!(
+                "float parameter `{name}` used as variable"
             ))),
             None => Err(FlatZincError::UnknownIdentifier(name)),
         },
@@ -1354,6 +1645,9 @@ fn resolve_int(env: &HashMap<String, Binding>, expr: Expr) -> Result<i32, FlatZi
             ))),
             Some(Binding::Array(_)) => Err(FlatZincError::Unsupported(format!(
                 "array `{name}` used as index"
+            ))),
+            Some(Binding::FloatParam(_)) => Err(FlatZincError::Unsupported(format!(
+                "float parameter `{name}` used as index"
             ))),
             None => Err(FlatZincError::UnknownIdentifier(name)),
         },

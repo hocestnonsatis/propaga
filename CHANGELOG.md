@@ -5,6 +5,33 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-07-12
+
+### Added
+
+- FlatZinc primitive constraints: `int_abs`, `int_times`, `int_div`, `int_mod`.
+- FlatZinc bool primitives: `bool_not`, `bool_and`, `bool_or`.
+- FlatZinc `automaton` global (compiled via `regular` propagator).
+- `bool` and `float` FlatZinc parameters.
+- Recursive nested predicate expansion with full constraint substitution.
+- Top-level `annotation` statements are skipped during parse.
+- `decompose` module in `propaga-flatzinc` for primitive constraint lowering.
+- Compile corpus test (`crates/propaga-flatzinc/tests/compile_corpus.rs`).
+- MiniZinc model corpus under `benchmarks/minizinc/models/`.
+- `scripts/flatzinc-compat-report.sh` for local MiniZinc compatibility checks.
+- Regression benchmarks: `int_abs.fzn`, `bool_logic.fzn`, `int_times.fzn`, `nested_predicate.fzn`, `automaton_chain.fzn`.
+
+### Changed
+
+- `incomplete` search annotations are tolerated (treated like `complete`).
+- Unknown predicates now produce explicit compile errors instead of silent `PredicateCall` leftovers.
+
+### Known limitations
+
+- `int_times` / `int_div` / `int_mod` use table decomposition with a 10_000 tuple cap.
+- Float parameters are parsed but not yet usable in float constraint expressions.
+- `function` / `test` top-level declarations remain unsupported.
+
 ## [0.6.0] - 2026-07-11
 
 ### Added

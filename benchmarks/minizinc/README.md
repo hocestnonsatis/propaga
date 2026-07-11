@@ -36,3 +36,11 @@ The root `benchmarks/` folder contains curated `.fzn` files (no MiniZinc toolcha
 | `int_search_restart.fzn` | `restart_luby` + minimize |
 
 When adding MiniZinc sources here, prefer small models that use supported constraints only. See [COMPATIBILITY.md](COMPATIBILITY.md) for the full list.
+
+## Compatibility report
+
+```bash
+bash scripts/flatzinc-compat-report.sh
+```
+
+Requires MiniZinc installed locally. CI uses only hand-written `.fzn` files.
