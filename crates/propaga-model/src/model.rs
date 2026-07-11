@@ -4,12 +4,13 @@ use propaga_engine::Engine;
 use propaga_propagators::{
     AllDifferentPropagator, CardinalityBound, CircuitPropagator, CumulativePropagator,
     DiffnPropagator, DisjunctivePropagator, DisjunctiveTask, ElementPropagator, EqualityPropagator,
-    FloatEqPropagator, FloatLePropagator, GlobalCardinalityPropagator, InversePropagator,
-    LessEqualPropagator, LessThanPropagator, LinearEqPropagator, LinearScalarGePropagator,
-    LinearScalarLePropagator, NotEqualOffsetPropagator, RectangleSpec, RegularPropagator,
-    ReifiedEqualityPropagator, ReifiedLessEqualPropagator, ReifiedLessThanPropagator,
-    ReifiedNotEqualPropagator, ReifiedScalarEqPropagator, ReifiedScalarGePropagator,
-    ReifiedScalarLePropagator, SetCardPropagator, SetSubsetPropagator, TablePropagator, TaskSpec,
+    FloatEqPropagator, FloatLePropagator, FloatTimesPropagator, GlobalCardinalityPropagator,
+    InversePropagator, LessEqualPropagator, LessThanPropagator, LinearEqPropagator,
+    LinearScalarGePropagator, LinearScalarLePropagator, NotEqualOffsetPropagator, RectangleSpec,
+    RegularPropagator, ReifiedEqualityPropagator, ReifiedLessEqualPropagator,
+    ReifiedLessThanPropagator, ReifiedNotEqualPropagator, ReifiedScalarEqPropagator,
+    ReifiedScalarGePropagator, ReifiedScalarLePropagator, SetCardPropagator,
+    SetIntersectPropagator, SetSubsetPropagator, SetUnionPropagator, TablePropagator, TaskSpec,
 };
 use propaga_search::{
     DepthFirstSearch, LexicographicOptimization, LexicographicResult, Objective,
@@ -132,6 +133,24 @@ impl Model {
     pub fn float_eq(&mut self, left: VariableId, right: VariableId) {
         self.engine
             .add_propagator(Box::new(FloatEqPropagator::new(left, right)));
+    }
+
+    /// Posts `result = left ∪ right`.
+    pub fn set_union(&mut self, left: VariableId, right: VariableId, result: VariableId) {
+        self.engine
+            .add_propagator(Box::new(SetUnionPropagator::new(left, right, result)));
+    }
+
+    /// Posts `result = left ∩ right`.
+    pub fn set_intersect(&mut self, left: VariableId, right: VariableId, result: VariableId) {
+        self.engine
+            .add_propagator(Box::new(SetIntersectPropagator::new(left, right, result)));
+    }
+
+    /// Posts `c = a * b` for float variables.
+    pub fn float_times(&mut self, a: VariableId, b: VariableId, c: VariableId) {
+        self.engine
+            .add_propagator(Box::new(FloatTimesPropagator::new(a, b, c)));
     }
 
     /// Posts `left == right`.

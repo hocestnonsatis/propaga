@@ -57,3 +57,38 @@ fn float_le_satisfiable() {
     let result = model.solve_subset(vec![x, y]);
     assert!(result.is_some());
 }
+
+#[test]
+fn set_union_satisfiable() {
+    let mut model = Model::new();
+    let a = model.set_var(1, 3, 1, 2);
+    let b = model.set_var(1, 3, 1, 2);
+    let u = model.set_var(1, 3, 2, 3);
+    model.set_union(a, b, u);
+    model.constrain_set_cardinality(u, 3, 3);
+    let result = model.solve_subset(vec![a, b, u]);
+    assert!(result.is_some());
+}
+
+#[test]
+fn set_intersect_satisfiable() {
+    let mut model = Model::new();
+    let a = model.set_var(1, 4, 2, 3);
+    let b = model.set_var(2, 5, 2, 3);
+    let i = model.set_var(1, 5, 1, 2);
+    model.set_intersect(a, b, i);
+    model.constrain_set_cardinality(i, 2, 2);
+    let result = model.solve_subset(vec![a, b, i]);
+    assert!(result.is_some());
+}
+
+#[test]
+fn float_times_satisfiable() {
+    let mut model = Model::new();
+    let a = model.float_var(2.0, 3.0);
+    let b = model.float_var(4.0, 5.0);
+    let c = model.float_var(0.0, 100.0);
+    model.float_times(a, b, c);
+    let result = model.solve_subset(vec![a, b, c]);
+    assert!(result.is_some());
+}
