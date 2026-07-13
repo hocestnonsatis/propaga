@@ -48,6 +48,13 @@ pub enum ParamDecl {
         /// Parameter value.
         value: f64,
     },
+    /// Fixed set parameter.
+    Set {
+        /// Parameter name.
+        name: String,
+        /// Contained values.
+        values: Vec<i32>,
+    },
 }
 
 /// A FlatZinc variable declaration.
@@ -112,7 +119,7 @@ pub enum VarDecl {
 }
 
 /// A FlatZinc constraint call.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Constraint {
     /// `all_different(...)`
     AllDifferent(Vec<Expr>),
@@ -169,6 +176,17 @@ pub enum Constraint {
     },
     /// `int_lin_eq_reif(coeffs, vars, rhs, reif)`
     IntLinEqReif {
+        /// Coefficients.
+        coeffs: Vec<i32>,
+        /// Variables or expressions.
+        vars: Vec<Expr>,
+        /// Right-hand side.
+        rhs: i32,
+        /// Reification variable.
+        reif: Expr,
+    },
+    /// `int_lin_ne_reif(coeffs, vars, rhs, reif)`
+    IntLinNeReif {
         /// Coefficients.
         coeffs: Vec<i32>,
         /// Variables or expressions.
@@ -272,6 +290,44 @@ pub enum Constraint {
         /// Heights (inline ints or param array).
         heights: DurationSpec,
     },
+    /// `count(xs, value, total)`
+    Count(Expr, Expr, Expr),
+    /// `among(n, xs, values)`
+    Among(Expr, Expr, Expr),
+    /// `at_least(n, xs, value)`
+    AtLeast(Expr, Expr, Expr),
+    /// `at_most(n, xs, value)`
+    AtMost(Expr, Expr, Expr),
+    /// `distribute(card, value, base)`
+    Distribute(Expr, Expr, Expr),
+    /// `nvalue(n, xs)`
+    Nvalue(Expr, Expr),
+    /// `lex_less(x, y)`
+    LexLess(Expr, Expr),
+    /// `lex_lesseq(x, y)`
+    LexLesseq(Expr, Expr),
+    /// `lex_greater(x, y)`
+    LexGreater(Expr, Expr),
+    /// `lex_greatereq(x, y)`
+    LexGreatereq(Expr, Expr),
+    /// `increasing(x)`
+    Increasing(Expr),
+    /// `decreasing(x)`
+    Decreasing(Expr),
+    /// `sort(x, y)`
+    Sort(Expr, Expr),
+    /// `float_dom(x, ranges)`
+    FloatDom(Expr, Vec<f64>),
+    /// `float_in(x, lo, hi)`
+    FloatIn(Expr, f64, f64),
+    /// `array_float_element(array, index, value)`
+    ArrayFloatElement(Expr, Expr, Expr),
+    /// `array_var_float_element(array, index, value)`
+    ArrayVarFloatElement(Expr, Expr, Expr),
+    /// `array_float_maximum(xs, m)`
+    ArrayFloatMaximum(Expr, Expr),
+    /// `array_float_minimum(xs, m)`
+    ArrayFloatMinimum(Expr, Expr),
     /// User-defined predicate call.
     PredicateCall {
         /// Predicate name.
@@ -298,6 +354,38 @@ pub enum Constraint {
     SetCard(Expr, i32),
     /// `set_subset(subset, superset)`
     SetSubset(Expr, Expr),
+    /// `set_eq(left, right)`
+    SetEq(Expr, Expr),
+    /// `set_in(value, set)`
+    SetIn(Expr, Expr),
+    /// `set_superset(superset, subset)`
+    SetSuperset(Expr, Expr),
+    /// `set_le(left, right)`
+    SetLe(Expr, Expr),
+    /// `set_ne(left, right)`
+    SetNe(Expr, Expr),
+    /// `set_lt(left, right)`
+    SetLt(Expr, Expr),
+    /// `set_diff(left, right, result)`
+    SetDiff(Expr, Expr, Expr),
+    /// `set_symdiff(left, right, result)`
+    SetSymdiff(Expr, Expr, Expr),
+    /// `set_eq_reif(left, right, reif)`
+    SetEqReif(Expr, Expr, Expr),
+    /// `set_ne_reif(left, right, reif)`
+    SetNeReif(Expr, Expr, Expr),
+    /// `set_in_reif(value, set, reif)`
+    SetInReif(Expr, Expr, Expr),
+    /// `set_subset_reif(subset, superset, reif)`
+    SetSubsetReif(Expr, Expr, Expr),
+    /// `set_superset_reif(superset, subset, reif)`
+    SetSupersetReif(Expr, Expr, Expr),
+    /// `set_le_reif(left, right, reif)`
+    SetLeReif(Expr, Expr, Expr),
+    /// `set_lt_reif(left, right, reif)`
+    SetLtReif(Expr, Expr, Expr),
+    /// `array_var_set_element(array, index, value)`
+    ArrayVarSetElement(Expr, Expr, Expr),
     /// `float_le(left, right)`
     FloatLe(Expr, Expr),
     /// `float_eq(left, right)`
@@ -308,6 +396,93 @@ pub enum Constraint {
     SetIntersect(Expr, Expr, Expr),
     /// `float_times(a, b, c)`
     FloatTimes(Expr, Expr, Expr),
+    /// `float_plus(a, b, c)`
+    FloatPlus(Expr, Expr, Expr),
+    /// `float_abs(a, b)`
+    FloatAbs(Expr, Expr),
+    /// `float_div(a, b, c)`
+    FloatDiv(Expr, Expr, Expr),
+    /// `float_lt(a, b)`
+    FloatLt(Expr, Expr),
+    /// `float_ne(a, b)`
+    FloatNe(Expr, Expr),
+    /// `float_max(a, b, c)`
+    FloatMax(Expr, Expr, Expr),
+    /// `float_min(a, b, c)`
+    FloatMin(Expr, Expr, Expr),
+    /// `int2float(i, f)`
+    Int2Float(Expr, Expr),
+    /// `float_sqrt(a, b)`
+    FloatSqrt(Expr, Expr),
+    /// `float_sin(a, b)`
+    FloatSin(Expr, Expr),
+    /// `float_cos(a, b)`
+    FloatCos(Expr, Expr),
+    /// `float_ln(a, b)`
+    FloatLn(Expr, Expr),
+    /// `float_log2(a, b)`
+    FloatLog2(Expr, Expr),
+    /// `float_exp(a, b)`
+    FloatExp(Expr, Expr),
+    /// `float_ceil(a, b)`
+    FloatCeil(Expr, Expr),
+    /// `float_floor(a, b)`
+    FloatFloor(Expr, Expr),
+    /// `float_round(a, b)`
+    FloatRound(Expr, Expr),
+    /// `float_lin_eq(coeffs, vars, rhs)`
+    FloatLinEq {
+        coeffs: Vec<f64>,
+        vars: Vec<Expr>,
+        rhs: f64,
+    },
+    /// `float_lin_ne(coeffs, vars, rhs)`
+    FloatLinNe {
+        coeffs: Vec<f64>,
+        vars: Vec<Expr>,
+        rhs: f64,
+    },
+    /// `float_lin_le(coeffs, vars, rhs)`
+    FloatLinLe {
+        coeffs: Vec<f64>,
+        vars: Vec<Expr>,
+        rhs: f64,
+    },
+    /// `float_lin_ge(coeffs, vars, rhs)`
+    FloatLinGe {
+        coeffs: Vec<f64>,
+        vars: Vec<Expr>,
+        rhs: f64,
+    },
+    /// `float_lin_le_reif(coeffs, vars, rhs, reif)`
+    FloatLinLeReif {
+        coeffs: Vec<f64>,
+        vars: Vec<Expr>,
+        rhs: f64,
+        reif: Expr,
+    },
+    /// `float_lin_ge_reif(coeffs, vars, rhs, reif)`
+    FloatLinGeReif {
+        coeffs: Vec<f64>,
+        vars: Vec<Expr>,
+        rhs: f64,
+        reif: Expr,
+    },
+    /// `float_lin_eq_reif(coeffs, vars, rhs, reif)`
+    FloatLinEqReif {
+        coeffs: Vec<f64>,
+        vars: Vec<Expr>,
+        rhs: f64,
+        reif: Expr,
+    },
+    /// `float_eq_reif(a, b, reif)`
+    FloatEqReif(Expr, Expr, Expr),
+    /// `float_ne_reif(a, b, reif)`
+    FloatNeReif(Expr, Expr, Expr),
+    /// `float_le_reif(a, b, reif)`
+    FloatLeReif(Expr, Expr, Expr),
+    /// `float_lt_reif(a, b, reif)`
+    FloatLtReif(Expr, Expr, Expr),
     /// `int_abs(a, b)` — b = |a|
     IntAbs(Expr, Expr),
     /// `int_times(a, b, c)`
@@ -322,6 +497,69 @@ pub enum Constraint {
     BoolAnd(Expr, Expr, Expr),
     /// `bool_or(a, b, c)`
     BoolOr(Expr, Expr, Expr),
+    /// `bool_xor(a, b, c)`
+    BoolXor(Expr, Expr, Expr),
+    /// `bool_clause(literals)`
+    BoolClause(Expr),
+    /// `bool_clause_reif(literals, reif)`
+    BoolClauseReif(Expr, Expr),
+    /// `bool_eq_reif(a, b, reif)`
+    BoolEqReif(Expr, Expr, Expr),
+    /// `bool_le(a, b)`
+    BoolLe(Expr, Expr),
+    /// `bool_le_reif(a, b, reif)`
+    BoolLeReif(Expr, Expr, Expr),
+    /// `bool_lt(a, b)`
+    BoolLt(Expr, Expr),
+    /// `bool_lt_reif(a, b, reif)`
+    BoolLtReif(Expr, Expr, Expr),
+    /// `bool_lin_eq(coeffs, vars, rhs)`
+    BoolLinEq {
+        coeffs: Vec<i32>,
+        vars: Vec<Expr>,
+        rhs: i32,
+    },
+    /// `bool_lin_le(coeffs, vars, rhs)`
+    BoolLinLe {
+        coeffs: Vec<i32>,
+        vars: Vec<Expr>,
+        rhs: i32,
+    },
+    /// `array_bool_and(xs, c)`
+    ArrayBoolAnd(Expr, Expr),
+    /// `array_bool_xor(xs, c)`
+    ArrayBoolXor(Expr, Expr),
+    /// `array_bool_element(array, index, value)`
+    ArrayBoolElement(Expr, Expr, Expr),
+    /// `array_var_bool_element(array, index, value)`
+    ArrayVarBoolElement(Expr, Expr, Expr),
+    /// `int_min(a, b, c)`
+    IntMin(Expr, Expr, Expr),
+    /// `int_max(a, b, c)`
+    IntMax(Expr, Expr, Expr),
+    /// `int_pow(base, exp, result)`
+    IntPow(Expr, Expr, Expr),
+    /// `int_pow_fixed(base, exp, result)`
+    IntPowFixed(Expr, i32, Expr),
+    /// `array_int_element(array, index, value)`
+    ArrayIntElement(Expr, Expr, Expr),
+    /// `array_var_int_element(array, index, value)`
+    ArrayVarIntElement(Expr, Expr, Expr),
+    /// `array_int_maximum(xs, m)`
+    ArrayIntMaximum(Expr, Expr),
+    /// `array_int_minimum(xs, m)`
+    ArrayIntMinimum(Expr, Expr),
+    /// `int_plus(a, b, c)`
+    IntPlus(Expr, Expr, Expr),
+    /// `int_lin_ne(coeffs, vars, rhs)`
+    IntLinNe {
+        /// Coefficients.
+        coeffs: Vec<i32>,
+        /// Variables or expressions.
+        vars: Vec<Expr>,
+        /// Right-hand side.
+        rhs: i32,
+    },
     /// `automaton(vars, symbols, states, transitions, start, accepting)`
     Automaton {
         /// Sequence variables.
@@ -340,7 +578,7 @@ pub enum Constraint {
 }
 
 /// A parsed user-defined predicate with one or more constraint bodies.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PredicateDecl {
     /// Predicate name.
     pub name: String,
@@ -605,6 +843,8 @@ impl Parser {
                 params.push(self.parse_bool_param()?);
             } else if self.peek_is_ident("float") {
                 params.push(self.parse_float_param()?);
+            } else if self.peek_is_ident("set") {
+                params.push(self.parse_set_param()?);
             } else if self.peek_is_ident("constraint") {
                 constraints.push(self.parse_constraint()?);
             } else if self.peek_is_ident("solve") {
@@ -619,13 +859,9 @@ impl Parser {
             } else if self.peek_is_ident("predicate") {
                 predicates.push(self.parse_predicate_decl()?);
             } else if self.peek_is_ident("function") {
-                return Err(FlatZincError::Unsupported(
-                    "function declarations are not supported".to_string(),
-                ));
+                self.skip_until_semicolon_or_eof();
             } else if self.peek_is_ident("test") {
-                return Err(FlatZincError::Unsupported(
-                    "test declarations are not supported".to_string(),
-                ));
+                self.skip_until_semicolon_or_eof();
             } else if self.peek_is_ident("annotation") {
                 self.skip_until_semicolon_or_eof();
             } else {
@@ -724,6 +960,17 @@ impl Parser {
             .parse::<f64>()
             .map_err(|_| FlatZincError::Unsupported("invalid float literal".into()))?;
         Ok(ParamDecl::Float { name, value })
+    }
+
+    fn parse_set_param(&mut self) -> Result<ParamDecl, FlatZincError> {
+        self.expect_ident("set")?;
+        self.expect_ident("of")?;
+        let _ = self.parse_domain()?;
+        self.expect_symbol(":")?;
+        let name = self.expect_ident_token()?;
+        self.expect_symbol("=")?;
+        let values = self.parse_tuple_set()?;
+        Ok(ParamDecl::Set { name, values })
     }
 
     fn skip_until_semicolon_or_eof(&mut self) {
@@ -972,6 +1219,25 @@ impl Parser {
                     reif,
                 }
             }
+            "int_lin_ne_reif" => {
+                self.expect_symbol("[")?;
+                let coeffs = self.parse_int_list()?;
+                self.expect_symbol("]")?;
+                self.expect_symbol(",")?;
+                self.expect_symbol("[")?;
+                let vars = self.parse_expr_list()?;
+                self.expect_symbol("]")?;
+                self.expect_symbol(",")?;
+                let rhs = self.expect_int()?;
+                self.expect_symbol(",")?;
+                let reif = self.parse_expr()?;
+                Constraint::IntLinNeReif {
+                    coeffs,
+                    vars,
+                    rhs,
+                    reif,
+                }
+            }
             "int_ne" => {
                 let left = self.parse_expr()?;
                 self.expect_symbol(",")?;
@@ -1093,6 +1359,134 @@ impl Parser {
                 let durations = self.parse_duration_spec()?;
                 Constraint::Disjunctive { starts, durations }
             }
+            "count" => {
+                let xs = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let value = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let total = self.parse_expr()?;
+                Constraint::Count(xs, value, total)
+            }
+            "among" => {
+                let n = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let xs = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let values = self.parse_expr()?;
+                Constraint::Among(n, xs, values)
+            }
+            "at_least" => {
+                let n = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let xs = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let value = self.parse_expr()?;
+                Constraint::AtLeast(n, xs, value)
+            }
+            "at_most" => {
+                let n = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let xs = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let value = self.parse_expr()?;
+                Constraint::AtMost(n, xs, value)
+            }
+            "distribute" => {
+                let card = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let value = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let base = self.parse_expr()?;
+                Constraint::Distribute(card, value, base)
+            }
+            "nvalue" => {
+                let n = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let xs = self.parse_expr()?;
+                Constraint::Nvalue(n, xs)
+            }
+            "lex_less" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                Constraint::LexLess(left, right)
+            }
+            "lex_lesseq" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                Constraint::LexLesseq(left, right)
+            }
+            "lex_greater" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                Constraint::LexGreater(left, right)
+            }
+            "lex_greatereq" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                Constraint::LexGreatereq(left, right)
+            }
+            "increasing" => {
+                let xs = self.parse_expr()?;
+                Constraint::Increasing(xs)
+            }
+            "decreasing" => {
+                let xs = self.parse_expr()?;
+                Constraint::Decreasing(xs)
+            }
+            "sort" => {
+                let x = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let y = self.parse_expr()?;
+                Constraint::Sort(x, y)
+            }
+            "float_dom" => {
+                let x = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                self.expect_symbol("[")?;
+                let ranges = self.parse_float_list()?;
+                self.expect_symbol("]")?;
+                Constraint::FloatDom(x, ranges)
+            }
+            "float_in" => {
+                let x = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let lo = self.expect_float()?;
+                self.expect_symbol(",")?;
+                let hi = self.expect_float()?;
+                Constraint::FloatIn(x, lo, hi)
+            }
+            "array_float_element" => {
+                let array = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let index = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let value = self.parse_expr()?;
+                Constraint::ArrayFloatElement(array, index, value)
+            }
+            "array_var_float_element" => {
+                let array = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let index = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let value = self.parse_expr()?;
+                Constraint::ArrayVarFloatElement(array, index, value)
+            }
+            "array_float_maximum" => {
+                let xs = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let m = self.parse_expr()?;
+                Constraint::ArrayFloatMaximum(xs, m)
+            }
+            "array_float_minimum" => {
+                let xs = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let m = self.parse_expr()?;
+                Constraint::ArrayFloatMinimum(xs, m)
+            }
             "global_cardinality" => {
                 let first = self.parse_expr()?;
                 self.expect_symbol(",")?;
@@ -1197,6 +1591,122 @@ impl Parser {
                 let superset = self.parse_expr()?;
                 Constraint::SetSubset(subset, superset)
             }
+            "set_eq" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                Constraint::SetEq(left, right)
+            }
+            "set_in" => {
+                let value = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let set = self.parse_expr()?;
+                Constraint::SetIn(value, set)
+            }
+            "set_superset" => {
+                let superset = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let subset = self.parse_expr()?;
+                Constraint::SetSuperset(superset, subset)
+            }
+            "set_le" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                Constraint::SetLe(left, right)
+            }
+            "set_ne" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                Constraint::SetNe(left, right)
+            }
+            "set_lt" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                Constraint::SetLt(left, right)
+            }
+            "set_diff" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let result = self.parse_expr()?;
+                Constraint::SetDiff(left, right, result)
+            }
+            "set_symdiff" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let result = self.parse_expr()?;
+                Constraint::SetSymdiff(left, right, result)
+            }
+            "set_eq_reif" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let reif = self.parse_expr()?;
+                Constraint::SetEqReif(left, right, reif)
+            }
+            "set_ne_reif" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let reif = self.parse_expr()?;
+                Constraint::SetNeReif(left, right, reif)
+            }
+            "set_in_reif" => {
+                let value = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let set = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let reif = self.parse_expr()?;
+                Constraint::SetInReif(value, set, reif)
+            }
+            "set_subset_reif" => {
+                let subset = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let superset = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let reif = self.parse_expr()?;
+                Constraint::SetSubsetReif(subset, superset, reif)
+            }
+            "set_superset_reif" => {
+                let superset = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let subset = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let reif = self.parse_expr()?;
+                Constraint::SetSupersetReif(superset, subset, reif)
+            }
+            "set_le_reif" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let reif = self.parse_expr()?;
+                Constraint::SetLeReif(left, right, reif)
+            }
+            "set_lt_reif" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let reif = self.parse_expr()?;
+                Constraint::SetLtReif(left, right, reif)
+            }
+            "array_var_set_element" | "array_var_set_element_nonshifted" => {
+                let array = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let index = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let value = self.parse_expr()?;
+                Constraint::ArrayVarSetElement(array, index, value)
+            }
             "float_le" => {
                 let left = self.parse_expr()?;
                 self.expect_symbol(",")?;
@@ -1232,6 +1742,253 @@ impl Parser {
                 self.expect_symbol(",")?;
                 let c = self.parse_expr()?;
                 Constraint::FloatTimes(a, b, c)
+            }
+            "float_plus" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let c = self.parse_expr()?;
+                Constraint::FloatPlus(a, b, c)
+            }
+            "float_abs" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                Constraint::FloatAbs(a, b)
+            }
+            "float_div" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let c = self.parse_expr()?;
+                Constraint::FloatDiv(a, b, c)
+            }
+            "float_lt" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                Constraint::FloatLt(a, b)
+            }
+            "float_ne" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                Constraint::FloatNe(a, b)
+            }
+            "float_max" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let c = self.parse_expr()?;
+                Constraint::FloatMax(a, b, c)
+            }
+            "float_min" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let c = self.parse_expr()?;
+                Constraint::FloatMin(a, b, c)
+            }
+            "int2float" => {
+                let int_var = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let float_var = self.parse_expr()?;
+                Constraint::Int2Float(int_var, float_var)
+            }
+            "float_sqrt" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                Constraint::FloatSqrt(a, b)
+            }
+            "float_sin" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                Constraint::FloatSin(a, b)
+            }
+            "float_cos" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                Constraint::FloatCos(a, b)
+            }
+            "float_ln" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                Constraint::FloatLn(a, b)
+            }
+            "float_log2" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                Constraint::FloatLog2(a, b)
+            }
+            "float_exp" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                Constraint::FloatExp(a, b)
+            }
+            "float_ceil" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                Constraint::FloatCeil(a, b)
+            }
+            "float_floor" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                Constraint::FloatFloor(a, b)
+            }
+            "float_round" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                Constraint::FloatRound(a, b)
+            }
+            "float_lin_eq" => {
+                self.expect_symbol("[")?;
+                let coeffs = self.parse_float_list()?;
+                self.expect_symbol("]")?;
+                self.expect_symbol(",")?;
+                self.expect_symbol("[")?;
+                let vars = self.parse_expr_list()?;
+                self.expect_symbol("]")?;
+                self.expect_symbol(",")?;
+                let rhs = self.expect_float()?;
+                Constraint::FloatLinEq { coeffs, vars, rhs }
+            }
+            "float_lin_ne" => {
+                self.expect_symbol("[")?;
+                let coeffs = self.parse_float_list()?;
+                self.expect_symbol("]")?;
+                self.expect_symbol(",")?;
+                self.expect_symbol("[")?;
+                let vars = self.parse_expr_list()?;
+                self.expect_symbol("]")?;
+                self.expect_symbol(",")?;
+                let rhs = self.expect_float()?;
+                Constraint::FloatLinNe { coeffs, vars, rhs }
+            }
+            "float_lin_le" => {
+                self.expect_symbol("[")?;
+                let coeffs = self.parse_float_list()?;
+                self.expect_symbol("]")?;
+                self.expect_symbol(",")?;
+                self.expect_symbol("[")?;
+                let vars = self.parse_expr_list()?;
+                self.expect_symbol("]")?;
+                self.expect_symbol(",")?;
+                let rhs = self.expect_float()?;
+                Constraint::FloatLinLe { coeffs, vars, rhs }
+            }
+            "float_lin_ge" => {
+                self.expect_symbol("[")?;
+                let coeffs = self.parse_float_list()?;
+                self.expect_symbol("]")?;
+                self.expect_symbol(",")?;
+                self.expect_symbol("[")?;
+                let vars = self.parse_expr_list()?;
+                self.expect_symbol("]")?;
+                self.expect_symbol(",")?;
+                let rhs = self.expect_float()?;
+                Constraint::FloatLinGe { coeffs, vars, rhs }
+            }
+            "float_lin_le_reif" => {
+                self.expect_symbol("[")?;
+                let coeffs = self.parse_float_list()?;
+                self.expect_symbol("]")?;
+                self.expect_symbol(",")?;
+                self.expect_symbol("[")?;
+                let vars = self.parse_expr_list()?;
+                self.expect_symbol("]")?;
+                self.expect_symbol(",")?;
+                let rhs = self.expect_float()?;
+                self.expect_symbol(",")?;
+                let reif = self.parse_expr()?;
+                Constraint::FloatLinLeReif {
+                    coeffs,
+                    vars,
+                    rhs,
+                    reif,
+                }
+            }
+            "float_lin_ge_reif" => {
+                self.expect_symbol("[")?;
+                let coeffs = self.parse_float_list()?;
+                self.expect_symbol("]")?;
+                self.expect_symbol(",")?;
+                self.expect_symbol("[")?;
+                let vars = self.parse_expr_list()?;
+                self.expect_symbol("]")?;
+                self.expect_symbol(",")?;
+                let rhs = self.expect_float()?;
+                self.expect_symbol(",")?;
+                let reif = self.parse_expr()?;
+                Constraint::FloatLinGeReif {
+                    coeffs,
+                    vars,
+                    rhs,
+                    reif,
+                }
+            }
+            "float_lin_eq_reif" => {
+                self.expect_symbol("[")?;
+                let coeffs = self.parse_float_list()?;
+                self.expect_symbol("]")?;
+                self.expect_symbol(",")?;
+                self.expect_symbol("[")?;
+                let vars = self.parse_expr_list()?;
+                self.expect_symbol("]")?;
+                self.expect_symbol(",")?;
+                let rhs = self.expect_float()?;
+                self.expect_symbol(",")?;
+                let reif = self.parse_expr()?;
+                Constraint::FloatLinEqReif {
+                    coeffs,
+                    vars,
+                    rhs,
+                    reif,
+                }
+            }
+            "float_eq_reif" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let reif = self.parse_expr()?;
+                Constraint::FloatEqReif(a, b, reif)
+            }
+            "float_ne_reif" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let reif = self.parse_expr()?;
+                Constraint::FloatNeReif(a, b, reif)
+            }
+            "float_le_reif" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let reif = self.parse_expr()?;
+                Constraint::FloatLeReif(a, b, reif)
+            }
+            "float_lt_reif" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let reif = self.parse_expr()?;
+                Constraint::FloatLtReif(a, b, reif)
             }
             "int_abs" => {
                 let a = self.parse_expr()?;
@@ -1284,6 +2041,192 @@ impl Parser {
                 self.expect_symbol(",")?;
                 let c = self.parse_expr()?;
                 Constraint::BoolOr(a, b, c)
+            }
+            "bool_xor" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let c = self.parse_expr()?;
+                Constraint::BoolXor(a, b, c)
+            }
+            "bool_clause" => {
+                let literals = self.parse_expr()?;
+                Constraint::BoolClause(literals)
+            }
+            "bool_clause_reif" => {
+                let literals = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let reif = self.parse_expr()?;
+                Constraint::BoolClauseReif(literals, reif)
+            }
+            "bool_eq_reif" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let reif = self.parse_expr()?;
+                Constraint::BoolEqReif(left, right, reif)
+            }
+            "bool_le" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                Constraint::BoolLe(left, right)
+            }
+            "bool_le_reif" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let reif = self.parse_expr()?;
+                Constraint::BoolLeReif(left, right, reif)
+            }
+            "bool_lt" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                Constraint::BoolLt(left, right)
+            }
+            "bool_lt_reif" => {
+                let left = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let right = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let reif = self.parse_expr()?;
+                Constraint::BoolLtReif(left, right, reif)
+            }
+            "bool_lin_eq" => {
+                self.expect_symbol("[")?;
+                let coeffs = self.parse_int_list()?;
+                self.expect_symbol("]")?;
+                self.expect_symbol(",")?;
+                self.expect_symbol("[")?;
+                let vars = self.parse_expr_list()?;
+                self.expect_symbol("]")?;
+                self.expect_symbol(",")?;
+                let rhs = self.expect_int()?;
+                Constraint::BoolLinEq { coeffs, vars, rhs }
+            }
+            "bool_lin_le" => {
+                self.expect_symbol("[")?;
+                let coeffs = self.parse_int_list()?;
+                self.expect_symbol("]")?;
+                self.expect_symbol(",")?;
+                self.expect_symbol("[")?;
+                let vars = self.parse_expr_list()?;
+                self.expect_symbol("]")?;
+                self.expect_symbol(",")?;
+                let rhs = self.expect_int()?;
+                Constraint::BoolLinLe { coeffs, vars, rhs }
+            }
+            "array_bool_and" => {
+                let xs = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let c = self.parse_expr()?;
+                Constraint::ArrayBoolAnd(xs, c)
+            }
+            "array_bool_xor" => {
+                let xs = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let c = self.parse_expr()?;
+                Constraint::ArrayBoolXor(xs, c)
+            }
+            "array_bool_element" => {
+                let array = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let index = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let value = self.parse_expr()?;
+                Constraint::ArrayBoolElement(array, index, value)
+            }
+            "array_var_bool_element" | "array_var_bool_element_nonshifted" => {
+                let array = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let index = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let value = self.parse_expr()?;
+                Constraint::ArrayVarBoolElement(array, index, value)
+            }
+            "int_plus" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let c = self.parse_expr()?;
+                Constraint::IntPlus(a, b, c)
+            }
+            "int_min" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let c = self.parse_expr()?;
+                Constraint::IntMin(a, b, c)
+            }
+            "int_max" => {
+                let a = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let b = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let c = self.parse_expr()?;
+                Constraint::IntMax(a, b, c)
+            }
+            "int_pow" => {
+                let base = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let exp = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let result = self.parse_expr()?;
+                Constraint::IntPow(base, exp, result)
+            }
+            "int_pow_fixed" => {
+                let base = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let exp = self.expect_int()?;
+                self.expect_symbol(",")?;
+                let result = self.parse_expr()?;
+                Constraint::IntPowFixed(base, exp, result)
+            }
+            "array_int_element" => {
+                let array = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let index = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let value = self.parse_expr()?;
+                Constraint::ArrayIntElement(array, index, value)
+            }
+            "array_var_int_element" => {
+                let array = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let index = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let value = self.parse_expr()?;
+                Constraint::ArrayVarIntElement(array, index, value)
+            }
+            "array_int_maximum" => {
+                let xs = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let m = self.parse_expr()?;
+                Constraint::ArrayIntMaximum(xs, m)
+            }
+            "array_int_minimum" => {
+                let xs = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let m = self.parse_expr()?;
+                Constraint::ArrayIntMinimum(xs, m)
+            }
+            "int_lin_ne" => {
+                self.expect_symbol("[")?;
+                let coeffs = self.parse_int_list()?;
+                self.expect_symbol("]")?;
+                self.expect_symbol(",")?;
+                self.expect_symbol("[")?;
+                let vars = self.parse_expr_list()?;
+                self.expect_symbol("]")?;
+                self.expect_symbol(",")?;
+                let rhs = self.expect_int()?;
+                Constraint::IntLinNe { coeffs, vars, rhs }
             }
             "automaton" => {
                 let vars_expr = self.parse_expr()?;
@@ -1355,9 +2298,13 @@ impl Parser {
                     self.expect_ident("int")?;
                 } else if self.peek_is_ident("bool") {
                     self.expect_ident("bool")?;
+                } else if self.peek_is_ident("set") {
+                    self.expect_ident("set")?;
+                } else if self.peek_is_ident("float") {
+                    self.expect_ident("float")?;
                 } else {
                     return Err(FlatZincError::Unsupported(
-                        "predicate parameters must be var int or var bool".to_string(),
+                        "predicate parameters must be var int, bool, set, or float".to_string(),
                     ));
                 }
                 self.expect_symbol(":")?;
@@ -1757,6 +2704,27 @@ impl Parser {
         Ok(values)
     }
 
+    fn parse_float_list(&mut self) -> Result<Vec<f64>, FlatZincError> {
+        let mut values = Vec::new();
+        if self.peek_is_symbol("]") {
+            return Ok(values);
+        }
+        loop {
+            values.push(self.expect_float()?);
+            if self.peek_is_symbol("]") {
+                break;
+            }
+            self.expect_symbol(",")?;
+        }
+        Ok(values)
+    }
+
+    fn expect_float(&mut self) -> Result<f64, FlatZincError> {
+        self.expect_float_text()?
+            .parse::<f64>()
+            .map_err(|_| FlatZincError::Unsupported("invalid float literal".to_string()))
+    }
+
     fn parse_expr(&mut self) -> Result<Expr, FlatZincError> {
         if self.peek_is_symbol("[") {
             self.expect_symbol("[")?;
@@ -2001,6 +2969,32 @@ mod tests {
     }
 
     #[test]
+    fn skips_function_declaration() {
+        let source = r#"
+            function int: id(int: x) = x;
+            var 1..3: a;
+            constraint int_eq(a, 2);
+            solve satisfy;
+        "#;
+        let program = parse(source).expect("function should be skipped like annotation");
+        assert_eq!(program.variables.len(), 1);
+        assert_eq!(program.constraints.len(), 1);
+    }
+
+    #[test]
+    fn skips_test_declaration() {
+        let source = r#"
+            test check() = assert(true);
+            var 1..3: a;
+            constraint int_eq(a, 2);
+            solve satisfy;
+        "#;
+        let program = parse(source).expect("test should be skipped like annotation");
+        assert_eq!(program.variables.len(), 1);
+        assert_eq!(program.constraints.len(), 1);
+    }
+
+    #[test]
     fn skips_annotation_top_level_statement() {
         let source = r#"
             annotation foo;
@@ -2128,6 +3122,19 @@ mod tests {
         "#;
         let program = parse(source).expect("multi-constraint predicate should parse");
         assert_eq!(program.predicates[0].body.len(), 2);
+    }
+
+    #[test]
+    fn parses_set_parameter() {
+        let source = r#"
+            set of 1..3: allowed = {1, 3};
+            var 1..3: x;
+            constraint set_in(x, allowed);
+            solve satisfy;
+        "#;
+        let program = parse(source).expect("set parameter should parse");
+        assert_eq!(program.params.len(), 1);
+        assert!(matches!(&program.params[0], ParamDecl::Set { .. }));
     }
 
     #[test]

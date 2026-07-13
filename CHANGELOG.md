@@ -5,6 +5,33 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - TBD
+
+### Added
+
+- Full MiniZinc FlatZinc 1.6 builtin support for the standard library workflow (int / bool / set / float).
+- Set parameters and extended predicate parameter types (`var set`, `var float`).
+- Float and set single-objective optimization (`minimize` / `maximize`).
+- Stdlib global decompositions: `count`, `among`, `at_least`, `at_most`, `distribute`, `nvalue`, lexicographic and monotonicity globals.
+- Integer / float primitives: `int_plus`, `int_lin_ne`, `int_min`/`int_max`/`int_pow`, generic `min`/`max`, full bool builtin set.
+- Float core: interval arithmetic, linear constraints, reified forms, unary transcendental ops (`float_sin`, `float_log2`, …).
+- Set builtins beyond union/intersect: equality, reified comparisons, `set_in`, etc.
+- MiniZinc stdlib corpus (`benchmarks/minizinc/stdlib/`) with bundled FlatZinc fixtures and CI `minizinc-stdlib` job.
+- `scripts/flatzinc-full-compat-report.sh` acceptance gate for models + stdlib.
+
+### Changed
+
+- `function` and `test` top-level declarations are skipped during parse (like `annotation`).
+- Unknown `min` / `max` predicate calls dispatch to `int_*` or `float_*` by variable domain.
+- Optimization objectives use typed `ObjectiveSpec` (int, float, set cardinality) with JSON/plain CLI output.
+
+### Known limitations
+
+- `sort`, `array_float_*`, `float_dom`, and `float_in` FlatZinc builtins are not yet supported.
+- Lexicographic and Pareto multi-objective search remain int-only.
+- Table-based int decompositions (`int_times`, `int_pow`, …) cap at 10 000 tuples.
+- Float propagation is interval-based (conservative, not exact real arithmetic).
+
 ## [0.7.0] - 2026-07-12
 
 ### Added

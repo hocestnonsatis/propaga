@@ -41,6 +41,23 @@ When adding MiniZinc sources here, prefer small models that use supported constr
 
 ```bash
 bash scripts/flatzinc-compat-report.sh
+bash scripts/flatzinc-full-compat-report.sh   # models + stdlib corpus
+bash scripts/flatzinc-builtin-inventory.sh    # list FlatZinc constraint names per stdlib model
 ```
 
-Requires MiniZinc installed locally. CI uses only hand-written `.fzn` files.
+Requires MiniZinc installed locally. CI runs stdlib precompile in the `minizinc-stdlib` job; the main test job uses hand-written `.fzn` files only.
+
+## Stdlib test corpus
+
+MiniZinc models under `benchmarks/minizinc/stdlib/` exercise individual FlatZinc builtins.
+Each model has a bundled `.fzn` fixture for offline compile regression. CI also
+precompiles fresh FlatZinc into `target/flatzinc-stdlib/` when MiniZinc is available:
+
+```bash
+mkdir -p target/flatzinc-stdlib
+for mzn in benchmarks/minizinc/stdlib/*.mzn; do
+  base=$(basename "$mzn" .mzn)
+  minizinc --compile-only -o "target/flatzinc-stdlib/$base.fzn" "$mzn"
+done
+cargo test -p propaga-flatzinc stdlib -- --nocapture
+```

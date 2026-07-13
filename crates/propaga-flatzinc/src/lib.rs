@@ -18,6 +18,9 @@
 
 mod compile;
 mod decompose;
+mod decompose_float;
+mod decompose_globals;
+mod decompose_set;
 mod error;
 mod parse;
 

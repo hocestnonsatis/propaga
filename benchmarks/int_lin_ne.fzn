@@ -1,0 +1,4 @@
+var 1..3: x;
+var 1..3: y;
+constraint int_lin_ne([1, 1], [x, y], 4);
+solve satisfy;

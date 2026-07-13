@@ -1,8 +1,21 @@
 # Propaga FlatZinc compatibility
 
-Propaga implements a **FlatZinc subset** focused on common MiniZinc stdlib constraints. This matrix summarizes what works today and what is partial or unsupported.
+Propaga targets **full MiniZinc FlatZinc 1.6 builtin support** for the standard library workflow: compile `.mzn` with MiniZinc, solve `.fzn` with Propaga. This matrix summarizes supported forms, decomposition notes, and remaining gaps.
 
 See also [README.md](../../README.md) for solver features and [README.md](README.md) for the MiniZinc compile workflow.
+
+## Summary
+
+| Area | Status |
+|------|--------|
+| Integer / bool primitives & linear constraints | **Supported** |
+| Set variables, parameters, and builtins | **Supported** |
+| Float interval arithmetic & linear constraints | **Supported** (sound intervals, not exact reals) |
+| Stdlib globals (`count`, `among`, `lex_*`, `nvalue`, …) | **Supported** (decomposition) |
+| Single-objective minimize / maximize | **Supported** (int, float, set cardinality) |
+| Lexicographic / Pareto multi-objective | **Supported** (int objectives only) |
+| `function` / `test` top-level | **Skipped** (like `annotation`) |
+| `sort`, `array_float_*`, `float_dom`, `float_in` | **Supported** (decomposition) |
 
 ## Variable declarations
 
@@ -11,104 +24,119 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `var int: x;` / `var low..high: x;` | Supported | |
 | `var int: x = N;` | Supported | Fixed variable |
 | `array [L..U] of var int: xs;` | Supported | |
-| `var bool: b;` | Supported | Modeled as `0..1` integer (Sprint 23) |
+| `var bool: b;` | Supported | Modeled as `0..1` integer |
 | `array [L..U] of var bool: bs;` | Supported | Modeled as `0..1` integers |
-| `var set of L..U: x;` | Supported | Cardinality via `set_card` |
-| `var L..U: x;` (float bounds) | Supported | Interval domain |
-| `set_card`, `set_subset` | Supported | Set propagators |
-| `set_union`, `set_intersect` | Supported | Set union/intersection propagators |
-| `float_le`, `float_eq` | Supported | Interval propagation |
-| `float_times` | Supported | Interval multiplication |
-| `int_abs`, `int_times`, `int_div`, `int_mod` | Supported | Table/reified decomposition (v0.7.0) |
-| `bool_not`, `bool_and`, `bool_or` | Supported | Table decomposition (v0.7.0) |
-| `automaton` | Supported | Compiled via `regular` propagator (v0.7.0) |
+| `var set of L..U: x;` | Supported | `SetIntervalDomain` with cardinality |
+| `var low..high: x;` (float bounds) | Supported | Inclusive interval domain |
 
 ## Parameters
 
-| Form | Status |
-|------|--------|
-| `int: n = N;` | Supported |
-| `array [L..U] of int: xs = [...];` | Supported |
-| `bool: flag = true;` | Supported (v0.7.0) |
-| `float: pi = 3.14;` | Supported (v0.7.0) |
-| Set parameters | Not supported |
+| Form | Status | Notes |
+|------|--------|-------|
+| `int: n = N;` | Supported | |
+| `array [L..U] of int: xs = [...];` | Supported | |
+| `bool: flag = true;` | Supported | |
+| `float: pi = 3.14;` | Supported | |
+| `set of L..U: s = { ... };` | Supported | Used in `set_in` and related constraints |
 
-## Constraints
+## Integer & bool constraints
+
+| Constraint | Status | Propaga mapping |
+|------------|--------|-----------------|
+| `int_eq`, `int_ne`, `int_le`, `int_lt`, `int_ge`, `int_gt` | Supported | Primitive propagators |
+| `int_*_reif` | Supported | Reified propagators |
+| `int_lin_eq`, `int_lin_le`, `int_lin_ge`, `int_lin_ne` | Supported | Linear scalar propagators |
+| `int_lin_*_reif` | Supported | Reified linear scalar |
+| `int_plus`, `int_abs`, `int_times`, `int_div`, `int_mod` | Supported | Table / decomposition |
+| `int_min`, `int_max`, `int_pow`, `int_pow_fixed` | Supported | Table decomposition |
+| `int2float` | Supported | Channeling propagator |
+| `min` / `max` (generic) | Supported | Dispatches to `int_*` or `float_*` by domain |
+| `element`, `array_int_element`, `array_var_int_element` | Supported | Element propagator |
+| `array_int_maximum`, `array_int_minimum` | Supported | Reified decomposition |
+| `bool_eq`, `bool2int` | Supported | Equality on `0..1` |
+| `bool_not`, `bool_and`, `bool_or`, `bool_xor` | Supported | Table decomposition |
+| `bool_clause`, `bool_clause_reif` | Supported | Clause decomposition |
+| `bool_le`, `bool_lt`, `bool_*_reif`, `bool_eq_reif` | Supported | Table / reified |
+| `bool_lin_eq`, `bool_lin_le` | Supported | Linear scalar on `0..1` vars |
+| `array_bool_and`, `array_bool_xor` | Supported | Decomposition |
+| `array_bool_element`, `array_var_bool_element` | Supported | Element |
+
+**Decomposition note:** `int_times`, `int_div`, `int_mod`, and `int_pow` use domain tables capped at **10 000 tuples**. Larger Cartesian products return an unsupported error at compile time.
+
+## Set constraints
+
+| Constraint | Status | Propaga mapping |
+|------------|--------|-----------------|
+| `set_card` | Supported | Cardinality propagator |
+| `set_subset`, `set_superset`, `set_eq`, `set_ne` | Supported | Set propagators / decomposition |
+| `set_in`, `set_le`, `set_lt`, `set_diff`, `set_symdiff` | Supported | Set decomposition |
+| `set_union`, `set_intersect` | Supported | Set union / intersection |
+| `set_*_reif` | Supported | Reified set propagators |
+
+## Float constraints
+
+| Constraint | Status | Propaga mapping |
+|------------|--------|-----------------|
+| `float_le`, `float_eq`, `float_lt`, `float_ne` | Supported | Interval propagators |
+| `float_times`, `float_plus`, `float_div`, `float_abs` | Supported | Interval arithmetic |
+| `float_min`, `float_max` | Supported | Reified interval decomposition |
+| `float_sqrt`, `float_sin`, `float_cos`, `float_ln`, `float_log2`, `float_exp` | Supported | Unary interval ops; `float_log2` via `ln` / `ln(2)` |
+| `float_ceil`, `float_floor`, `float_round` | Supported | Unary interval ops |
+| `float_lin_eq`, `float_lin_le`, `float_lin_ge`, `float_lin_ne` | Supported | `FloatLinear*` propagators |
+| `float_lin_*_reif` | Supported | Reified float linear |
+| `float_*_reif` | Supported | Reified float comparisons |
+| `float_dom`, `float_in` | Supported | Interval union / membership decomposition |
+| `array_float_element`, `array_var_float_element`, `array_float_maximum`, `array_float_minimum` | Supported | Reified decomposition |
+
+**Soundness note:** Float propagation is **interval-based**. Bounds are conservative; non-convex unary functions (e.g. `sin`) widen to `[-1, 1]` when the input span exceeds one period.
+
+## Global constraints
 
 | Constraint | Status | Propaga mapping |
 |------------|--------|-----------------|
 | `all_different` | Supported | GAC all-different |
-| `int_eq`, `int_ne`, `int_le`, `int_lt`, `int_ge`, `int_gt` | Supported | Equality / ordering propagators |
-| `int_*_reif` | Supported | Reified propagators |
-| `int_lin_eq`, `int_lin_le`, `int_lin_ge` | Supported | Linear scalar propagators |
-| `int_lin_*_reif` | Supported | Reified linear scalar |
-| `bool_eq` | Supported | Equality on `0..1` vars (Sprint 23) |
-| `bool2int` | Supported | Equality link (Sprint 23) |
-| `element` | Supported | Element propagator |
-| `cumulative` | Supported | Overload + time-table edges; inline or param duration/height arrays |
+| `cumulative` | Supported | Overload + time-table edges |
 | `disjunctive` | Supported | Disjunctive propagator |
 | `global_cardinality` | Supported | 2-arg and 4-arg forms |
 | `table` | Supported | Tuple table propagator |
-| `circuit` | Supported | Hamiltonian circuit propagator |
-| `inverse` | Supported | Inverse array propagator |
-| `diffn` | Supported | Non-overlap rectangles (fixed width/height) |
-| `regular` | Supported | DFA compiled to table propagator |
-| Other globals (`automaton` without transition table, …) | Partial / unsupported | See primitive table above |
+| `circuit` | Supported | Hamiltonian circuit |
+| `inverse` | Supported | Inverse array |
+| `diffn` | Supported | Non-overlap rectangles (fixed size) |
+| `regular`, `automaton` | Supported | DFA → table |
+| `count`, `among`, `at_least`, `at_most` | Supported | Global decomposition |
+| `distribute`, `nvalue` | Supported | Global decomposition |
+| `lex_less`, `lex_lesseq`, `lex_greater`, `lex_greatereq` | Supported | Lexicographic decomposition |
+| `increasing`, `decreasing` | Supported | Pairwise order constraints |
+| `sort` | Supported | Permutation + `increasing` decomposition |
 
-### Partial support
+## Top-level statements
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| `cumulative` variable duration/height arrays | Supported | Variable `array of var int` duration/height arrays |
-| `solve :: int_search(...)` | Supported subset | Variable list, `first_fail`/`input_order`/…, `indomain_min`/`indomain_max`, `complete` |
-| `solve :: restart_luby(base)` | Supported | Optional second scale argument is parsed and ignored |
-| `solve :: restart_constant(scale)` | Supported | Constant node budget between restarts |
-| `solve :: restart_geometric(base, scale)` | Supported | Geometric node budget; `base` may be a FlatZinc float literal |
-| `solve :: restart_none` | Supported | With or without `()` |
-| `predicate` declarations | Supported subset | Multi-constraint bodies; nested predicate calls (v0.7.0) |
-| `annotation` top-level | Skipped | Ignored during parse (v0.7.0) |
-| Unknown top-level statements (`function`, `test`, …) | **Rejected** | Parse error: unsupported top-level statement |
+| Statement | Status | Notes |
+|-----------|--------|-------|
+| `var` / `array` / parameters | Supported | |
+| `constraint` | Supported | |
+| `solve` / `output` | Supported | |
+| `predicate` | Supported | Multi-constraint bodies; nested calls |
+| `annotation` | Skipped | Ignored during parse |
+| `function` | Skipped | Ignored during parse (v1.0.0) |
+| `test` | Skipped | Ignored during parse (v1.0.0) |
 
 ## Solve directives
 
-| Directive | Status |
-|-----------|--------|
-| `solve satisfy;` | Supported |
-| `solve minimize x;` | Supported | Branch-and-bound |
-| `solve maximize x;` | Supported | Branch-and-bound |
-| `solve minimize x, y;` | Supported | Lexicographic branch-and-bound |
-| Multi-objective Pareto | Supported | `solve :: pareto([...])` with CLI JSON `pareto_solutions` |
+| Directive | Status | Notes |
+|-----------|--------|-------|
+| `solve satisfy;` | Supported | |
+| `solve minimize x;` / `maximize x;` | Supported | Int, float, or set (cardinality) objective |
+| `solve minimize x, y;` | Supported | Lexicographic (int objectives) |
+| `solve :: pareto([...]) satisfy` | Supported | Int objectives; CLI JSON `pareto_solutions` |
 
-## CLI features (FlatZinc path)
+## Search annotations
 
-| Flag | Status |
-|------|--------|
-| `propaga solve --file model.fzn` | Supported |
-| `propaga solve --dir benchmarks/` | Supported | Batch `.fzn` directory (Sprint 23) |
-| `--time-limit SECS` | Supported | Wall-clock cutoff (Sprint 23) |
-| `--all`, `--solutions N` | Supported | Satisfy instances |
-| `--stats`, `--format json` | Supported | Includes `timed_out` when applicable |
-| `--workers N` | Supported | Parallel portfolio search for satisfy instances |
-
-## MiniZinc workflow example
-
-```bash
-# Compile MiniZinc to FlatZinc (requires MiniZinc toolchain)
-minizinc --compile-only -o /tmp/model.fzn model.mzn
-
-# Single instance
-cargo run -p propaga-cli -- solve --file /tmp/model.fzn --stats
-
-# Batch curated benchmarks
-cargo run -p propaga-cli -- solve --dir benchmarks --quiet
-
-# With time limit (seconds)
-cargo run -p propaga-cli -- solve --file benchmarks/magic_square.fzn --time-limit 5 --stats
-```
-
-When a compiled model fails with `Unsupported constraint`, check this matrix and simplify the model or extend Propaga.
-
-## Search annotation mapping
+| Feature | Status | Notes |
+|---------|--------|-------|
+| `int_search` / `bool_search` | Supported subset | Variable list, common selectors, `complete` |
+| `restart_luby`, `restart_constant`, `restart_geometric`, `restart_none` | Supported | |
+| `incomplete` | Tolerated | Treated like `complete` |
 
 FlatZinc search annotations are applied when solving with `propaga solve`. CLI flags override annotation defaults when explicitly provided:
 
@@ -122,16 +150,35 @@ Supported `int_search` variable selectors: `input_order`, `first_fail`, `smalles
 
 Supported `int_search` value selectors: `indomain_min`, `indomain_max`, `indomain_split`, `indomain_median`.
 
-`bool_search` is supported with the same selector vocabulary as `int_search`.
+## CLI features (FlatZinc path)
 
-`incomplete` search is tolerated (mapped to complete). Supported restart policies include `restart_linear` and `restart_on_solution`.
+| Flag | Status |
+|------|--------|
+| `propaga solve --file model.fzn` | Supported |
+| `propaga solve --dir benchmarks/` | Supported | Batch `.fzn` directory |
+| `--time-limit SECS` | Supported | Wall-clock cutoff |
+| `--all`, `--solutions N` | Supported | Satisfy instances |
+| `--stats`, `--format json` | Supported | Typed assignments; objective values for float/set |
+| `--workers N` | Supported | Portfolio search (satisfy) |
 
-## Performance benchmarks
-
-Criterion micro-benchmarks live in `crates/propaga-propagators/benches/propagation.rs`:
+## MiniZinc workflow
 
 ```bash
-cargo bench -p propaga-propagators
+# Compile MiniZinc to FlatZinc (requires MiniZinc toolchain)
+minizinc --compile-only -o /tmp/model.fzn model.mzn
+
+# Single instance
+cargo run -p propaga-cli -- solve --file /tmp/model.fzn --stats
+
+# Stdlib corpus regression (bundled .fzn or CI-precompiled)
+cargo test -p propaga-flatzinc stdlib -- --nocapture
+
+# Full compat report (requires MiniZinc)
+bash scripts/flatzinc-full-compat-report.sh
 ```
 
-CI runs `cargo bench -p propaga-propagators --no-run` to verify bench compilation without executing full runs.
+When a compiled model fails with `Unsupported constraint`, check the tables above. For stdlib coverage, see `benchmarks/minizinc/stdlib/` and the `minizinc-stdlib` CI job.
+
+## Acceptance gate
+
+`scripts/flatzinc-full-compat-report.sh` compiles every model under `benchmarks/minizinc/{models,stdlib}/` and attempts a solve. Expected: `==> N passed, 0 failed` when MiniZinc is installed.

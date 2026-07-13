@@ -1,0 +1,554 @@
+use crate::reified::reif_literal;
+use propaga_core::{
+    FloatDomainSnapshot, PropagationContext, PropagationStatus, Propagator, VariableId,
+};
+
+/// Propagates `sum(coeffs[i] * vars[i]) <= rhs` with interval bound consistency.
+#[derive(Clone, Debug)]
+pub struct FloatLinearLePropagator {
+    watched: Vec<VariableId>,
+    coeffs: Vec<f64>,
+    rhs: f64,
+}
+
+impl FloatLinearLePropagator {
+    #[must_use]
+    pub fn new(coeffs: impl Into<Vec<f64>>, vars: impl Into<Vec<VariableId>>, rhs: f64) -> Self {
+        let coeffs = coeffs.into();
+        let vars = vars.into();
+        assert_eq!(coeffs.len(), vars.len());
+        Self {
+            watched: vars,
+            coeffs,
+            rhs,
+        }
+    }
+}
+
+impl Propagator for FloatLinearLePropagator {
+    fn watched_variables(&self) -> &[VariableId] {
+        &self.watched
+    }
+
+    fn propagate(&mut self, ctx: &mut dyn PropagationContext) -> PropagationStatus {
+        propagate_float_le(ctx, &self.coeffs, &self.watched, self.rhs)
+    }
+}
+
+/// Propagates `sum(coeffs[i] * vars[i]) >= rhs` with interval bound consistency.
+#[derive(Clone, Debug)]
+pub struct FloatLinearGePropagator {
+    watched: Vec<VariableId>,
+    coeffs: Vec<f64>,
+    rhs: f64,
+}
+
+impl FloatLinearGePropagator {
+    #[must_use]
+    pub fn new(coeffs: impl Into<Vec<f64>>, vars: impl Into<Vec<VariableId>>, rhs: f64) -> Self {
+        let coeffs = coeffs.into();
+        let vars = vars.into();
+        assert_eq!(coeffs.len(), vars.len());
+        Self {
+            watched: vars,
+            coeffs,
+            rhs,
+        }
+    }
+}
+
+impl Propagator for FloatLinearGePropagator {
+    fn watched_variables(&self) -> &[VariableId] {
+        &self.watched
+    }
+
+    fn propagate(&mut self, ctx: &mut dyn PropagationContext) -> PropagationStatus {
+        propagate_float_ge(ctx, &self.coeffs, &self.watched, self.rhs)
+    }
+}
+
+/// Propagates `reif == 1 <=> sum(coeffs[i] * vars[i]) <= rhs`.
+#[derive(Clone, Debug)]
+pub struct ReifiedFloatLinearLePropagator {
+    watched: Vec<VariableId>,
+    coeffs: Vec<f64>,
+    rhs: f64,
+    reif: VariableId,
+}
+
+impl ReifiedFloatLinearLePropagator {
+    #[must_use]
+    pub fn new(
+        coeffs: impl Into<Vec<f64>>,
+        vars: impl Into<Vec<VariableId>>,
+        rhs: f64,
+        reif: VariableId,
+    ) -> Self {
+        let coeffs = coeffs.into();
+        let mut vars = vars.into();
+        assert_eq!(coeffs.len(), vars.len());
+        vars.push(reif);
+        Self {
+            watched: vars,
+            coeffs,
+            rhs,
+            reif,
+        }
+    }
+}
+
+impl Propagator for ReifiedFloatLinearLePropagator {
+    fn watched_variables(&self) -> &[VariableId] {
+        &self.watched
+    }
+
+    fn priority(&self) -> u32 {
+        13
+    }
+
+    fn propagate(&mut self, ctx: &mut dyn PropagationContext) -> PropagationStatus {
+        let vars: Vec<VariableId> = self
+            .watched
+            .iter()
+            .copied()
+            .filter(|&var| var != self.reif)
+            .collect();
+        let mut changed = false;
+
+        match reif_literal(ctx, self.reif) {
+            Some(1) => {
+                let status = propagate_float_le(ctx, &self.coeffs, &vars, self.rhs);
+                if status.is_failure() {
+                    return status;
+                }
+                changed |= status == PropagationStatus::OkChanged;
+            }
+            Some(0) => {
+                let status = propagate_float_ge(ctx, &self.coeffs, &vars, next_up(self.rhs));
+                if status.is_failure() {
+                    return status;
+                }
+                changed |= status == PropagationStatus::OkChanged;
+            }
+            _ => {}
+        }
+
+        let min_total = min_sum(ctx, &self.coeffs, &vars);
+        let max_total = max_sum(ctx, &self.coeffs, &vars);
+        if max_total <= self.rhs {
+            changed |= tighten_reif(ctx, self.reif, 1);
+        } else if min_total > self.rhs {
+            changed |= tighten_reif(ctx, self.reif, 0);
+        }
+
+        finish_reified_scalar(ctx, &self.watched, changed)
+    }
+}
+
+/// Propagates `reif == 1 <=> sum(coeffs[i] * vars[i]) == rhs`.
+#[derive(Clone, Debug)]
+pub struct ReifiedFloatLinearEqPropagator {
+    watched: Vec<VariableId>,
+    coeffs: Vec<f64>,
+    rhs: f64,
+    reif: VariableId,
+}
+
+impl ReifiedFloatLinearEqPropagator {
+    #[must_use]
+    pub fn new(
+        coeffs: impl Into<Vec<f64>>,
+        vars: impl Into<Vec<VariableId>>,
+        rhs: f64,
+        reif: VariableId,
+    ) -> Self {
+        let coeffs = coeffs.into();
+        let mut vars = vars.into();
+        assert_eq!(coeffs.len(), vars.len());
+        vars.push(reif);
+        Self {
+            watched: vars,
+            coeffs,
+            rhs,
+            reif,
+        }
+    }
+}
+
+impl Propagator for ReifiedFloatLinearEqPropagator {
+    fn watched_variables(&self) -> &[VariableId] {
+        &self.watched
+    }
+
+    fn priority(&self) -> u32 {
+        13
+    }
+
+    fn propagate(&mut self, ctx: &mut dyn PropagationContext) -> PropagationStatus {
+        let vars: Vec<VariableId> = self
+            .watched
+            .iter()
+            .copied()
+            .filter(|&var| var != self.reif)
+            .collect();
+        let mut changed = false;
+
+        match reif_literal(ctx, self.reif) {
+            Some(1) => {
+                let le = propagate_float_le(ctx, &self.coeffs, &vars, self.rhs);
+                if le.is_failure() {
+                    return le;
+                }
+                changed |= le == PropagationStatus::OkChanged;
+                let ge = propagate_float_ge(ctx, &self.coeffs, &vars, self.rhs);
+                if ge.is_failure() {
+                    return ge;
+                }
+                changed |= ge == PropagationStatus::OkChanged;
+            }
+            Some(0) => {
+                let le = propagate_float_le(ctx, &self.coeffs, &vars, next_down(self.rhs));
+                if le.is_failure() {
+                    return le;
+                }
+                changed |= le == PropagationStatus::OkChanged;
+                let ge = propagate_float_ge(ctx, &self.coeffs, &vars, next_up(self.rhs));
+                if ge.is_failure() {
+                    return ge;
+                }
+                changed |= ge == PropagationStatus::OkChanged;
+            }
+            _ => {}
+        }
+
+        let min_total = min_sum(ctx, &self.coeffs, &vars);
+        let max_total = max_sum(ctx, &self.coeffs, &vars);
+        if (min_total - self.rhs).abs() < f64::EPSILON
+            && (max_total - self.rhs).abs() < f64::EPSILON
+        {
+            changed |= tighten_reif(ctx, self.reif, 1);
+        } else if min_total > self.rhs || max_total < self.rhs {
+            changed |= tighten_reif(ctx, self.reif, 0);
+        }
+
+        finish_reified_scalar(ctx, &self.watched, changed)
+    }
+}
+
+/// Propagates `reif == 1 <=> sum(coeffs[i] * vars[i]) >= rhs`.
+#[derive(Clone, Debug)]
+pub struct ReifiedFloatLinearGePropagator {
+    watched: Vec<VariableId>,
+    coeffs: Vec<f64>,
+    rhs: f64,
+    reif: VariableId,
+}
+
+impl ReifiedFloatLinearGePropagator {
+    #[must_use]
+    pub fn new(
+        coeffs: impl Into<Vec<f64>>,
+        vars: impl Into<Vec<VariableId>>,
+        rhs: f64,
+        reif: VariableId,
+    ) -> Self {
+        let coeffs = coeffs.into();
+        let mut vars = vars.into();
+        assert_eq!(coeffs.len(), vars.len());
+        vars.push(reif);
+        Self {
+            watched: vars,
+            coeffs,
+            rhs,
+            reif,
+        }
+    }
+}
+
+impl Propagator for ReifiedFloatLinearGePropagator {
+    fn watched_variables(&self) -> &[VariableId] {
+        &self.watched
+    }
+
+    fn priority(&self) -> u32 {
+        13
+    }
+
+    fn propagate(&mut self, ctx: &mut dyn PropagationContext) -> PropagationStatus {
+        let vars: Vec<VariableId> = self
+            .watched
+            .iter()
+            .copied()
+            .filter(|&var| var != self.reif)
+            .collect();
+        let mut changed = false;
+
+        match reif_literal(ctx, self.reif) {
+            Some(1) => {
+                let status = propagate_float_ge(ctx, &self.coeffs, &vars, self.rhs);
+                if status.is_failure() {
+                    return status;
+                }
+                changed |= status == PropagationStatus::OkChanged;
+            }
+            Some(0) => {
+                let status = propagate_float_le(ctx, &self.coeffs, &vars, next_down(self.rhs));
+                if status.is_failure() {
+                    return status;
+                }
+                changed |= status == PropagationStatus::OkChanged;
+            }
+            _ => {}
+        }
+
+        let min_total = min_sum(ctx, &self.coeffs, &vars);
+        let max_total = max_sum(ctx, &self.coeffs, &vars);
+        if min_total >= self.rhs {
+            changed |= tighten_reif(ctx, self.reif, 1);
+        } else if max_total < self.rhs {
+            changed |= tighten_reif(ctx, self.reif, 0);
+        }
+
+        finish_reified_scalar(ctx, &self.watched, changed)
+    }
+}
+
+fn finish_reified_scalar(
+    ctx: &dyn PropagationContext,
+    watched: &[VariableId],
+    changed: bool,
+) -> PropagationStatus {
+    if watched.iter().any(|var| ctx.domain(*var).is_empty()) {
+        PropagationStatus::Failure
+    } else if changed {
+        PropagationStatus::OkChanged
+    } else {
+        PropagationStatus::OkNoChange
+    }
+}
+
+fn tighten_reif(ctx: &mut dyn PropagationContext, reif: VariableId, value: i32) -> bool {
+    let mut changed = false;
+    if ctx.remove_below(reif, value) {
+        changed = true;
+    }
+    if ctx.remove_above(reif, value) {
+        changed = true;
+    }
+    changed
+}
+
+fn next_up(value: f64) -> f64 {
+    if value.is_infinite() && value.is_sign_positive() {
+        value
+    } else {
+        f64::from_bits(value.to_bits().saturating_add(1))
+    }
+}
+
+fn next_down(value: f64) -> f64 {
+    if value.is_infinite() && value.is_sign_negative() {
+        value
+    } else {
+        f64::from_bits(value.to_bits().saturating_sub(1))
+    }
+}
+
+fn min_term(coeff: f64, domain: FloatDomainSnapshot) -> f64 {
+    if coeff >= 0.0 {
+        coeff * domain.min
+    } else {
+        coeff * domain.max
+    }
+}
+
+fn max_term(coeff: f64, domain: FloatDomainSnapshot) -> f64 {
+    if coeff >= 0.0 {
+        coeff * domain.max
+    } else {
+        coeff * domain.min
+    }
+}
+
+fn float_domain(ctx: &mut dyn PropagationContext, var: VariableId) -> Option<FloatDomainSnapshot> {
+    ctx.as_extended()
+        .and_then(|ext| ext.float_domain(var))
+        .filter(|domain| !domain.is_empty())
+}
+
+fn snapshot_domains(
+    ctx: &mut dyn PropagationContext,
+    vars: &[VariableId],
+) -> Option<Vec<FloatDomainSnapshot>> {
+    let mut domains = Vec::with_capacity(vars.len());
+    for &var in vars {
+        domains.push(float_domain(ctx, var)?);
+    }
+    Some(domains)
+}
+
+fn min_sum_domains(coeffs: &[f64], domains: &[FloatDomainSnapshot]) -> f64 {
+    coeffs
+        .iter()
+        .zip(domains)
+        .map(|(&coeff, domain)| min_term(coeff, *domain))
+        .sum()
+}
+
+fn max_sum_domains(coeffs: &[f64], domains: &[FloatDomainSnapshot]) -> f64 {
+    coeffs
+        .iter()
+        .zip(domains)
+        .map(|(&coeff, domain)| max_term(coeff, *domain))
+        .sum()
+}
+
+fn min_sum_excluding_domains(coeffs: &[f64], domains: &[FloatDomainSnapshot], skip: usize) -> f64 {
+    coeffs
+        .iter()
+        .zip(domains)
+        .enumerate()
+        .filter(|(index, _)| *index != skip)
+        .map(|(_, (&coeff, domain))| min_term(coeff, *domain))
+        .sum()
+}
+
+fn max_sum_excluding_domains(coeffs: &[f64], domains: &[FloatDomainSnapshot], skip: usize) -> f64 {
+    coeffs
+        .iter()
+        .zip(domains)
+        .enumerate()
+        .filter(|(index, _)| *index != skip)
+        .map(|(_, (&coeff, domain))| max_term(coeff, *domain))
+        .sum()
+}
+
+fn min_sum(ctx: &mut dyn PropagationContext, coeffs: &[f64], vars: &[VariableId]) -> f64 {
+    snapshot_domains(ctx, vars)
+        .map(|domains| min_sum_domains(coeffs, &domains))
+        .unwrap_or(f64::INFINITY)
+}
+
+fn max_sum(ctx: &mut dyn PropagationContext, coeffs: &[f64], vars: &[VariableId]) -> f64 {
+    snapshot_domains(ctx, vars)
+        .map(|domains| max_sum_domains(coeffs, &domains))
+        .unwrap_or(f64::NEG_INFINITY)
+}
+
+fn min_sum_excluding(
+    ctx: &mut dyn PropagationContext,
+    coeffs: &[f64],
+    vars: &[VariableId],
+    skip: usize,
+) -> f64 {
+    snapshot_domains(ctx, vars)
+        .map(|domains| min_sum_excluding_domains(coeffs, &domains, skip))
+        .unwrap_or(f64::INFINITY)
+}
+
+fn max_sum_excluding(
+    ctx: &mut dyn PropagationContext,
+    coeffs: &[f64],
+    vars: &[VariableId],
+    skip: usize,
+) -> f64 {
+    snapshot_domains(ctx, vars)
+        .map(|domains| max_sum_excluding_domains(coeffs, &domains, skip))
+        .unwrap_or(f64::NEG_INFINITY)
+}
+
+fn any_empty(ctx: &mut dyn PropagationContext, vars: &[VariableId]) -> bool {
+    vars.iter().any(|&var| {
+        ctx.as_extended()
+            .and_then(|ext| ext.float_domain(var))
+            .is_none_or(|domain| domain.is_empty())
+    })
+}
+
+fn propagate_float_le(
+    ctx: &mut dyn PropagationContext,
+    coeffs: &[f64],
+    vars: &[VariableId],
+    rhs: f64,
+) -> PropagationStatus {
+    let Some(domains) = snapshot_domains(ctx, vars) else {
+        return PropagationStatus::Failure;
+    };
+
+    if min_sum_domains(coeffs, &domains) > rhs {
+        return PropagationStatus::Failure;
+    }
+
+    let Some(ext) = ctx.as_extended() else {
+        return PropagationStatus::OkNoChange;
+    };
+
+    let mut changed = false;
+    for (index, &var) in vars.iter().enumerate() {
+        let coeff = coeffs[index];
+        if coeff == 0.0 {
+            continue;
+        }
+        let other_min = min_sum_excluding_domains(coeffs, &domains, index);
+        let slack = rhs - other_min;
+        if coeff > 0.0 {
+            let max_allowed = slack / coeff;
+            changed |= ext.tighten_float_above(var, max_allowed);
+        } else {
+            let min_allowed = slack / coeff;
+            changed |= ext.tighten_float_below(var, min_allowed);
+        }
+    }
+
+    if any_empty(ctx, vars) {
+        PropagationStatus::Failure
+    } else if changed {
+        PropagationStatus::OkChanged
+    } else {
+        PropagationStatus::OkNoChange
+    }
+}
+
+fn propagate_float_ge(
+    ctx: &mut dyn PropagationContext,
+    coeffs: &[f64],
+    vars: &[VariableId],
+    rhs: f64,
+) -> PropagationStatus {
+    let Some(domains) = snapshot_domains(ctx, vars) else {
+        return PropagationStatus::Failure;
+    };
+
+    if max_sum_domains(coeffs, &domains) < rhs {
+        return PropagationStatus::Failure;
+    }
+
+    let Some(ext) = ctx.as_extended() else {
+        return PropagationStatus::OkNoChange;
+    };
+
+    let mut changed = false;
+    for (index, &var) in vars.iter().enumerate() {
+        let coeff = coeffs[index];
+        if coeff == 0.0 {
+            continue;
+        }
+        let other_max = max_sum_excluding_domains(coeffs, &domains, index);
+        let slack = rhs - other_max;
+        if coeff > 0.0 {
+            let min_allowed = slack / coeff;
+            changed |= ext.tighten_float_below(var, min_allowed);
+        } else {
+            let max_allowed = slack / coeff;
+            changed |= ext.tighten_float_above(var, max_allowed);
+        }
+    }
+
+    if any_empty(ctx, vars) {
+        PropagationStatus::Failure
+    } else if changed {
+        PropagationStatus::OkChanged
+    } else {
+        PropagationStatus::OkNoChange
+    }
+}

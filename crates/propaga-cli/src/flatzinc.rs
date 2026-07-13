@@ -5,7 +5,8 @@ use crate::puzzle_io::{GlobalOptions, OutputFormat};
 use propaga_core::VariableId;
 use propaga_flatzinc::{OutputDirective, compile, parse};
 use propaga_search::{
-    Objective, ObjectiveDirection, ParetoSolution, PortfolioConfig, SearchStats, Solution,
+    Objective, ObjectiveDirection, ObjectiveValue, ParetoSolution, PortfolioConfig, SearchStats,
+    Solution,
 };
 use std::collections::HashMap;
 use std::fs;
@@ -22,8 +23,8 @@ struct SolveOutcome {
     solve_vars: Vec<VariableId>,
     outputs: Vec<OutputDirective>,
     solution: Option<Solution>,
-    objective_value: Option<i32>,
-    objective_values: Vec<i32>,
+    objective_value: Option<ObjectiveValue>,
+    objective_values: Vec<ObjectiveValue>,
     objective_direction: Option<ObjectiveDirection>,
     pareto_solutions: Vec<ParetoSolution>,
 }
@@ -140,9 +141,16 @@ fn solve_source(source: &str, options: GlobalOptions) -> Result<SolveOutcome, St
             result.stats,
             first
                 .as_ref()
-                .and_then(|entry| entry.objective_values.first().copied()),
+                .and_then(|entry| entry.objective_values.first().copied())
+                .map(ObjectiveValue::Int),
             first
-                .map(|entry| entry.objective_values.clone())
+                .map(|entry| {
+                    entry
+                        .objective_values
+                        .into_iter()
+                        .map(ObjectiveValue::Int)
+                        .collect()
+                })
                 .unwrap_or_default(),
             found,
             Some(ObjectiveDirection::Minimize),
@@ -154,8 +162,8 @@ fn solve_source(source: &str, options: GlobalOptions) -> Result<SolveOutcome, St
                 .objectives
                 .iter()
                 .map(|objective| Objective {
-                    var: objective.var,
-                    direction: objective.direction,
+                    var: objective.var(),
+                    direction: objective.direction(),
                 })
                 .collect();
             let result = instance
@@ -164,31 +172,40 @@ fn solve_source(source: &str, options: GlobalOptions) -> Result<SolveOutcome, St
             let direction = instance
                 .objectives
                 .first()
-                .map(|objective| objective.direction);
+                .map(|objective| objective.direction());
             let found = u32::from(result.solution.is_some());
             (
                 result.solution,
                 result.stats,
-                result.objective_values.first().copied(),
-                result.objective_values,
+                result
+                    .objective_values
+                    .first()
+                    .copied()
+                    .map(ObjectiveValue::Int),
+                result
+                    .objective_values
+                    .into_iter()
+                    .map(ObjectiveValue::Int)
+                    .collect(),
                 found,
                 direction,
                 Vec::new(),
             )
         } else {
             let objective = instance.objectives[0];
-            let (solution, value, stats, solutions_found) = instance.model.optimize(
+            let (solution, value, stats, solutions_found) = instance.model.optimize_objective(
                 instance.solve_vars.clone(),
-                objective.var,
-                objective.direction,
+                objective.optimization_target(),
+                objective.direction(),
             );
+            let objective_values = value.clone().into_iter().collect();
             (
                 solution,
                 stats,
                 value,
-                value.into_iter().collect(),
+                objective_values,
                 solutions_found,
-                Some(objective.direction),
+                Some(objective.direction()),
                 Vec::new(),
             )
         }
@@ -264,7 +281,7 @@ fn print_outcome(path: &Path, options: GlobalOptions, outcome: &SolveOutcome) {
                 outcome.stats.timed_out,
                 options.quiet,
             );
-            if let Some(value) = outcome.objective_value {
+            if let Some(value) = &outcome.objective_value {
                 print_objective_plain(value, outcome.objective_direction, options.quiet);
             }
             if options.stats {

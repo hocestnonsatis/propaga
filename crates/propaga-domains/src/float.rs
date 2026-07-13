@@ -105,6 +105,124 @@ impl FloatDomain {
         let max = corners.iter().copied().fold(f64::NEG_INFINITY, f64::max);
         Self::new(min, max)
     }
+
+    /// Returns the interval sum `self + other`.
+    #[must_use]
+    pub fn plus(self, other: Self) -> Self {
+        if self.is_empty() || other.is_empty() {
+            return Self::new(1.0, 0.0);
+        }
+        Self::new(self.min + other.min, self.max + other.max)
+    }
+
+    /// Returns the interval negation `-self`.
+    #[must_use]
+    pub fn neg(self) -> Self {
+        if self.is_empty() {
+            return Self::new(1.0, 0.0);
+        }
+        Self::new(-self.max, -self.min)
+    }
+
+    /// Returns a sound absolute value interval.
+    #[must_use]
+    pub fn abs(self) -> Self {
+        if self.is_empty() {
+            return Self::new(1.0, 0.0);
+        }
+        if self.min >= 0.0 {
+            return self;
+        }
+        if self.max <= 0.0 {
+            return Self::new(-self.max, -self.min);
+        }
+        Self::new(0.0, self.min.abs().max(self.max.abs()))
+    }
+
+    /// Returns a sound square root interval.
+    #[must_use]
+    pub fn sqrt(self) -> Self {
+        if self.is_empty() || self.max < 0.0 {
+            return Self::new(1.0, 0.0);
+        }
+        let min = self.min.max(0.0).sqrt();
+        let max = self.max.max(0.0).sqrt();
+        Self::new(min, max)
+    }
+
+    /// Returns a conservative sine interval.
+    #[must_use]
+    pub fn sin(self) -> Self {
+        if self.is_empty() {
+            return Self::new(1.0, 0.0);
+        }
+        if self.max - self.min >= std::f64::consts::TAU {
+            return Self::new(-1.0, 1.0);
+        }
+        let corners = [self.min.sin(), self.max.sin()];
+        Self::new(
+            corners.iter().copied().fold(f64::INFINITY, f64::min),
+            corners.iter().copied().fold(f64::NEG_INFINITY, f64::max),
+        )
+    }
+
+    /// Returns a conservative cosine interval.
+    #[must_use]
+    pub fn cos(self) -> Self {
+        if self.is_empty() {
+            return Self::new(1.0, 0.0);
+        }
+        if self.max - self.min >= std::f64::consts::TAU {
+            return Self::new(-1.0, 1.0);
+        }
+        let corners = [self.min.cos(), self.max.cos()];
+        Self::new(
+            corners.iter().copied().fold(f64::INFINITY, f64::min),
+            corners.iter().copied().fold(f64::NEG_INFINITY, f64::max),
+        )
+    }
+
+    /// Returns a conservative natural logarithm interval.
+    #[must_use]
+    pub fn ln(self) -> Self {
+        if self.is_empty() || self.max <= 0.0 {
+            return Self::new(1.0, 0.0);
+        }
+        Self::new(self.min.max(0.0).ln(), self.max.ln())
+    }
+
+    /// Returns a conservative exponential interval.
+    #[must_use]
+    pub fn exp(self) -> Self {
+        if self.is_empty() {
+            return Self::new(1.0, 0.0);
+        }
+        Self::new(self.min.exp(), self.max.exp())
+    }
+
+    /// Returns a conservative ceiling interval.
+    #[must_use]
+    pub fn ceil(self) -> Self {
+        if self.is_empty() {
+            return Self::new(1.0, 0.0);
+        }
+        Self::new(self.min.ceil(), self.max.ceil())
+    }
+
+    /// Returns a conservative floor interval.
+    #[must_use]
+    pub fn floor(self) -> Self {
+        if self.is_empty() {
+            return Self::new(1.0, 0.0);
+        }
+        Self::new(self.min.floor(), self.max.floor())
+    }
+
+    /// Returns a conservative round interval.
+    #[must_use]
+    pub fn round(self) -> Self {
+        self.floor().plus(Self::new(0.0, 1.0))
+    }
 }
 
 #[cfg(test)]

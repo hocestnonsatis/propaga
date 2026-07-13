@@ -1,0 +1,4 @@
+array [1..2] of var 0..1: xs;
+var 0..1: c;
+constraint array_bool_xor(xs, c);
+solve satisfy;

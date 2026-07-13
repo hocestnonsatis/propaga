@@ -1,0 +1,4 @@
+% Minimize a floating-point variable
+var 0.0..10.0: x;
+
+solve minimize x;

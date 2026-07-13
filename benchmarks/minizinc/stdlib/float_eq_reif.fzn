@@ -1,0 +1,5 @@
+var 1.0..3.0: x;
+var 1.0..3.0: y;
+var 0..1: b;
+constraint float_eq_reif(x, y, b);
+solve satisfy;

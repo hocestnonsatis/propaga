@@ -1,12 +1,22 @@
 # Propaga Roadmap
 
-Forward-looking ideas beyond v0.7.0. See [README.md](README.md) for what ships today.
+Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships today and [COMPATIBILITY.md](benchmarks/minizinc/COMPATIBILITY.md) for FlatZinc coverage.
 
-## Long term
+## Next
 
-- Trigonometric and additional float global constraints
-- Float parameters in float constraint expressions
-- Incremental Pareto enumeration
+- `sort` global decomposition
+- `array_float_element`, `array_var_float_element`, `array_float_maximum`, `array_float_minimum`
+- `float_dom`, `float_in` interval membership constraints
+- Float / set objectives in lexicographic and Pareto search
+- Incremental Pareto enumeration improvements
+
+## Shipped in v1.0.0
+
+- FlatZinc 1.6 stdlib workflow: int / bool / set / float builtins, globals, and parameters
+- Float & set single-objective branch-and-bound
+- Stdlib corpus + CI precompile regression (`minizinc-stdlib` job)
+- `function` / `test` top-level skip; generic `min` / `max`
+- `scripts/flatzinc-full-compat-report.sh` acceptance gate
 
 ## Shipped in v0.7.0
 

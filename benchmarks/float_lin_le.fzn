@@ -1,0 +1,4 @@
+var 0.0..1.0: x;
+var 0.0..1.0: y;
+constraint float_lin_le([1.0, 1.0], [x, y], 1.5);
+solve satisfy;

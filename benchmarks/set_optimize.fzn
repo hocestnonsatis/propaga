@@ -1,0 +1,4 @@
+% Minimize set cardinality
+var set of 1..4: s;
+
+solve minimize s;

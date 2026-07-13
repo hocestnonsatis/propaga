@@ -9,7 +9,7 @@ use propaga_propagators::{CardinalityBound, DisjunctiveTask, RectangleSpec, Task
 use propaga_search::{RestartPolicy, ValueOrdering, VariableOrdering};
 use std::collections::HashMap;
 
-use propaga_search::ObjectiveDirection;
+use propaga_search::{ObjectiveDirection, OptimizationTarget};
 
 /// Search configuration extracted from FlatZinc annotations.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -24,11 +24,60 @@ pub struct AnnotationSearchConfig {
 
 /// Objective specification extracted from a FlatZinc solve directive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ObjectiveSpec {
-    /// Objective variable to optimize.
-    pub var: VariableId,
-    /// Optimization direction.
-    pub direction: ObjectiveDirection,
+pub enum ObjectiveSpec {
+    /// Integer objective variable.
+    Int {
+        /// Objective variable to optimize.
+        var: VariableId,
+        /// Optimization direction.
+        direction: ObjectiveDirection,
+    },
+    /// Floating-point objective variable.
+    Float {
+        /// Objective variable to optimize.
+        var: VariableId,
+        /// Optimization direction.
+        direction: ObjectiveDirection,
+    },
+    /// Set variable optimized by cardinality.
+    SetCardinality {
+        /// Objective set variable.
+        var: VariableId,
+        /// Optimization direction.
+        direction: ObjectiveDirection,
+    },
+}
+
+impl ObjectiveSpec {
+    /// Returns the objective variable.
+    #[must_use]
+    pub fn var(&self) -> VariableId {
+        match self {
+            Self::Int { var, .. } | Self::Float { var, .. } | Self::SetCardinality { var, .. } => {
+                *var
+            }
+        }
+    }
+
+    /// Returns the optimization direction.
+    #[must_use]
+    pub fn direction(&self) -> ObjectiveDirection {
+        match self {
+            Self::Int { direction, .. }
+            | Self::Float { direction, .. }
+            | Self::SetCardinality { direction, .. } => *direction,
+        }
+    }
+
+    /// Maps this objective to a branch-and-bound target.
+    #[must_use]
+    pub fn optimization_target(&self) -> OptimizationTarget {
+        match self {
+            Self::Int { var, .. } => OptimizationTarget::Int(*var),
+            Self::Float { var, .. } => OptimizationTarget::Float(*var),
+            Self::SetCardinality { var, .. } => OptimizationTarget::SetCardinality(*var),
+        }
+    }
 }
 
 /// A compiled FlatZinc instance ready for search.
@@ -70,6 +119,9 @@ pub fn compile(program: FlatZincProgram) -> Result<CompiledInstance, FlatZincErr
             }
             ParamDecl::Float { name, value } => {
                 env.insert(name, Binding::FloatParam(value));
+            }
+            ParamDecl::Set { name, values } => {
+                env.insert(name, Binding::SetParam(values));
             }
         }
     }
@@ -135,7 +187,7 @@ pub fn compile(program: FlatZincProgram) -> Result<CompiledInstance, FlatZincErr
         }
     }
 
-    for constraint in expand_predicates(program.constraints, &program.predicates)? {
+    for constraint in expand_predicates(program.constraints, &program.predicates, &model, &env)? {
         post_constraint(&mut model, &env, constraint)?;
     }
 
@@ -150,10 +202,10 @@ pub fn compile(program: FlatZincProgram) -> Result<CompiledInstance, FlatZincErr
     let objectives = match program.solve.goal {
         SolveGoal::Satisfy => Vec::new(),
         SolveGoal::Minimize(exprs) => {
-            compile_objectives(&env, exprs, ObjectiveDirection::Minimize)?
+            compile_objectives(&env, &model, exprs, ObjectiveDirection::Minimize)?
         }
         SolveGoal::Maximize(exprs) => {
-            compile_objectives(&env, exprs, ObjectiveDirection::Maximize)?
+            compile_objectives(&env, &model, exprs, ObjectiveDirection::Maximize)?
         }
     };
 
@@ -181,6 +233,7 @@ pub fn compile(program: FlatZincProgram) -> Result<CompiledInstance, FlatZincErr
 
 fn compile_objectives(
     env: &HashMap<String, Binding>,
+    model: &Model,
     exprs: Vec<Expr>,
     direction: ObjectiveDirection,
 ) -> Result<Vec<ObjectiveSpec>, FlatZincError> {
@@ -188,7 +241,15 @@ fn compile_objectives(
         .into_iter()
         .map(|expr| {
             let var = resolve_var(env, expr)?;
-            Ok(ObjectiveSpec { var, direction })
+            let domain = model.engine().domain(var);
+            let spec = if domain.as_float().is_some() {
+                ObjectiveSpec::Float { var, direction }
+            } else if domain.as_set().is_some() {
+                ObjectiveSpec::SetCardinality { var, direction }
+            } else {
+                ObjectiveSpec::Int { var, direction }
+            };
+            Ok(spec)
         })
         .collect()
 }
@@ -197,6 +258,7 @@ enum Binding {
     Param(i32),
     ParamArray(Vec<i32>),
     FloatParam(f64),
+    SetParam(Vec<i32>),
     Var(VariableId),
     Array(HashMap<i32, VariableId>),
 }
@@ -383,6 +445,14 @@ fn post_constraint(
         } => {
             post_linear_eq_reif(model, env, &coeffs, vars, rhs, reif)?;
         }
+        Constraint::IntLinNeReif {
+            coeffs,
+            vars,
+            rhs,
+            reif,
+        } => {
+            post_linear_ne_reif(model, env, &coeffs, vars, rhs, reif)?;
+        }
         Constraint::IntNe(left, right) => {
             let left_var = resolve_var(env, left)?;
             let right_var = resolve_var(env, right)?;
@@ -466,6 +536,71 @@ fn post_constraint(
         } => {
             post_global_cardinality(model, env, vars, cover, lbound, ubound)?;
         }
+        Constraint::Count(xs, value, total) => {
+            post_count(model, env, xs, value, total)?;
+        }
+        Constraint::Among(n, xs, values) => {
+            post_among(model, env, n, xs, values)?;
+        }
+        Constraint::AtLeast(n, xs, value) => {
+            post_at_least(model, env, n, xs, value)?;
+        }
+        Constraint::AtMost(n, xs, value) => {
+            post_at_most(model, env, n, xs, value)?;
+        }
+        Constraint::Distribute(card, value, base) => {
+            post_distribute(model, env, card, value, base)?;
+        }
+        Constraint::Nvalue(n, xs) => {
+            let n_var = resolve_var(env, n)?;
+            let xs_vars = resolve_var_list(env, xs)?;
+            crate::decompose_globals::nvalue(model, &xs_vars, n_var);
+        }
+        Constraint::LexLess(left, right) => {
+            post_lex_less(model, env, left, right)?;
+        }
+        Constraint::LexLesseq(left, right) => {
+            post_lex_lesseq(model, env, left, right)?;
+        }
+        Constraint::LexGreater(left, right) => {
+            post_lex_greater(model, env, left, right)?;
+        }
+        Constraint::LexGreatereq(left, right) => {
+            post_lex_greatereq(model, env, left, right)?;
+        }
+        Constraint::Increasing(xs) => {
+            post_increasing(model, env, xs)?;
+        }
+        Constraint::Decreasing(xs) => {
+            post_decreasing(model, env, xs)?;
+        }
+        Constraint::Sort(x, y) => {
+            post_sort(model, env, x, y)?;
+        }
+        Constraint::FloatDom(x, values) => {
+            let x = resolve_var(env, x)?;
+            crate::decompose_float::float_dom(model, x, &values);
+        }
+        Constraint::FloatIn(x, lo, hi) => {
+            let x = resolve_var(env, x)?;
+            crate::decompose_float::float_in(model, x, lo, hi);
+        }
+        Constraint::ArrayFloatElement(array, index, value) => {
+            post_array_float_element(model, env, array, index, value)?;
+        }
+        Constraint::ArrayVarFloatElement(array, index, value) => {
+            post_array_var_float_element(model, env, array, index, value)?;
+        }
+        Constraint::ArrayFloatMaximum(xs, m) => {
+            let xs = resolve_var_list(env, xs)?;
+            let m = resolve_var(env, m)?;
+            crate::decompose_float::array_float_maximum(model, &xs, m);
+        }
+        Constraint::ArrayFloatMinimum(xs, m) => {
+            let xs = resolve_var_list(env, xs)?;
+            let m = resolve_var(env, m)?;
+            crate::decompose_float::array_float_minimum(model, &xs, m);
+        }
         Constraint::Table { vars, tuples } => {
             post_table(model, env, vars, tuples)?;
         }
@@ -542,6 +677,92 @@ fn post_constraint(
             let superset = resolve_var(env, superset)?;
             model.set_subset(subset, superset);
         }
+        Constraint::SetEq(left, right) => {
+            let left = resolve_var(env, left)?;
+            let right = resolve_var(env, right)?;
+            crate::decompose_set::set_eq(model, left, right);
+        }
+        Constraint::SetIn(value, set) => {
+            let value = resolve_var(env, value)?;
+            post_set_in(model, env, value, set)?;
+        }
+        Constraint::SetSuperset(superset, subset) => {
+            let superset = resolve_var(env, superset)?;
+            let subset = resolve_var(env, subset)?;
+            crate::decompose_set::set_superset(model, superset, subset);
+        }
+        Constraint::SetLe(left, right) => {
+            let left = resolve_var(env, left)?;
+            let right = resolve_var(env, right)?;
+            crate::decompose_set::set_le(model, left, right);
+        }
+        Constraint::SetNe(left, right) => {
+            let left = resolve_var(env, left)?;
+            let right = resolve_var(env, right)?;
+            crate::decompose_set::set_ne(model, left, right);
+        }
+        Constraint::SetLt(left, right) => {
+            let left = resolve_var(env, left)?;
+            let right = resolve_var(env, right)?;
+            crate::decompose_set::set_lt(model, left, right);
+        }
+        Constraint::SetDiff(left, right, result) => {
+            let left = resolve_var(env, left)?;
+            let right = resolve_var(env, right)?;
+            let result = resolve_var(env, result)?;
+            crate::decompose_set::set_diff(model, left, right, result);
+        }
+        Constraint::SetSymdiff(left, right, result) => {
+            let left = resolve_var(env, left)?;
+            let right = resolve_var(env, right)?;
+            let result = resolve_var(env, result)?;
+            crate::decompose_set::set_symdiff(model, left, right, result);
+        }
+        Constraint::SetEqReif(left, right, reif) => {
+            let left = resolve_var(env, left)?;
+            let right = resolve_var(env, right)?;
+            let reif = resolve_var(env, reif)?;
+            crate::decompose_set::set_eq_reif(model, left, right, reif);
+        }
+        Constraint::SetNeReif(left, right, reif) => {
+            let left = resolve_var(env, left)?;
+            let right = resolve_var(env, right)?;
+            let reif = resolve_var(env, reif)?;
+            crate::decompose_set::set_ne_reif(model, left, right, reif);
+        }
+        Constraint::SetInReif(value, set, reif) => {
+            let value = resolve_var(env, value)?;
+            let set = resolve_var(env, set)?;
+            let reif = resolve_var(env, reif)?;
+            crate::decompose_set::set_in_reif(model, value, set, reif);
+        }
+        Constraint::SetSubsetReif(subset, superset, reif) => {
+            let subset = resolve_var(env, subset)?;
+            let superset = resolve_var(env, superset)?;
+            let reif = resolve_var(env, reif)?;
+            crate::decompose_set::set_subset_reif(model, subset, superset, reif);
+        }
+        Constraint::SetSupersetReif(superset, subset, reif) => {
+            let superset = resolve_var(env, superset)?;
+            let subset = resolve_var(env, subset)?;
+            let reif = resolve_var(env, reif)?;
+            crate::decompose_set::set_superset_reif(model, superset, subset, reif);
+        }
+        Constraint::SetLeReif(left, right, reif) => {
+            let left = resolve_var(env, left)?;
+            let right = resolve_var(env, right)?;
+            let reif = resolve_var(env, reif)?;
+            crate::decompose_set::set_le_reif(model, left, right, reif);
+        }
+        Constraint::SetLtReif(left, right, reif) => {
+            let left = resolve_var(env, left)?;
+            let right = resolve_var(env, right)?;
+            let reif = resolve_var(env, reif)?;
+            crate::decompose_set::set_lt_reif(model, left, right, reif);
+        }
+        Constraint::ArrayVarSetElement(array, index, value) => {
+            post_array_var_set_element(model, env, array, index, value)?;
+        }
         Constraint::FloatLe(left, right) => {
             let left = resolve_var(env, left)?;
             let right = resolve_var(env, right)?;
@@ -570,6 +791,155 @@ fn post_constraint(
             let c = resolve_var(env, c)?;
             model.float_times(a, b, c);
         }
+        Constraint::FloatPlus(a, b, c) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            let c = resolve_var(env, c)?;
+            crate::decompose_float::float_plus(model, a, b, c);
+        }
+        Constraint::FloatAbs(a, b) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            crate::decompose_float::float_abs(model, a, b);
+        }
+        Constraint::FloatDiv(a, b, c) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            let c = resolve_var(env, c)?;
+            crate::decompose_float::float_div(model, a, b, c);
+        }
+        Constraint::FloatLt(a, b) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            crate::decompose_float::float_lt(model, a, b);
+        }
+        Constraint::FloatNe(a, b) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            crate::decompose_float::float_ne(model, a, b);
+        }
+        Constraint::FloatMax(a, b, c) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            let c = resolve_var(env, c)?;
+            crate::decompose_float::float_max(model, a, b, c);
+        }
+        Constraint::FloatMin(a, b, c) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            let c = resolve_var(env, c)?;
+            crate::decompose_float::float_min(model, a, b, c);
+        }
+        Constraint::Int2Float(int_var, float_var) => {
+            let int_var = resolve_var(env, int_var)?;
+            let float_var = resolve_var(env, float_var)?;
+            crate::decompose_float::int2float(model, int_var, float_var);
+        }
+        Constraint::FloatSqrt(a, b) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            crate::decompose_float::float_sqrt(model, a, b);
+        }
+        Constraint::FloatSin(a, b) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            crate::decompose_float::float_sin(model, a, b);
+        }
+        Constraint::FloatCos(a, b) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            crate::decompose_float::float_cos(model, a, b);
+        }
+        Constraint::FloatLn(a, b) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            crate::decompose_float::float_ln(model, a, b);
+        }
+        Constraint::FloatLog2(a, b) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            crate::decompose_float::float_log2(model, a, b);
+        }
+        Constraint::FloatExp(a, b) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            crate::decompose_float::float_exp(model, a, b);
+        }
+        Constraint::FloatCeil(a, b) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            crate::decompose_float::float_ceil(model, a, b);
+        }
+        Constraint::FloatFloor(a, b) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            crate::decompose_float::float_floor(model, a, b);
+        }
+        Constraint::FloatRound(a, b) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            crate::decompose_float::float_round(model, a, b);
+        }
+        Constraint::FloatLinEq { coeffs, vars, rhs } => {
+            post_float_lin_eq(model, env, &coeffs, vars, rhs)?;
+        }
+        Constraint::FloatLinNe { coeffs, vars, rhs } => {
+            post_float_lin_ne(model, env, &coeffs, vars, rhs)?;
+        }
+        Constraint::FloatLinLe { coeffs, vars, rhs } => {
+            post_float_lin_le(model, env, &coeffs, vars, rhs)?;
+        }
+        Constraint::FloatLinGe { coeffs, vars, rhs } => {
+            post_float_lin_ge(model, env, &coeffs, vars, rhs)?;
+        }
+        Constraint::FloatLinLeReif {
+            coeffs,
+            vars,
+            rhs,
+            reif,
+        } => {
+            post_float_lin_le_reif(model, env, &coeffs, vars, rhs, reif)?;
+        }
+        Constraint::FloatLinGeReif {
+            coeffs,
+            vars,
+            rhs,
+            reif,
+        } => {
+            post_float_lin_ge_reif(model, env, &coeffs, vars, rhs, reif)?;
+        }
+        Constraint::FloatLinEqReif {
+            coeffs,
+            vars,
+            rhs,
+            reif,
+        } => {
+            post_float_lin_eq_reif(model, env, &coeffs, vars, rhs, reif)?;
+        }
+        Constraint::FloatEqReif(a, b, reif) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            let reif = resolve_var(env, reif)?;
+            crate::decompose_float::float_eq_reif(model, a, b, reif);
+        }
+        Constraint::FloatNeReif(a, b, reif) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            let reif = resolve_var(env, reif)?;
+            crate::decompose_float::float_ne_reif(model, a, b, reif);
+        }
+        Constraint::FloatLeReif(a, b, reif) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            let reif = resolve_var(env, reif)?;
+            crate::decompose_float::float_le_reif(model, a, b, reif);
+        }
+        Constraint::FloatLtReif(a, b, reif) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            let reif = resolve_var(env, reif)?;
+            crate::decompose_float::float_lt_reif(model, a, b, reif);
+        }
         Constraint::IntAbs(a, b) => {
             let a = resolve_var(env, a)?;
             let b = resolve_var(env, b)?;
@@ -593,6 +963,59 @@ fn post_constraint(
             let c = resolve_var(env, c)?;
             crate::decompose::int_mod(model, a, b, c).map_err(FlatZincError::Unsupported)?;
         }
+        Constraint::IntPlus(a, b, c) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            let c = resolve_var(env, c)?;
+            crate::decompose::int_plus(model, a, b, c);
+        }
+        Constraint::IntLinNe { coeffs, vars, rhs } => {
+            post_int_lin_ne(model, env, &coeffs, vars, rhs)?;
+        }
+        Constraint::IntMin(a, b, c) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            let c = resolve_var(env, c)?;
+            crate::decompose::generic_min(model, a, b, c);
+        }
+        Constraint::IntMax(a, b, c) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            let c = resolve_var(env, c)?;
+            crate::decompose::generic_max(model, a, b, c);
+        }
+        Constraint::IntPow(base, exp, result) => {
+            let base = resolve_var(env, base)?;
+            let exp = resolve_var(env, exp)?;
+            let result = resolve_var(env, result)?;
+            crate::decompose::int_pow(model, base, exp, result)
+                .map_err(FlatZincError::Unsupported)?;
+        }
+        Constraint::IntPowFixed(base, exp, result) => {
+            let base = resolve_var(env, base)?;
+            let result = resolve_var(env, result)?;
+            crate::decompose::int_pow_fixed(model, base, exp, result)
+                .map_err(FlatZincError::Unsupported)?;
+        }
+        Constraint::ArrayIntElement(array, index, value) => {
+            post_array_int_element(model, env, array, index, value)?;
+        }
+        Constraint::ArrayVarIntElement(array, index, value) => {
+            let array_vars = resolve_var_list(env, array)?;
+            let index_var = resolve_var(env, index)?;
+            let value_var = resolve_var(env, value)?;
+            model.element(index_var, array_vars, value_var);
+        }
+        Constraint::ArrayIntMaximum(xs, m) => {
+            let xs = resolve_var_list(env, xs)?;
+            let m = resolve_var(env, m)?;
+            crate::decompose::array_int_maximum(model, &xs, m);
+        }
+        Constraint::ArrayIntMinimum(xs, m) => {
+            let xs = resolve_var_list(env, xs)?;
+            let m = resolve_var(env, m)?;
+            crate::decompose::array_int_minimum(model, &xs, m);
+        }
         Constraint::BoolNot(a, b) => {
             let a = resolve_var(env, a)?;
             let b = resolve_var(env, b)?;
@@ -609,6 +1032,70 @@ fn post_constraint(
             let b = resolve_var(env, b)?;
             let c = resolve_var(env, c)?;
             crate::decompose::bool_or(model, a, b, c);
+        }
+        Constraint::BoolXor(a, b, c) => {
+            let a = resolve_var(env, a)?;
+            let b = resolve_var(env, b)?;
+            let c = resolve_var(env, c)?;
+            crate::decompose::bool_xor(model, a, b, c);
+        }
+        Constraint::BoolClause(literals) => {
+            let vars = resolve_var_list(env, literals)?;
+            crate::decompose::bool_clause(model, &vars);
+        }
+        Constraint::BoolClauseReif(literals, reif) => {
+            let vars = resolve_var_list(env, literals)?;
+            let reif = resolve_var(env, reif)?;
+            crate::decompose::bool_clause_reif(model, &vars, reif);
+        }
+        Constraint::BoolEqReif(left, right, reif) => {
+            let left = resolve_var(env, left)?;
+            let right = resolve_var(env, right)?;
+            let reif = resolve_var(env, reif)?;
+            model.reified_equal(left, right, reif);
+        }
+        Constraint::BoolLe(left, right) => {
+            post_int_le(model, env, left, right)?;
+        }
+        Constraint::BoolLeReif(left, right, reif) => {
+            let left = resolve_var(env, left)?;
+            let right = resolve_var(env, right)?;
+            let reif = resolve_var(env, reif)?;
+            model.reified_less_equal(left, right, reif);
+        }
+        Constraint::BoolLt(left, right) => {
+            post_int_lt(model, env, left, right)?;
+        }
+        Constraint::BoolLtReif(left, right, reif) => {
+            let left = resolve_var(env, left)?;
+            let right = resolve_var(env, right)?;
+            let reif = resolve_var(env, reif)?;
+            model.reified_less_than(left, right, reif);
+        }
+        Constraint::BoolLinEq { coeffs, vars, rhs } => {
+            post_linear_eq(model, env, &coeffs, vars, rhs)?;
+        }
+        Constraint::BoolLinLe { coeffs, vars, rhs } => {
+            post_linear_le(model, env, &coeffs, vars, rhs)?;
+        }
+        Constraint::ArrayBoolAnd(xs, c) => {
+            let xs = resolve_var_list(env, xs)?;
+            let c = resolve_var(env, c)?;
+            crate::decompose::array_bool_and(model, &xs, c);
+        }
+        Constraint::ArrayBoolXor(xs, c) => {
+            let xs = resolve_var_list(env, xs)?;
+            let c = resolve_var(env, c)?;
+            crate::decompose::array_bool_xor(model, &xs, c);
+        }
+        Constraint::ArrayBoolElement(array, index, value) => {
+            post_array_int_element(model, env, array, index, value)?;
+        }
+        Constraint::ArrayVarBoolElement(array, index, value) => {
+            let array_vars = resolve_var_list(env, array)?;
+            let index_var = resolve_var(env, index)?;
+            let value_var = resolve_var(env, value)?;
+            model.element(index_var, array_vars, value_var);
         }
         Constraint::Automaton {
             vars,
@@ -641,6 +1128,8 @@ fn post_constraint(
 fn expand_predicates(
     constraints: Vec<Constraint>,
     predicates: &[PredicateDecl],
+    model: &Model,
+    env: &HashMap<String, Binding>,
 ) -> Result<Vec<Constraint>, FlatZincError> {
     let lookup: HashMap<_, _> = predicates
         .iter()
@@ -651,7 +1140,11 @@ fn expand_predicates(
     while let Some(constraint) = pending.pop() {
         match constraint {
             Constraint::PredicateCall { name, args } => {
-                if let Some(predicate) = lookup.get(name.as_str()) {
+                if let Some(constraint) = try_expand_generic_min_max(&name, &args, model, env)? {
+                    pending.push(constraint);
+                } else if let Some(constraint) = try_expand_global_call(&name, &args) {
+                    pending.push(constraint);
+                } else if let Some(predicate) = lookup.get(name.as_str()) {
                     for substituted in substitute_predicate(predicate, &args) {
                         pending.push(substituted);
                     }
@@ -666,6 +1159,71 @@ fn expand_predicates(
     }
     expanded.reverse();
     Ok(expanded)
+}
+
+fn try_expand_generic_min_max(
+    name: &str,
+    args: &[Expr],
+    model: &Model,
+    env: &HashMap<String, Binding>,
+) -> Result<Option<Constraint>, FlatZincError> {
+    if args.len() != 3 {
+        return Ok(None);
+    }
+    let (a, b, c) = (&args[0], &args[1], &args[2]);
+    let vars = [
+        resolve_var(env, a.clone())?,
+        resolve_var(env, b.clone())?,
+        resolve_var(env, c.clone())?,
+    ];
+    let is_float = crate::decompose::uses_float_domain(model, &vars);
+    let constraint = match name {
+        "min" if is_float => Constraint::FloatMin(a.clone(), b.clone(), c.clone()),
+        "min" => Constraint::IntMin(a.clone(), b.clone(), c.clone()),
+        "max" if is_float => Constraint::FloatMax(a.clone(), b.clone(), c.clone()),
+        "max" => Constraint::IntMax(a.clone(), b.clone(), c.clone()),
+        _ => return Ok(None),
+    };
+    Ok(Some(constraint))
+}
+
+fn try_expand_global_call(name: &str, args: &[Expr]) -> Option<Constraint> {
+    match (name, args.len()) {
+        ("count", 3) => Some(Constraint::Count(
+            args[0].clone(),
+            args[1].clone(),
+            args[2].clone(),
+        )),
+        ("among", 3) => Some(Constraint::Among(
+            args[0].clone(),
+            args[1].clone(),
+            args[2].clone(),
+        )),
+        ("at_least", 3) => Some(Constraint::AtLeast(
+            args[0].clone(),
+            args[1].clone(),
+            args[2].clone(),
+        )),
+        ("at_most", 3) => Some(Constraint::AtMost(
+            args[0].clone(),
+            args[1].clone(),
+            args[2].clone(),
+        )),
+        ("distribute", 3) => Some(Constraint::Distribute(
+            args[0].clone(),
+            args[1].clone(),
+            args[2].clone(),
+        )),
+        ("lex_less", 2) => Some(Constraint::LexLess(args[0].clone(), args[1].clone())),
+        ("lex_lesseq", 2) => Some(Constraint::LexLesseq(args[0].clone(), args[1].clone())),
+        ("lex_greater", 2) => Some(Constraint::LexGreater(args[0].clone(), args[1].clone())),
+        ("lex_greatereq", 2) => Some(Constraint::LexGreatereq(args[0].clone(), args[1].clone())),
+        ("increasing", 1) => Some(Constraint::Increasing(args[0].clone())),
+        ("decreasing", 1) => Some(Constraint::Decreasing(args[0].clone())),
+        ("sort", 2) => Some(Constraint::Sort(args[0].clone(), args[1].clone())),
+        ("nvalue", 2) => Some(Constraint::Nvalue(args[0].clone(), args[1].clone())),
+        _ => None,
+    }
 }
 
 fn substitute_predicate(predicate: &PredicateDecl, args: &[Expr]) -> Vec<Constraint> {
@@ -739,6 +1297,17 @@ fn substitute_constraint(
             rhs: *rhs,
             reif: map(reif),
         },
+        Constraint::IntLinNeReif {
+            coeffs,
+            vars,
+            rhs,
+            reif,
+        } => Constraint::IntLinNeReif {
+            coeffs: coeffs.clone(),
+            vars: map_list(vars),
+            rhs: *rhs,
+            reif: map(reif),
+        },
         Constraint::IntNe(left, right) => Constraint::IntNe(map(left), map(right)),
         Constraint::IntLe(left, right) => Constraint::IntLe(map(left), map(right)),
         Constraint::IntLt(left, right) => Constraint::IntLt(map(left), map(right)),
@@ -799,6 +1368,31 @@ fn substitute_constraint(
             lbound: lbound.as_ref().map(map),
             ubound: ubound.as_ref().map(map),
         },
+        Constraint::Count(xs, value, total) => Constraint::Count(map(xs), map(value), map(total)),
+        Constraint::Among(n, xs, values) => Constraint::Among(map(n), map(xs), map(values)),
+        Constraint::AtLeast(n, xs, value) => Constraint::AtLeast(map(n), map(xs), map(value)),
+        Constraint::AtMost(n, xs, value) => Constraint::AtMost(map(n), map(xs), map(value)),
+        Constraint::Distribute(card, value, base) => {
+            Constraint::Distribute(map(card), map(value), map(base))
+        }
+        Constraint::Nvalue(n, xs) => Constraint::Nvalue(map(n), map(xs)),
+        Constraint::LexLess(left, right) => Constraint::LexLess(map(left), map(right)),
+        Constraint::LexLesseq(left, right) => Constraint::LexLesseq(map(left), map(right)),
+        Constraint::LexGreater(left, right) => Constraint::LexGreater(map(left), map(right)),
+        Constraint::LexGreatereq(left, right) => Constraint::LexGreatereq(map(left), map(right)),
+        Constraint::Increasing(xs) => Constraint::Increasing(map(xs)),
+        Constraint::Decreasing(xs) => Constraint::Decreasing(map(xs)),
+        Constraint::Sort(x, y) => Constraint::Sort(map(x), map(y)),
+        Constraint::FloatDom(x, values) => Constraint::FloatDom(map(x), values.clone()),
+        Constraint::FloatIn(x, lo, hi) => Constraint::FloatIn(map(x), *lo, *hi),
+        Constraint::ArrayFloatElement(array, index, value) => {
+            Constraint::ArrayFloatElement(map(array), map(index), map(value))
+        }
+        Constraint::ArrayVarFloatElement(array, index, value) => {
+            Constraint::ArrayVarFloatElement(map(array), map(index), map(value))
+        }
+        Constraint::ArrayFloatMaximum(xs, m) => Constraint::ArrayFloatMaximum(map(xs), map(m)),
+        Constraint::ArrayFloatMinimum(xs, m) => Constraint::ArrayFloatMinimum(map(xs), map(m)),
         Constraint::Table { vars, tuples } => Constraint::Table {
             vars: map(vars),
             tuples: tuples.clone(),
@@ -846,6 +1440,44 @@ fn substitute_constraint(
         Constraint::SetSubset(subset, superset) => {
             Constraint::SetSubset(map(subset), map(superset))
         }
+        Constraint::SetEq(left, right) => Constraint::SetEq(map(left), map(right)),
+        Constraint::SetIn(value, set) => Constraint::SetIn(map(value), map(set)),
+        Constraint::SetSuperset(superset, subset) => {
+            Constraint::SetSuperset(map(superset), map(subset))
+        }
+        Constraint::SetLe(left, right) => Constraint::SetLe(map(left), map(right)),
+        Constraint::SetNe(left, right) => Constraint::SetNe(map(left), map(right)),
+        Constraint::SetLt(left, right) => Constraint::SetLt(map(left), map(right)),
+        Constraint::SetDiff(left, right, result) => {
+            Constraint::SetDiff(map(left), map(right), map(result))
+        }
+        Constraint::SetSymdiff(left, right, result) => {
+            Constraint::SetSymdiff(map(left), map(right), map(result))
+        }
+        Constraint::SetEqReif(left, right, reif) => {
+            Constraint::SetEqReif(map(left), map(right), map(reif))
+        }
+        Constraint::SetNeReif(left, right, reif) => {
+            Constraint::SetNeReif(map(left), map(right), map(reif))
+        }
+        Constraint::SetInReif(value, set, reif) => {
+            Constraint::SetInReif(map(value), map(set), map(reif))
+        }
+        Constraint::SetSubsetReif(subset, superset, reif) => {
+            Constraint::SetSubsetReif(map(subset), map(superset), map(reif))
+        }
+        Constraint::SetSupersetReif(superset, subset, reif) => {
+            Constraint::SetSupersetReif(map(superset), map(subset), map(reif))
+        }
+        Constraint::SetLeReif(left, right, reif) => {
+            Constraint::SetLeReif(map(left), map(right), map(reif))
+        }
+        Constraint::SetLtReif(left, right, reif) => {
+            Constraint::SetLtReif(map(left), map(right), map(reif))
+        }
+        Constraint::ArrayVarSetElement(array, index, value) => {
+            Constraint::ArrayVarSetElement(map(array), map(index), map(value))
+        }
         Constraint::FloatLe(left, right) => Constraint::FloatLe(map(left), map(right)),
         Constraint::FloatEq(left, right) => Constraint::FloatEq(map(left), map(right)),
         Constraint::SetUnion(left, right, result) => {
@@ -855,13 +1487,145 @@ fn substitute_constraint(
             Constraint::SetIntersect(map(left), map(right), map(result))
         }
         Constraint::FloatTimes(a, b, c) => Constraint::FloatTimes(map(a), map(b), map(c)),
+        Constraint::FloatPlus(a, b, c) => Constraint::FloatPlus(map(a), map(b), map(c)),
+        Constraint::FloatAbs(a, b) => Constraint::FloatAbs(map(a), map(b)),
+        Constraint::FloatDiv(a, b, c) => Constraint::FloatDiv(map(a), map(b), map(c)),
+        Constraint::FloatLt(a, b) => Constraint::FloatLt(map(a), map(b)),
+        Constraint::FloatNe(a, b) => Constraint::FloatNe(map(a), map(b)),
+        Constraint::FloatMax(a, b, c) => Constraint::FloatMax(map(a), map(b), map(c)),
+        Constraint::FloatMin(a, b, c) => Constraint::FloatMin(map(a), map(b), map(c)),
+        Constraint::Int2Float(int_var, float_var) => {
+            Constraint::Int2Float(map(int_var), map(float_var))
+        }
+        Constraint::FloatSqrt(a, b) => Constraint::FloatSqrt(map(a), map(b)),
+        Constraint::FloatSin(a, b) => Constraint::FloatSin(map(a), map(b)),
+        Constraint::FloatCos(a, b) => Constraint::FloatCos(map(a), map(b)),
+        Constraint::FloatLn(a, b) => Constraint::FloatLn(map(a), map(b)),
+        Constraint::FloatLog2(a, b) => Constraint::FloatLog2(map(a), map(b)),
+        Constraint::FloatExp(a, b) => Constraint::FloatExp(map(a), map(b)),
+        Constraint::FloatCeil(a, b) => Constraint::FloatCeil(map(a), map(b)),
+        Constraint::FloatFloor(a, b) => Constraint::FloatFloor(map(a), map(b)),
+        Constraint::FloatRound(a, b) => Constraint::FloatRound(map(a), map(b)),
+        Constraint::FloatLinEq { coeffs, vars, rhs } => Constraint::FloatLinEq {
+            coeffs: coeffs.clone(),
+            vars: map_list(vars),
+            rhs: *rhs,
+        },
+        Constraint::FloatLinNe { coeffs, vars, rhs } => Constraint::FloatLinNe {
+            coeffs: coeffs.clone(),
+            vars: map_list(vars),
+            rhs: *rhs,
+        },
+        Constraint::FloatLinLe { coeffs, vars, rhs } => Constraint::FloatLinLe {
+            coeffs: coeffs.clone(),
+            vars: map_list(vars),
+            rhs: *rhs,
+        },
+        Constraint::FloatLinGe { coeffs, vars, rhs } => Constraint::FloatLinGe {
+            coeffs: coeffs.clone(),
+            vars: map_list(vars),
+            rhs: *rhs,
+        },
+        Constraint::FloatLinLeReif {
+            coeffs,
+            vars,
+            rhs,
+            reif,
+        } => Constraint::FloatLinLeReif {
+            coeffs: coeffs.clone(),
+            vars: map_list(vars),
+            rhs: *rhs,
+            reif: map(reif),
+        },
+        Constraint::FloatLinGeReif {
+            coeffs,
+            vars,
+            rhs,
+            reif,
+        } => Constraint::FloatLinGeReif {
+            coeffs: coeffs.clone(),
+            vars: map_list(vars),
+            rhs: *rhs,
+            reif: map(reif),
+        },
+        Constraint::FloatLinEqReif {
+            coeffs,
+            vars,
+            rhs,
+            reif,
+        } => Constraint::FloatLinEqReif {
+            coeffs: coeffs.clone(),
+            vars: map_list(vars),
+            rhs: *rhs,
+            reif: map(reif),
+        },
+        Constraint::FloatEqReif(a, b, reif) => Constraint::FloatEqReif(map(a), map(b), map(reif)),
+        Constraint::FloatNeReif(a, b, reif) => Constraint::FloatNeReif(map(a), map(b), map(reif)),
+        Constraint::FloatLeReif(a, b, reif) => Constraint::FloatLeReif(map(a), map(b), map(reif)),
+        Constraint::FloatLtReif(a, b, reif) => Constraint::FloatLtReif(map(a), map(b), map(reif)),
         Constraint::IntAbs(a, b) => Constraint::IntAbs(map(a), map(b)),
         Constraint::IntTimes(a, b, c) => Constraint::IntTimes(map(a), map(b), map(c)),
         Constraint::IntDiv(a, b, c) => Constraint::IntDiv(map(a), map(b), map(c)),
         Constraint::IntMod(a, b, c) => Constraint::IntMod(map(a), map(b), map(c)),
+        Constraint::IntPlus(a, b, c) => Constraint::IntPlus(map(a), map(b), map(c)),
+        Constraint::IntLinNe { coeffs, vars, rhs } => Constraint::IntLinNe {
+            coeffs: coeffs.clone(),
+            vars: map_list(vars),
+            rhs: *rhs,
+        },
+        Constraint::IntMin(a, b, c) => Constraint::IntMin(map(a), map(b), map(c)),
+        Constraint::IntMax(a, b, c) => Constraint::IntMax(map(a), map(b), map(c)),
+        Constraint::IntPow(base, exp, result) => {
+            Constraint::IntPow(map(base), map(exp), map(result))
+        }
+        Constraint::IntPowFixed(base, exp, result) => {
+            Constraint::IntPowFixed(map(base), *exp, map(result))
+        }
+        Constraint::ArrayIntElement(array, index, value) => {
+            Constraint::ArrayIntElement(map(array), map(index), map(value))
+        }
+        Constraint::ArrayVarIntElement(array, index, value) => {
+            Constraint::ArrayVarIntElement(map(array), map(index), map(value))
+        }
+        Constraint::ArrayIntMaximum(xs, m) => Constraint::ArrayIntMaximum(map(xs), map(m)),
+        Constraint::ArrayIntMinimum(xs, m) => Constraint::ArrayIntMinimum(map(xs), map(m)),
         Constraint::BoolNot(a, b) => Constraint::BoolNot(map(a), map(b)),
         Constraint::BoolAnd(a, b, c) => Constraint::BoolAnd(map(a), map(b), map(c)),
         Constraint::BoolOr(a, b, c) => Constraint::BoolOr(map(a), map(b), map(c)),
+        Constraint::BoolXor(a, b, c) => Constraint::BoolXor(map(a), map(b), map(c)),
+        Constraint::BoolClause(literals) => Constraint::BoolClause(map(literals)),
+        Constraint::BoolClauseReif(literals, reif) => {
+            Constraint::BoolClauseReif(map(literals), map(reif))
+        }
+        Constraint::BoolEqReif(left, right, reif) => {
+            Constraint::BoolEqReif(map(left), map(right), map(reif))
+        }
+        Constraint::BoolLe(left, right) => Constraint::BoolLe(map(left), map(right)),
+        Constraint::BoolLeReif(left, right, reif) => {
+            Constraint::BoolLeReif(map(left), map(right), map(reif))
+        }
+        Constraint::BoolLt(left, right) => Constraint::BoolLt(map(left), map(right)),
+        Constraint::BoolLtReif(left, right, reif) => {
+            Constraint::BoolLtReif(map(left), map(right), map(reif))
+        }
+        Constraint::BoolLinEq { coeffs, vars, rhs } => Constraint::BoolLinEq {
+            coeffs: coeffs.clone(),
+            vars: map_list(vars),
+            rhs: *rhs,
+        },
+        Constraint::BoolLinLe { coeffs, vars, rhs } => Constraint::BoolLinLe {
+            coeffs: coeffs.clone(),
+            vars: map_list(vars),
+            rhs: *rhs,
+        },
+        Constraint::ArrayBoolAnd(xs, c) => Constraint::ArrayBoolAnd(map(xs), map(c)),
+        Constraint::ArrayBoolXor(xs, c) => Constraint::ArrayBoolXor(map(xs), map(c)),
+        Constraint::ArrayBoolElement(array, index, value) => {
+            Constraint::ArrayBoolElement(map(array), map(index), map(value))
+        }
+        Constraint::ArrayVarBoolElement(array, index, value) => {
+            Constraint::ArrayVarBoolElement(map(array), map(index), map(value))
+        }
         Constraint::Automaton {
             vars,
             num_symbols,
@@ -1102,6 +1866,9 @@ fn resolve_duration_binding(
             Some(Binding::FloatParam(_)) => Err(FlatZincError::Unsupported(format!(
                 "float parameter `{name}` used as duration array"
             ))),
+            Some(Binding::SetParam(_)) => Err(FlatZincError::Unsupported(format!(
+                "set parameter `{name}` used as duration array"
+            ))),
             Some(Binding::Var(_)) => Err(FlatZincError::Unsupported(format!(
                 "scalar variable `{name}` used as duration array"
             ))),
@@ -1251,6 +2018,496 @@ fn post_linear_ge_reif(
     Ok(())
 }
 
+fn post_set_in(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    value: VariableId,
+    set: Expr,
+) -> Result<(), FlatZincError> {
+    match set {
+        Expr::Name(name) => match env.get(&name) {
+            Some(Binding::SetParam(values)) => {
+                let set_var = model.set_var_fixed_values(values);
+                crate::decompose_set::set_in(model, value, set_var);
+                Ok(())
+            }
+            Some(Binding::Var(set_var)) => {
+                crate::decompose_set::set_in(model, value, *set_var);
+                Ok(())
+            }
+            Some(_) => Err(FlatZincError::Unsupported(format!(
+                "`{name}` is not a set variable or parameter"
+            ))),
+            None => Err(FlatZincError::UnknownIdentifier(name)),
+        },
+        other => {
+            let set_var = resolve_var(env, other)?;
+            crate::decompose_set::set_in(model, value, set_var);
+            Ok(())
+        }
+    }
+}
+
+fn post_array_var_set_element(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    array: Expr,
+    index: Expr,
+    value: Expr,
+) -> Result<(), FlatZincError> {
+    let sets = resolve_var_list(env, array)?;
+    let index_var = resolve_var(env, index)?;
+    let value_var = resolve_var(env, value)?;
+    for (offset, &set_var) in sets.iter().enumerate() {
+        let idx = i32::try_from(offset).map_err(|_| {
+            FlatZincError::Unsupported("array_var_set_element index offset too large".into())
+        })?;
+        let idx_var = model.int_var_fixed(idx);
+        let reif = model.int_var(0, 1);
+        model.reified_equal(index_var, idx_var, reif);
+        model.set_eq_reif(set_var, value_var, reif);
+    }
+    Ok(())
+}
+
+fn post_array_int_element(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    array: Expr,
+    index: Expr,
+    value: Expr,
+) -> Result<(), FlatZincError> {
+    let index_var = resolve_var(env, index)?;
+    let value_var = resolve_var(env, value)?;
+    let array_vars = resolve_int_array_vars(model, env, array)?;
+    model.element(index_var, array_vars, value_var);
+    Ok(())
+}
+
+fn resolve_int_array_vars(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    expr: Expr,
+) -> Result<Vec<VariableId>, FlatZincError> {
+    match expr {
+        Expr::List(items) => {
+            let mut vars = Vec::new();
+            for item in items {
+                match item {
+                    Expr::Int(value) => vars.push(model.int_var_fixed(value)),
+                    other => vars.push(resolve_var(env, other)?),
+                }
+            }
+            Ok(vars)
+        }
+        Expr::Name(name) => match env.get(&name) {
+            Some(Binding::ParamArray(values)) => Ok(values
+                .iter()
+                .map(|&value| model.int_var_fixed(value))
+                .collect()),
+            Some(Binding::Array(elements)) => {
+                let mut indices: Vec<_> = elements.keys().copied().collect();
+                indices.sort_unstable();
+                Ok(indices.into_iter().map(|index| elements[&index]).collect())
+            }
+            Some(_) => Err(FlatZincError::Unsupported(format!(
+                "`{name}` is not an int array"
+            ))),
+            None => Err(FlatZincError::UnknownIdentifier(name)),
+        },
+        other => resolve_var_list(env, other),
+    }
+}
+
+fn post_int_lin_ne(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    coeffs: &[i32],
+    vars: Vec<Expr>,
+    rhs: i32,
+) -> Result<(), FlatZincError> {
+    if coeffs.len() != vars.len() {
+        return Err(FlatZincError::Unsupported(
+            "coefficient and variable length mismatch".to_string(),
+        ));
+    }
+    let variables = resolve_var_list(env, Expr::List(vars))?;
+    let reif = model.int_var(0, 1);
+    model.reified_scalar_eq(coeffs.to_vec(), variables, rhs, reif);
+    let zero = model.int_var_fixed(0);
+    model.equal(reif, zero);
+    Ok(())
+}
+
+fn post_float_lin_le(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    coeffs: &[f64],
+    vars: Vec<Expr>,
+    rhs: f64,
+) -> Result<(), FlatZincError> {
+    if coeffs.len() != vars.len() {
+        return Err(FlatZincError::Unsupported(
+            "coefficient and variable length mismatch".to_string(),
+        ));
+    }
+    let variables = resolve_float_var_list(env, vars)?;
+    crate::decompose_float::float_lin_le(model, coeffs, &variables, rhs);
+    Ok(())
+}
+
+fn post_float_lin_ge(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    coeffs: &[f64],
+    vars: Vec<Expr>,
+    rhs: f64,
+) -> Result<(), FlatZincError> {
+    if coeffs.len() != vars.len() {
+        return Err(FlatZincError::Unsupported(
+            "coefficient and variable length mismatch".to_string(),
+        ));
+    }
+    let variables = resolve_float_var_list(env, vars)?;
+    crate::decompose_float::float_lin_ge(model, coeffs, &variables, rhs);
+    Ok(())
+}
+
+fn post_float_lin_eq(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    coeffs: &[f64],
+    vars: Vec<Expr>,
+    rhs: f64,
+) -> Result<(), FlatZincError> {
+    if coeffs.len() != vars.len() {
+        return Err(FlatZincError::Unsupported(
+            "coefficient and variable length mismatch".to_string(),
+        ));
+    }
+    let variables = resolve_float_var_list(env, vars)?;
+    crate::decompose_float::float_lin_eq(model, coeffs, &variables, rhs);
+    Ok(())
+}
+
+fn post_float_lin_ne(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    coeffs: &[f64],
+    vars: Vec<Expr>,
+    rhs: f64,
+) -> Result<(), FlatZincError> {
+    if coeffs.len() != vars.len() {
+        return Err(FlatZincError::Unsupported(
+            "coefficient and variable length mismatch".to_string(),
+        ));
+    }
+    let variables = resolve_float_var_list(env, vars)?;
+    crate::decompose_float::float_lin_ne(model, coeffs, &variables, rhs);
+    Ok(())
+}
+
+fn post_float_lin_le_reif(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    coeffs: &[f64],
+    vars: Vec<Expr>,
+    rhs: f64,
+    reif: Expr,
+) -> Result<(), FlatZincError> {
+    if coeffs.len() != vars.len() {
+        return Err(FlatZincError::Unsupported(
+            "coefficient and variable length mismatch".to_string(),
+        ));
+    }
+    let variables = resolve_float_var_list(env, vars)?;
+    let reif_var = resolve_var(env, reif)?;
+    crate::decompose_float::float_lin_le_reif(model, coeffs, &variables, rhs, reif_var);
+    Ok(())
+}
+
+fn post_float_lin_ge_reif(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    coeffs: &[f64],
+    vars: Vec<Expr>,
+    rhs: f64,
+    reif: Expr,
+) -> Result<(), FlatZincError> {
+    if coeffs.len() != vars.len() {
+        return Err(FlatZincError::Unsupported(
+            "coefficient and variable length mismatch".to_string(),
+        ));
+    }
+    let variables = resolve_float_var_list(env, vars)?;
+    let reif_var = resolve_var(env, reif)?;
+    crate::decompose_float::float_lin_ge_reif(model, coeffs, &variables, rhs, reif_var);
+    Ok(())
+}
+
+fn post_float_lin_eq_reif(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    coeffs: &[f64],
+    vars: Vec<Expr>,
+    rhs: f64,
+    reif: Expr,
+) -> Result<(), FlatZincError> {
+    if coeffs.len() != vars.len() {
+        return Err(FlatZincError::Unsupported(
+            "coefficient and variable length mismatch".to_string(),
+        ));
+    }
+    let variables = resolve_float_var_list(env, vars)?;
+    let reif_var = resolve_var(env, reif)?;
+    crate::decompose_float::float_lin_eq_reif(model, coeffs, &variables, rhs, reif_var);
+    Ok(())
+}
+
+fn resolve_float_var_list(
+    env: &HashMap<String, Binding>,
+    vars: Vec<Expr>,
+) -> Result<Vec<VariableId>, FlatZincError> {
+    resolve_var_list(env, Expr::List(vars))
+}
+
+fn resolve_count_value(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    expr: Expr,
+) -> Result<VariableId, FlatZincError> {
+    match expr {
+        Expr::Int(value) => Ok(model.int_var_fixed(value)),
+        other => resolve_var(env, other),
+    }
+}
+
+fn resolve_set_values(
+    env: &HashMap<String, Binding>,
+    expr: Expr,
+) -> Result<Vec<i32>, FlatZincError> {
+    match expr {
+        Expr::Name(name) => match env.get(&name) {
+            Some(Binding::SetParam(values)) => Ok(values.clone()),
+            Some(_) => Err(FlatZincError::Unsupported(format!(
+                "`{name}` is not a set parameter"
+            ))),
+            None => Err(FlatZincError::UnknownIdentifier(name)),
+        },
+        _ => Err(FlatZincError::Unsupported(
+            "set-valued global argument must be a set parameter".to_string(),
+        )),
+    }
+}
+
+fn post_count(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    xs: Expr,
+    value: Expr,
+    total: Expr,
+) -> Result<(), FlatZincError> {
+    let xs_vars = resolve_var_list(env, xs)?;
+    let value_var = resolve_count_value(model, env, value)?;
+    let total_var = resolve_var(env, total)?;
+    crate::decompose_globals::count(model, &xs_vars, value_var, total_var);
+    Ok(())
+}
+
+fn post_among(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    n: Expr,
+    xs: Expr,
+    values: Expr,
+) -> Result<(), FlatZincError> {
+    let n_var = resolve_var(env, n)?;
+    let xs_vars = resolve_var_list(env, xs)?;
+    let set_values = resolve_set_values(env, values)?;
+    crate::decompose_globals::among(model, n_var, &xs_vars, &set_values);
+    Ok(())
+}
+
+fn post_at_least(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    n: Expr,
+    xs: Expr,
+    value: Expr,
+) -> Result<(), FlatZincError> {
+    let n_val = resolve_int(env, n)?;
+    let xs_vars = resolve_var_list(env, xs)?;
+    let value_val = resolve_int(env, value)?;
+    crate::decompose_globals::at_least(model, n_val, &xs_vars, value_val);
+    Ok(())
+}
+
+fn post_at_most(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    n: Expr,
+    xs: Expr,
+    value: Expr,
+) -> Result<(), FlatZincError> {
+    let n_val = resolve_int(env, n)?;
+    let xs_vars = resolve_var_list(env, xs)?;
+    let value_val = resolve_int(env, value)?;
+    crate::decompose_globals::at_most(model, n_val, &xs_vars, value_val);
+    Ok(())
+}
+
+fn post_distribute(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    card: Expr,
+    value: Expr,
+    base: Expr,
+) -> Result<(), FlatZincError> {
+    let card_vars = resolve_var_list(env, card)?;
+    let value_vars = resolve_var_list(env, value)?;
+    let base_vars = resolve_var_list(env, base)?;
+    if card_vars.len() != value_vars.len() {
+        return Err(FlatZincError::Unsupported(
+            "distribute card and value arrays must have equal length".to_string(),
+        ));
+    }
+    crate::decompose_globals::distribute(model, &card_vars, &value_vars, &base_vars);
+    Ok(())
+}
+
+fn post_lex_pair(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    left: Expr,
+    right: Expr,
+    decompose: fn(&mut Model, &[VariableId], &[VariableId]),
+) -> Result<(), FlatZincError> {
+    let left_vars = resolve_var_list(env, left)?;
+    let right_vars = resolve_var_list(env, right)?;
+    if left_vars.len() != right_vars.len() {
+        return Err(FlatZincError::Unsupported(
+            "lexicographic arrays must have equal length".to_string(),
+        ));
+    }
+    decompose(model, &left_vars, &right_vars);
+    Ok(())
+}
+
+fn post_lex_less(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    left: Expr,
+    right: Expr,
+) -> Result<(), FlatZincError> {
+    post_lex_pair(model, env, left, right, crate::decompose_globals::lex_less)
+}
+
+fn post_lex_lesseq(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    left: Expr,
+    right: Expr,
+) -> Result<(), FlatZincError> {
+    post_lex_pair(
+        model,
+        env,
+        left,
+        right,
+        crate::decompose_globals::lex_lesseq,
+    )
+}
+
+fn post_lex_greater(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    left: Expr,
+    right: Expr,
+) -> Result<(), FlatZincError> {
+    post_lex_pair(
+        model,
+        env,
+        left,
+        right,
+        crate::decompose_globals::lex_greater,
+    )
+}
+
+fn post_lex_greatereq(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    left: Expr,
+    right: Expr,
+) -> Result<(), FlatZincError> {
+    post_lex_pair(
+        model,
+        env,
+        left,
+        right,
+        crate::decompose_globals::lex_greatereq,
+    )
+}
+
+fn post_increasing(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    xs: Expr,
+) -> Result<(), FlatZincError> {
+    let xs_vars = resolve_var_list(env, xs)?;
+    crate::decompose_globals::increasing(model, &xs_vars);
+    Ok(())
+}
+
+fn post_decreasing(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    xs: Expr,
+) -> Result<(), FlatZincError> {
+    let xs_vars = resolve_var_list(env, xs)?;
+    crate::decompose_globals::decreasing(model, &xs_vars);
+    Ok(())
+}
+
+fn post_sort(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    x: Expr,
+    y: Expr,
+) -> Result<(), FlatZincError> {
+    let x_vars = resolve_var_list(env, x)?;
+    let y_vars = resolve_var_list(env, y)?;
+    if x_vars.len() != y_vars.len() {
+        return Err(FlatZincError::Unsupported(
+            "sort arrays must have the same length".to_string(),
+        ));
+    }
+    crate::decompose_globals::sort(model, &x_vars, &y_vars);
+    Ok(())
+}
+
+fn post_array_float_element(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    array: Expr,
+    index: Expr,
+    value: Expr,
+) -> Result<(), FlatZincError> {
+    post_array_var_float_element(model, env, array, index, value)
+}
+
+fn post_array_var_float_element(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    array: Expr,
+    index: Expr,
+    value: Expr,
+) -> Result<(), FlatZincError> {
+    let array_vars = resolve_var_list(env, array)?;
+    let index_var = resolve_var(env, index)?;
+    let value_var = resolve_var(env, value)?;
+    crate::decompose_float::array_var_float_element(model, &array_vars, index_var, value_var);
+    Ok(())
+}
+
 fn post_linear_eq_reif(
     model: &mut Model,
     env: &HashMap<String, Binding>,
@@ -1268,6 +2525,28 @@ fn post_linear_eq_reif(
     let resolved = resolve_var_list(env, Expr::List(vars))?;
     let reif_var = resolve_var(env, reif)?;
     model.reified_scalar_eq(coeffs.to_vec(), resolved, rhs, reif_var);
+    Ok(())
+}
+
+fn post_linear_ne_reif(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    coeffs: &[i32],
+    vars: Vec<Expr>,
+    rhs: i32,
+    reif: Expr,
+) -> Result<(), FlatZincError> {
+    if coeffs.len() != vars.len() {
+        return Err(FlatZincError::Unsupported(
+            "coefficient and variable length mismatch".to_string(),
+        ));
+    }
+
+    let resolved = resolve_var_list(env, Expr::List(vars))?;
+    let reif_var = resolve_var(env, reif)?;
+    let eq_reif = model.int_var(0, 1);
+    model.reified_scalar_eq(coeffs.to_vec(), resolved, rhs, eq_reif);
+    crate::decompose::bool_not(model, eq_reif, reif_var);
     Ok(())
 }
 
@@ -1503,6 +2782,9 @@ fn resolve_int_array(
             Some(Binding::FloatParam(_)) => Err(FlatZincError::Unsupported(format!(
                 "float parameter `{name}` used as integer array"
             ))),
+            Some(Binding::SetParam(_)) => Err(FlatZincError::Unsupported(format!(
+                "set parameter `{name}` used as integer array"
+            ))),
             None => Err(FlatZincError::UnknownIdentifier(name)),
         },
         Expr::Int(value) => Ok(vec![value]),
@@ -1525,6 +2807,9 @@ fn resolve_duration_values(
             ))),
             Some(Binding::FloatParam(_)) => Err(FlatZincError::Unsupported(format!(
                 "float parameter `{name}` used as duration array"
+            ))),
+            Some(Binding::SetParam(_)) => Err(FlatZincError::Unsupported(format!(
+                "set parameter `{name}` used as duration array"
             ))),
             Some(Binding::Var(_)) | Some(Binding::Array(_)) => Err(FlatZincError::Unsupported(
                 format!("variable `{name}` used as duration array"),
@@ -1585,6 +2870,9 @@ fn resolve_var_list(
             Some(Binding::FloatParam(_)) => Err(FlatZincError::Unsupported(format!(
                 "float parameter `{name}` used as decision variable"
             ))),
+            Some(Binding::SetParam(_)) => Err(FlatZincError::Unsupported(format!(
+                "set parameter `{name}` used as decision variable"
+            ))),
             None => Err(FlatZincError::UnknownIdentifier(name)),
         },
         other => resolve_var(env, other).map(|var| vec![var]),
@@ -1606,6 +2894,9 @@ fn resolve_var(env: &HashMap<String, Binding>, expr: Expr) -> Result<VariableId,
             ))),
             Some(Binding::FloatParam(_)) => Err(FlatZincError::Unsupported(format!(
                 "float parameter `{name}` used as variable"
+            ))),
+            Some(Binding::SetParam(_)) => Err(FlatZincError::Unsupported(format!(
+                "set parameter `{name}` used as variable"
             ))),
             None => Err(FlatZincError::UnknownIdentifier(name)),
         },
@@ -1648,6 +2939,9 @@ fn resolve_int(env: &HashMap<String, Binding>, expr: Expr) -> Result<i32, FlatZi
             ))),
             Some(Binding::FloatParam(_)) => Err(FlatZincError::Unsupported(format!(
                 "float parameter `{name}` used as index"
+            ))),
+            Some(Binding::SetParam(_)) => Err(FlatZincError::Unsupported(format!(
+                "set parameter `{name}` used as index"
             ))),
             None => Err(FlatZincError::UnknownIdentifier(name)),
         },
@@ -1846,6 +3140,27 @@ mod tests {
             solve maximize x;
         "#;
         compile(parse(maximize).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn compiles_generic_min_and_max() {
+        let int_min = r#"
+            var 1..5: a;
+            var 2..6: b;
+            var 1..6: c;
+            constraint min(a, b, c);
+            solve satisfy;
+        "#;
+        compile(parse(int_min).unwrap()).unwrap();
+
+        let float_max = r#"
+            var 1.0..3.0: a;
+            var 2.0..5.0: b;
+            var 0.0..10.0: c;
+            constraint max(a, b, c);
+            solve satisfy;
+        "#;
+        compile(parse(float_max).unwrap()).unwrap();
     }
 
     #[test]

@@ -1,0 +1,5 @@
+var 1..5: a;
+var 1..5: b;
+var 2..10: c;
+constraint int_plus(a, b, c);
+solve satisfy;

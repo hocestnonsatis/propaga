@@ -1,8 +1,53 @@
 use propaga_flatzinc::{compile, parse};
+use propaga_search::ObjectiveValue;
 
 const MAGIC_SQUARE: &str = include_str!("../../../benchmarks/magic_square.fzn");
 const MAXIMIZE_X: &str = include_str!("../../../benchmarks/maximize_x.fzn");
 const BOOL_REIFY: &str = include_str!("../../../benchmarks/bool_reify.fzn");
+
+#[test]
+fn float_lin_le_model_api_is_satisfiable() {
+    use propaga_model::Model;
+    let mut model = Model::new();
+    let x = model.float_var(0.0, 1.0);
+    let y = model.float_var(0.0, 1.0);
+    model.float_scalar_le(vec![1.0, 1.0], vec![x, y], 1.5);
+    model.propagate().unwrap();
+    let (solution, stats) = model.solve_subset_with_stats([x, y]);
+    assert!(
+        solution.is_some(),
+        "float_lin_le should be SAT: timed_out={}",
+        stats.timed_out
+    );
+}
+
+#[test]
+fn float_lin_le_benchmark_is_satisfiable() {
+    let source = include_str!("../../../benchmarks/float_lin_le.fzn");
+    let mut instance = compile(parse(source).expect("parse")).expect("compile");
+    let prop = instance.model.propagate();
+    assert!(prop.is_ok(), "propagate failed: {prop:?}");
+    let (solution, stats) = instance.model.solve_subset_with_stats(instance.solve_vars);
+    assert!(
+        solution.is_some(),
+        "expected SAT, got UNSAT (timed_out={})",
+        stats.timed_out
+    );
+}
+
+#[test]
+fn set_param_benchmark_is_satisfiable() {
+    let source = include_str!("../../../benchmarks/set_param.fzn");
+    let mut instance = compile(parse(source).expect("parse")).expect("compile");
+    let prop = instance.model.propagate();
+    assert!(prop.is_ok(), "propagate failed: {prop:?}");
+    let (solution, stats) = instance.model.solve_subset_with_stats(instance.solve_vars);
+    assert!(
+        solution.is_some(),
+        "expected SAT, got UNSAT (timed_out={})",
+        stats.timed_out
+    );
+}
 
 #[test]
 fn magic_square_is_satisfiable() {
@@ -17,12 +62,13 @@ fn maximize_x_finds_optimum() {
     let program = parse(MAXIMIZE_X).expect("parse maximize_x");
     let mut instance = compile(program).expect("compile maximize_x");
     let objective = instance.objectives.first().expect("objective");
-    let (solution, best, _stats, _solutions) =
-        instance
-            .model
-            .optimize(instance.solve_vars, objective.var, objective.direction);
+    let (solution, best, _stats, _solutions) = instance.model.optimize_objective(
+        instance.solve_vars.clone(),
+        objective.optimization_target(),
+        objective.direction(),
+    );
     assert!(solution.is_some());
-    assert_eq!(best, Some(10));
+    assert_eq!(best, Some(ObjectiveValue::Int(10)));
 }
 
 #[test]
@@ -192,6 +238,51 @@ fn compiles_bool_parameter() {
 }
 
 #[test]
+fn compiles_float_minimize_instance() {
+    let source = r#"
+        var 0.0..10.0: x;
+        solve minimize x;
+    "#;
+    let program = parse(source).expect("parse");
+    let instance = compile(program).expect("compile float objective");
+    assert_eq!(instance.objectives.len(), 1);
+    assert!(matches!(
+        instance.objectives[0],
+        propaga_flatzinc::ObjectiveSpec::Float { .. }
+    ));
+}
+
+#[test]
+fn minimizes_float_objective() {
+    let source = r#"
+        var 0.0..10.0: x;
+        solve minimize x;
+    "#;
+    let program = parse(source).expect("parse");
+    let mut instance = compile(program).expect("compile float objective");
+    let objective = instance.objectives[0];
+    let (solution, best, _stats, _solutions) = instance.model.optimize_objective(
+        instance.solve_vars.clone(),
+        objective.optimization_target(),
+        objective.direction(),
+    );
+    assert!(solution.is_some());
+    assert_eq!(best, Some(ObjectiveValue::Float(0.0)));
+}
+
+#[test]
+fn compiles_set_minimize_instance() {
+    let source = include_str!("../../../benchmarks/set_optimize.fzn");
+    let program = parse(source).expect("parse");
+    let instance = compile(program).expect("compile set objective");
+    assert_eq!(instance.objectives.len(), 1);
+    assert!(matches!(
+        instance.objectives[0],
+        propaga_flatzinc::ObjectiveSpec::SetCardinality { .. }
+    ));
+}
+
+#[test]
 fn compiles_float_parameter() {
     let source = r#"
         float: pi = 3.14;
@@ -200,4 +291,21 @@ fn compiles_float_parameter() {
     "#;
     let program = parse(source).expect("parse float param");
     compile(program).expect("compile float param");
+}
+
+#[test]
+fn generic_min_instance_solves() {
+    use propaga_search::assignment_int;
+
+    let source = include_str!("../../../benchmarks/generic_min.fzn");
+    let program = parse(source).expect("parse generic_min");
+    let mut instance = compile(program).expect("compile generic_min");
+    let c = instance
+        .names
+        .iter()
+        .find(|(_, name)| *name == "c")
+        .map(|(var, _)| *var)
+        .expect("c");
+    let (solution, _) = instance.model.solve_subset_with_stats(instance.solve_vars);
+    assert_eq!(solution.and_then(|s| assignment_int(&s, c)), Some(4));
 }

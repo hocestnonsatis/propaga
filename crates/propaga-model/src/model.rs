@@ -4,13 +4,18 @@ use propaga_engine::Engine;
 use propaga_propagators::{
     AllDifferentPropagator, CardinalityBound, CircuitPropagator, CumulativePropagator,
     DiffnPropagator, DisjunctivePropagator, DisjunctiveTask, ElementPropagator, EqualityPropagator,
-    FloatEqPropagator, FloatLePropagator, FloatTimesPropagator, GlobalCardinalityPropagator,
-    InversePropagator, LessEqualPropagator, LessThanPropagator, LinearEqPropagator,
-    LinearScalarGePropagator, LinearScalarLePropagator, NotEqualOffsetPropagator, RectangleSpec,
-    RegularPropagator, ReifiedEqualityPropagator, ReifiedLessEqualPropagator,
-    ReifiedLessThanPropagator, ReifiedNotEqualPropagator, ReifiedScalarEqPropagator,
-    ReifiedScalarGePropagator, ReifiedScalarLePropagator, SetCardPropagator,
-    SetIntersectPropagator, SetSubsetPropagator, SetUnionPropagator, TablePropagator, TaskSpec,
+    FloatBinaryOp, FloatBinaryPropagator, FloatEqPropagator, FloatEqReifPropagator,
+    FloatLePropagator, FloatLeReifPropagator, FloatLinearGePropagator, FloatLinearLePropagator,
+    FloatTimesPropagator, FloatUnaryOp, FloatUnaryPropagator, GlobalCardinalityPropagator,
+    Int2FloatPropagator, InversePropagator, LessEqualPropagator, LessThanPropagator,
+    LinearEqPropagator, LinearScalarGePropagator, LinearScalarLePropagator,
+    NotEqualOffsetPropagator, RectangleSpec, RegularPropagator, ReifiedEqualityPropagator,
+    ReifiedFloatLinearEqPropagator, ReifiedFloatLinearGePropagator, ReifiedFloatLinearLePropagator,
+    ReifiedLessEqualPropagator, ReifiedLessThanPropagator, ReifiedNotEqualPropagator,
+    ReifiedScalarEqPropagator, ReifiedScalarGePropagator, ReifiedScalarLePropagator,
+    SetCardPropagator, SetEqReifPropagator, SetInPropagator, SetInReifPropagator,
+    SetIntersectPropagator, SetSubsetPropagator, SetSubsetReifPropagator, SetUnionPropagator,
+    TablePropagator, TaskSpec,
 };
 use propaga_search::{
     DepthFirstSearch, LexicographicOptimization, LexicographicResult, Objective,
@@ -123,6 +128,46 @@ impl Model {
             .add_propagator(Box::new(SetSubsetPropagator::new(subset, superset)));
     }
 
+    /// Posts `value ∈ set`.
+    pub fn set_member(&mut self, value: VariableId, set: VariableId) {
+        self.engine
+            .add_propagator(Box::new(SetInPropagator::new(value, set)));
+    }
+
+    /// Declares a fixed set variable with exactly `values`.
+    pub fn set_var_fixed_values(&mut self, values: &[i32]) -> VariableId {
+        if values.is_empty() {
+            return self.set_var(0, 0, 0, 0);
+        }
+        let low = *values.iter().min().unwrap();
+        let high = *values.iter().max().unwrap();
+        let var = self.set_var(low, high, values.len(), values.len());
+        for &value in values {
+            let _ = self.engine.force_set_in(var, value);
+        }
+        var
+    }
+
+    /// Posts `reif <=> value ∈ set`.
+    pub fn set_member_reif(&mut self, value: VariableId, set: VariableId, reif: VariableId) {
+        self.engine
+            .add_propagator(Box::new(SetInReifPropagator::new(value, set, reif)));
+    }
+
+    /// Posts `reif <=> left == right` for set variables.
+    pub fn set_eq_reif(&mut self, left: VariableId, right: VariableId, reif: VariableId) {
+        self.engine
+            .add_propagator(Box::new(SetEqReifPropagator::new(left, right, reif)));
+    }
+
+    /// Posts `reif <=> subset ⊆ superset`.
+    pub fn set_subset_reif(&mut self, subset: VariableId, superset: VariableId, reif: VariableId) {
+        self.engine
+            .add_propagator(Box::new(SetSubsetReifPropagator::new(
+                subset, superset, reif,
+            )));
+    }
+
     /// Posts `left <= right` for float variables.
     pub fn float_le(&mut self, left: VariableId, right: VariableId) {
         self.engine
@@ -133,6 +178,18 @@ impl Model {
     pub fn float_eq(&mut self, left: VariableId, right: VariableId) {
         self.engine
             .add_propagator(Box::new(FloatEqPropagator::new(left, right)));
+    }
+
+    /// Posts `reif <=> left == right` for float variables.
+    pub fn float_eq_reif(&mut self, left: VariableId, right: VariableId, reif: VariableId) {
+        self.engine
+            .add_propagator(Box::new(FloatEqReifPropagator::new(left, right, reif)));
+    }
+
+    /// Posts `reif <=> left <= right` for float variables.
+    pub fn float_le_reif(&mut self, left: VariableId, right: VariableId, reif: VariableId) {
+        self.engine
+            .add_propagator(Box::new(FloatLeReifPropagator::new(left, right, reif)));
     }
 
     /// Posts `result = left ∪ right`.
@@ -151,6 +208,123 @@ impl Model {
     pub fn float_times(&mut self, a: VariableId, b: VariableId, c: VariableId) {
         self.engine
             .add_propagator(Box::new(FloatTimesPropagator::new(a, b, c)));
+    }
+
+    /// Posts `c = a + b` for float variables.
+    pub fn float_plus(&mut self, a: VariableId, b: VariableId, c: VariableId) {
+        self.engine
+            .add_propagator(Box::new(FloatBinaryPropagator::new(
+                a,
+                b,
+                c,
+                FloatBinaryOp::Plus,
+            )));
+    }
+
+    /// Posts `c = a / b` for float variables.
+    pub fn float_div(&mut self, a: VariableId, b: VariableId, c: VariableId) {
+        self.engine
+            .add_propagator(Box::new(FloatBinaryPropagator::new(
+                a,
+                b,
+                c,
+                FloatBinaryOp::Div,
+            )));
+    }
+
+    /// Posts `b = unary(a)` for float variables.
+    pub fn float_unary(&mut self, input: VariableId, output: VariableId, op: FloatUnaryOp) {
+        self.engine
+            .add_propagator(Box::new(FloatUnaryPropagator::new(input, output, op)));
+    }
+
+    /// Posts `float = int` channeling.
+    pub fn int2float(&mut self, int_var: VariableId, float_var: VariableId) {
+        self.engine
+            .add_propagator(Box::new(Int2FloatPropagator::new(int_var, float_var)));
+    }
+
+    /// Posts `sum(coeffs[i] * vars[i]) <= rhs` for float variables.
+    pub fn float_scalar_le(
+        &mut self,
+        coeffs: impl Into<Vec<f64>>,
+        vars: impl Into<Vec<VariableId>>,
+        rhs: f64,
+    ) {
+        self.engine
+            .add_propagator(Box::new(FloatLinearLePropagator::new(coeffs, vars, rhs)));
+    }
+
+    /// Posts `sum(coeffs[i] * vars[i]) >= rhs` for float variables.
+    pub fn float_scalar_ge(
+        &mut self,
+        coeffs: impl Into<Vec<f64>>,
+        vars: impl Into<Vec<VariableId>>,
+        rhs: f64,
+    ) {
+        self.engine
+            .add_propagator(Box::new(FloatLinearGePropagator::new(coeffs, vars, rhs)));
+    }
+
+    /// Posts `sum(coeffs[i] * vars[i]) == rhs` for float variables.
+    pub fn float_scalar_eq(
+        &mut self,
+        coeffs: impl Into<Vec<f64>>,
+        vars: impl Into<Vec<VariableId>>,
+        rhs: f64,
+    ) {
+        let coeffs = coeffs.into();
+        let vars = vars.into();
+        self.engine
+            .add_propagator(Box::new(FloatLinearLePropagator::new(
+                coeffs.clone(),
+                vars.clone(),
+                rhs,
+            )));
+        self.engine
+            .add_propagator(Box::new(FloatLinearGePropagator::new(coeffs, vars, rhs)));
+    }
+
+    /// Posts `reif <=> sum(coeffs[i] * vars[i]) <= rhs` for float variables.
+    pub fn reified_float_scalar_le(
+        &mut self,
+        coeffs: impl Into<Vec<f64>>,
+        vars: impl Into<Vec<VariableId>>,
+        rhs: f64,
+        reif: VariableId,
+    ) {
+        self.engine
+            .add_propagator(Box::new(ReifiedFloatLinearLePropagator::new(
+                coeffs, vars, rhs, reif,
+            )));
+    }
+
+    /// Posts `reif <=> sum(coeffs[i] * vars[i]) == rhs` for float variables.
+    pub fn reified_float_scalar_eq(
+        &mut self,
+        coeffs: impl Into<Vec<f64>>,
+        vars: impl Into<Vec<VariableId>>,
+        rhs: f64,
+        reif: VariableId,
+    ) {
+        self.engine
+            .add_propagator(Box::new(ReifiedFloatLinearEqPropagator::new(
+                coeffs, vars, rhs, reif,
+            )));
+    }
+
+    /// Posts `reif <=> sum(coeffs[i] * vars[i]) >= rhs` for float variables.
+    pub fn reified_float_scalar_ge(
+        &mut self,
+        coeffs: impl Into<Vec<f64>>,
+        vars: impl Into<Vec<VariableId>>,
+        rhs: f64,
+        reif: VariableId,
+    ) {
+        self.engine
+            .add_propagator(Box::new(ReifiedFloatLinearGePropagator::new(
+                coeffs, vars, rhs, reif,
+            )));
     }
 
     /// Posts `left == right`.
@@ -467,16 +641,21 @@ impl Model {
         (solutions, search.stats())
     }
 
-    /// Optimizes a single integer objective using branch-and-bound.
-    pub fn optimize(
+    /// Optimizes a single objective using branch-and-bound.
+    pub fn optimize_objective(
         &mut self,
         variables: impl Into<Vec<VariableId>>,
-        objective: VariableId,
+        target: propaga_search::OptimizationTarget,
         direction: propaga_search::ObjectiveDirection,
-    ) -> (Option<Solution>, Option<i32>, SearchStats, u32) {
-        let mut search = propaga_search::OptimizationSearch::new(
+    ) -> (
+        Option<Solution>,
+        Option<propaga_search::ObjectiveValue>,
+        SearchStats,
+        u32,
+    ) {
+        let mut search = propaga_search::OptimizationSearch::with_target(
             variables,
-            objective,
+            target,
             direction,
             self.search_config,
         );
@@ -486,6 +665,26 @@ impl Model {
             result.objective_value,
             result.stats,
             result.solutions_found,
+        )
+    }
+
+    /// Optimizes a single integer objective using branch-and-bound.
+    pub fn optimize(
+        &mut self,
+        variables: impl Into<Vec<VariableId>>,
+        objective: VariableId,
+        direction: propaga_search::ObjectiveDirection,
+    ) -> (Option<Solution>, Option<i32>, SearchStats, u32) {
+        let (solution, value, stats, solutions_found) = self.optimize_objective(
+            variables,
+            propaga_search::OptimizationTarget::Int(objective),
+            direction,
+        );
+        (
+            solution,
+            value.and_then(|value| value.as_int()),
+            stats,
+            solutions_found,
         )
     }
 

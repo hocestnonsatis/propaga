@@ -66,7 +66,7 @@ impl LexicographicOptimization {
             );
             let result = search.optimize(engine);
             merge_stats(&mut total_stats, result.stats);
-            let Some(value) = result.objective_value else {
+            let Some(value) = result.objective_value.and_then(|value| value.as_int()) else {
                 return LexicographicResult {
                     solution: None,
                     objective_values,

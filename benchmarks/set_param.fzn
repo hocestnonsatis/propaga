@@ -1,0 +1,4 @@
+set of 1..3: allowed = {1, 3};
+var 1..3: x;
+constraint set_in(x, allowed);
+solve satisfy;

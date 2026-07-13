@@ -4,7 +4,7 @@ A propagator-based constraint solver written in Rust.
 
 Propaga combines a typed propagation engine with pluggable domains, composable propagators, and conflict-driven search. Use it as a library via the `Model` API, from FlatZinc files, or through the `propaga` CLI.
 
-**v0.6.0** — [crates.io](https://crates.io/crates/propaga-cli) · [GitHub Releases](https://github.com/hocestnonsatis/propaga/releases) · [CHANGELOG](CHANGELOG.md)
+**v1.0.0** (FlatZinc milestone) — [crates.io](https://crates.io/crates/propaga-cli) · [GitHub Releases](https://github.com/hocestnonsatis/propaga/releases) · [CHANGELOG](CHANGELOG.md)
 
 ## Installation
 
@@ -25,7 +25,7 @@ propaga-model = "0.6"
 propaga-flatzinc = "0.6"
 ```
 
-FlatZinc support is an intentional subset — check [COMPATIBILITY.md](benchmarks/minizinc/COMPATIBILITY.md) before compiling MiniZinc models.
+FlatZinc support covers the MiniZinc **FlatZinc 1.6 stdlib workflow** (compile `.mzn` → solve `.fzn`). See [COMPATIBILITY.md](benchmarks/minizinc/COMPATIBILITY.md) for the full matrix and known gaps (`sort`, `array_float_*`, `float_dom`/`float_in`).
 
 ## Workspace
 
@@ -52,9 +52,9 @@ MRV, DOM, DOM/W-DEG, activity-based, and input-order variable ordering; ascendin
 
 ### FlatZinc
 
-Parses a practical subset of FlatZinc: integer and bool variables, common globals, linear constraints, reified forms, `output` directives, `solve satisfy | minimize | maximize`, and a subset of search annotations (`int_search`, `restart_luby`, `restart_constant`, `restart_geometric`, `restart_none`). Batch solving with `propaga solve --dir`. CLI flags override annotation defaults when explicitly set.
+Parses and compiles FlatZinc 1.6 builtins for the MiniZinc stdlib workflow: integer, bool, set, and float variables; linear and global constraints; reified forms; `output` directives; `solve satisfy | minimize | maximize` (including float and set-cardinality objectives); lexicographic and Pareto int objectives; search annotations (`int_search`, `restart_*`); and user `predicate` declarations with nested expansion. Batch solving with `propaga solve --dir`. CLI flags override annotation defaults when explicitly set.
 
-Full constraint matrix: [COMPATIBILITY.md](benchmarks/minizinc/COMPATIBILITY.md). MiniZinc workflow: [benchmarks/minizinc/README.md](benchmarks/minizinc/README.md).
+Full constraint matrix: [COMPATIBILITY.md](benchmarks/minizinc/COMPATIBILITY.md). MiniZinc workflow and stdlib corpus: [benchmarks/minizinc/README.md](benchmarks/minizinc/README.md).
 
 ### Scheduling
 

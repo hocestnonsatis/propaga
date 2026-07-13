@@ -20,7 +20,9 @@ pub use conflict::{ConflictAnalyzer, NogoodStore};
 pub use dfs::DepthFirstSearch;
 pub use lcg::{ClauseStore, LearnedClause};
 pub use lexicographic::{LexicographicOptimization, LexicographicResult, Objective};
-pub use optimize::{ObjectiveDirection, OptimizationResult, OptimizationSearch};
+pub use optimize::{
+    ObjectiveDirection, ObjectiveValue, OptimizationResult, OptimizationSearch, OptimizationTarget,
+};
 pub use pareto::{ParetoOptimization, ParetoResult, ParetoSolution, dominates};
 pub use portfolio::{PortfolioConfig, PortfolioSearch};
 pub use stats::SearchStats;

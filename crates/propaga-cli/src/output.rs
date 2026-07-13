@@ -1,7 +1,7 @@
 use crate::puzzle_io::OutputFormat;
 use propaga_core::VariableId;
 use propaga_model::Model;
-use propaga_search::{AssignmentValue, SearchStats, Solution};
+use propaga_search::{AssignmentValue, ObjectiveValue, SearchStats, Solution};
 use serde::Serialize;
 use std::time::Duration;
 
@@ -299,6 +299,16 @@ pub(crate) fn format_output_directive(
     rendered
 }
 
+fn objective_value_json(value: &ObjectiveValue) -> serde_json::Value {
+    use serde_json::json;
+
+    match value {
+        ObjectiveValue::Int(value) => json!(value),
+        ObjectiveValue::Float(value) => json!(value),
+        ObjectiveValue::SetCardinality(value) => json!(value),
+    }
+}
+
 /// Prints FlatZinc JSON including optional formatted outputs.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn print_flatzinc_json(
@@ -306,7 +316,7 @@ pub(crate) fn print_flatzinc_json(
     order: &[propaga_core::VariableId],
     solution: Option<&propaga_search::Solution>,
     outputs: &[propaga_flatzinc::OutputDirective],
-    objective_values: &[i32],
+    objective_values: &[ObjectiveValue],
     direction: Option<propaga_search::ObjectiveDirection>,
     pareto_solutions: &[propaga_search::ParetoSolution],
     stats: Option<(SearchStats, Duration, u32)>,
@@ -341,9 +351,9 @@ pub(crate) fn print_flatzinc_json(
     if !formatted.is_empty() {
         payload["outputs"] = json!(formatted);
     }
-    if let (Some(value), Some(direction)) = (objective_values.first().copied(), direction) {
+    if let (Some(value), Some(direction)) = (objective_values.first(), direction) {
         payload["objective"] = json!({
-            "value": value,
+            "value": objective_value_json(value),
             "direction": match direction {
                 propaga_search::ObjectiveDirection::Minimize => "minimize",
                 propaga_search::ObjectiveDirection::Maximize => "maximize",
@@ -351,7 +361,12 @@ pub(crate) fn print_flatzinc_json(
         });
     }
     if objective_values.len() > 1 {
-        payload["objective_values"] = json!(objective_values);
+        payload["objective_values"] = json!(
+            objective_values
+                .iter()
+                .map(objective_value_json)
+                .collect::<Vec<_>>()
+        );
     }
     if !pareto_solutions.is_empty() {
         payload["pareto_solutions"] = json!(
@@ -383,21 +398,26 @@ pub(crate) fn print_flatzinc_json(
 
 /// Prints the optimized objective value in plain text.
 pub(crate) fn print_objective_plain(
-    value: i32,
+    value: &ObjectiveValue,
     direction: Option<propaga_search::ObjectiveDirection>,
     quiet: bool,
 ) {
     if quiet {
         return;
     }
+    let rendered = match value {
+        ObjectiveValue::Int(value) => value.to_string(),
+        ObjectiveValue::Float(value) => value.to_string(),
+        ObjectiveValue::SetCardinality(value) => value.to_string(),
+    };
     match direction {
         Some(propaga_search::ObjectiveDirection::Minimize) => {
-            println!("objective (minimize) = {value}");
+            println!("objective (minimize) = {rendered}");
         }
         Some(propaga_search::ObjectiveDirection::Maximize) => {
-            println!("objective (maximize) = {value}");
+            println!("objective (maximize) = {rendered}");
         }
-        None => println!("objective = {value}"),
+        None => println!("objective = {rendered}"),
     }
 }
 
