@@ -257,6 +257,7 @@ fn compile_objectives(
 enum Binding {
     Param(i32),
     ParamArray(Vec<i32>),
+    #[allow(dead_code)]
     FloatParam(f64),
     SetParam(Vec<i32>),
     Var(VariableId),
@@ -1745,6 +1746,7 @@ fn post_regular(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn post_automaton(
     model: &mut Model,
     env: &HashMap<String, Binding>,

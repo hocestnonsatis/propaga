@@ -167,6 +167,7 @@ pub fn float_ne_reif(model: &mut Model, a: VariableId, b: VariableId, reif: Vari
     crate::decompose::bool_not(model, eq_reif, reif);
 }
 
+#[allow(dead_code)]
 pub fn float_lin_ne_reif(
     model: &mut Model,
     coeffs: &[f64],

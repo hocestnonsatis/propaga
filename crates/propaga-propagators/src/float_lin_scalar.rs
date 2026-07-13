@@ -435,28 +435,6 @@ fn max_sum(ctx: &mut dyn PropagationContext, coeffs: &[f64], vars: &[VariableId]
         .unwrap_or(f64::NEG_INFINITY)
 }
 
-fn min_sum_excluding(
-    ctx: &mut dyn PropagationContext,
-    coeffs: &[f64],
-    vars: &[VariableId],
-    skip: usize,
-) -> f64 {
-    snapshot_domains(ctx, vars)
-        .map(|domains| min_sum_excluding_domains(coeffs, &domains, skip))
-        .unwrap_or(f64::INFINITY)
-}
-
-fn max_sum_excluding(
-    ctx: &mut dyn PropagationContext,
-    coeffs: &[f64],
-    vars: &[VariableId],
-    skip: usize,
-) -> f64 {
-    snapshot_domains(ctx, vars)
-        .map(|domains| max_sum_excluding_domains(coeffs, &domains, skip))
-        .unwrap_or(f64::NEG_INFINITY)
-}
-
 fn any_empty(ctx: &mut dyn PropagationContext, vars: &[VariableId]) -> bool {
     vars.iter().any(|&var| {
         ctx.as_extended()

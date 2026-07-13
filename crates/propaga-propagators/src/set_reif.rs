@@ -62,23 +62,23 @@ impl Propagator for SetEqReifPropagator {
             }
         }
 
-        if ctx.fixed_value(reif_id) == Some(1) {
-            if let Some(ext) = ctx.as_extended() {
-                for &value in &left.glb {
-                    changed |= ext.force_set_in(right_id, value);
+        if ctx.fixed_value(reif_id) == Some(1)
+            && let Some(ext) = ctx.as_extended()
+        {
+            for &value in &left.glb {
+                changed |= ext.force_set_in(right_id, value);
+            }
+            for &value in &right.glb {
+                changed |= ext.force_set_in(left_id, value);
+            }
+            for value in left.lub.clone() {
+                if !right.lub.contains(&value) {
+                    changed |= ext.force_set_out(left_id, value);
                 }
-                for &value in &right.glb {
-                    changed |= ext.force_set_in(left_id, value);
-                }
-                for value in left.lub.clone() {
-                    if !right.lub.contains(&value) {
-                        changed |= ext.force_set_out(left_id, value);
-                    }
-                }
-                for value in right.lub.clone() {
-                    if !left.lub.contains(&value) {
-                        changed |= ext.force_set_out(right_id, value);
-                    }
+            }
+            for value in right.lub.clone() {
+                if !left.lub.contains(&value) {
+                    changed |= ext.force_set_out(right_id, value);
                 }
             }
         }
@@ -124,27 +124,27 @@ impl Propagator for SetSubsetReifPropagator {
         };
 
         let mut changed = false;
-        if ctx.fixed_value(reif_id) == Some(1) {
-            if let Some(ext) = ctx.as_extended() {
-                for &value in &subset.glb {
-                    changed |= ext.force_set_in(superset_id, value);
-                }
-                if let Some(superset) = ext.set_domain(superset_id) {
-                    for value in subset.lub.clone() {
-                        if !superset.lub.contains(&value) {
-                            changed |= ext.force_set_out(subset_id, value);
-                        }
+        if ctx.fixed_value(reif_id) == Some(1)
+            && let Some(ext) = ctx.as_extended()
+        {
+            for &value in &subset.glb {
+                changed |= ext.force_set_in(superset_id, value);
+            }
+            if let Some(superset) = ext.set_domain(superset_id) {
+                for value in subset.lub.clone() {
+                    if !superset.lub.contains(&value) {
+                        changed |= ext.force_set_out(subset_id, value);
                     }
                 }
             }
         }
 
-        if let Some(ext) = ctx.as_extended() {
-            if let Some(superset) = ext.set_domain(superset_id) {
-                let violated = subset.glb.iter().any(|v| !superset.lub.contains(v));
-                if violated && ctx.fixed_value(reif_id) == Some(1) {
-                    return PropagationStatus::Failure;
-                }
+        if let Some(ext) = ctx.as_extended()
+            && let Some(superset) = ext.set_domain(superset_id)
+        {
+            let violated = subset.glb.iter().any(|v| !superset.lub.contains(v));
+            if violated && ctx.fixed_value(reif_id) == Some(1) {
+                return PropagationStatus::Failure;
             }
         }
 
@@ -201,20 +201,18 @@ impl Propagator for SetInReifPropagator {
             }
         }
 
-        if ctx.fixed_value(reif_id) == Some(1) {
-            if let Some(value) = ctx.fixed_value(value_id) {
-                if let Some(ext) = ctx.as_extended() {
-                    changed |= ext.force_set_in(set_id, value);
-                }
-            }
+        if ctx.fixed_value(reif_id) == Some(1)
+            && let Some(value) = ctx.fixed_value(value_id)
+            && let Some(ext) = ctx.as_extended()
+        {
+            changed |= ext.force_set_in(set_id, value);
         }
 
-        if ctx.fixed_value(reif_id) == Some(0) {
-            if let Some(value) = ctx.fixed_value(value_id) {
-                if set.glb.contains(&value) {
-                    return PropagationStatus::Failure;
-                }
-            }
+        if ctx.fixed_value(reif_id) == Some(0)
+            && let Some(value) = ctx.fixed_value(value_id)
+            && set.glb.contains(&value)
+        {
+            return PropagationStatus::Failure;
         }
 
         if let (Some(min), Some(max)) = (ctx.domain(value_id).min(), ctx.domain(value_id).max()) {

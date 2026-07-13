@@ -107,7 +107,7 @@ fn propagate_bounds(
             }
         }
 
-        let mut fixed_count = fixed.len() as i32;
+        let fixed_count = fixed.len() as i32;
         let possible_count = fixed_count + open.len() as i32;
 
         if fixed_count > bounds.max || possible_count < bounds.min {
@@ -138,7 +138,6 @@ fn propagate_bounds(
                     None => {}
                 }
             }
-            fixed_count = fixed.len() as i32;
         }
     }
 

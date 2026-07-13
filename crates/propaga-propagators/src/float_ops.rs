@@ -30,17 +30,15 @@ impl Propagator for FloatEqReifPropagator {
             let mut eq = FloatEqPropagator::new(left_id, right_id);
             return eq.propagate(ctx);
         }
-        if ctx.fixed_value(reif_id) == Some(0) {
-            let left = ctx.as_extended().and_then(|ext| ext.float_domain(left_id));
-            let right = ctx.as_extended().and_then(|ext| ext.float_domain(right_id));
-            if let (Some(left), Some(right)) = (left, right) {
-                if left.min == left.max
-                    && right.min == right.max
-                    && (left.min - right.min).abs() < f64::EPSILON
-                {
-                    return PropagationStatus::Failure;
-                }
-            }
+        if ctx.fixed_value(reif_id) == Some(0)
+            && let Some(ext) = ctx.as_extended()
+            && let (Some(left), Some(right)) =
+                (ext.float_domain(left_id), ext.float_domain(right_id))
+            && left.min == left.max
+            && right.min == right.max
+            && (left.min - right.min).abs() < f64::EPSILON
+        {
+            return PropagationStatus::Failure;
         }
         PropagationStatus::OkNoChange
     }
@@ -96,15 +94,14 @@ impl Propagator for FloatLeReifPropagator {
             _ => {}
         }
 
-        if let Some(ext) = ctx.as_extended() {
-            if let (Some(left), Some(right)) =
+        if let Some(ext) = ctx.as_extended()
+            && let (Some(left), Some(right)) =
                 (ext.float_domain(left_id), ext.float_domain(right_id))
-            {
-                if left.max <= right.min {
-                    changed |= tighten_reif(ctx, reif_id, 1);
-                } else if left.min > right.max {
-                    changed |= tighten_reif(ctx, reif_id, 0);
-                }
+        {
+            if left.max <= right.min {
+                changed |= tighten_reif(ctx, reif_id, 1);
+            } else if left.min > right.max {
+                changed |= tighten_reif(ctx, reif_id, 0);
             }
         }
 
@@ -206,10 +203,10 @@ impl Propagator for FloatBinaryPropagator {
         if matches!(self.op, FloatBinaryOp::Plus) {
             let c_snap = ext.float_domain(self.watched[2]).unwrap_or(c);
             let c_interval = FloatDomain::new(c_snap.min, c_snap.max);
-            let a_from_c = c_interval.plus(b_dom.neg());
+            let a_from_c = c_interval.plus(-b_dom);
             changed |= ext.tighten_float_below(self.watched[0], a_from_c.lower_bound());
             changed |= ext.tighten_float_above(self.watched[0], a_from_c.upper_bound());
-            let b_from_c = c_interval.plus(a_dom.neg());
+            let b_from_c = c_interval.plus(-a_dom);
             changed |= ext.tighten_float_below(self.watched[1], b_from_c.lower_bound());
             changed |= ext.tighten_float_above(self.watched[1], b_from_c.upper_bound());
         }

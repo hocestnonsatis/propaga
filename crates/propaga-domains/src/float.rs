@@ -115,15 +115,6 @@ impl FloatDomain {
         Self::new(self.min + other.min, self.max + other.max)
     }
 
-    /// Returns the interval negation `-self`.
-    #[must_use]
-    pub fn neg(self) -> Self {
-        if self.is_empty() {
-            return Self::new(1.0, 0.0);
-        }
-        Self::new(-self.max, -self.min)
-    }
-
     /// Returns a sound absolute value interval.
     #[must_use]
     pub fn abs(self) -> Self {
@@ -222,6 +213,17 @@ impl FloatDomain {
     #[must_use]
     pub fn round(self) -> Self {
         self.floor().plus(Self::new(0.0, 1.0))
+    }
+}
+
+impl std::ops::Neg for FloatDomain {
+    type Output = Self;
+
+    fn neg(self) -> Self {
+        if self.is_empty() {
+            return Self::new(1.0, 0.0);
+        }
+        Self::new(-self.max, -self.min)
     }
 }
 

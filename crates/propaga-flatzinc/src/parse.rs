@@ -858,11 +858,10 @@ impl Parser {
                 outputs.push(self.parse_output()?);
             } else if self.peek_is_ident("predicate") {
                 predicates.push(self.parse_predicate_decl()?);
-            } else if self.peek_is_ident("function") {
-                self.skip_until_semicolon_or_eof();
-            } else if self.peek_is_ident("test") {
-                self.skip_until_semicolon_or_eof();
-            } else if self.peek_is_ident("annotation") {
+            } else if self.peek_is_ident("function")
+                || self.peek_is_ident("test")
+                || self.peek_is_ident("annotation")
+            {
                 self.skip_until_semicolon_or_eof();
             } else {
                 let found = match self.peek() {
