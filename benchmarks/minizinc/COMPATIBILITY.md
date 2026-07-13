@@ -165,13 +165,13 @@ Supported `int_search` value selectors: `indomain_min`, `indomain_max`, `indomai
 
 ```bash
 # Compile MiniZinc to FlatZinc (requires MiniZinc toolchain)
-minizinc --compile-only -o /tmp/model.fzn model.mzn
+minizinc -c --solver default --output-fzn-to-file /tmp/model.fzn model.mzn
 
 # Single instance
 cargo run -p propaga-cli -- solve --file /tmp/model.fzn --stats
 
-# Stdlib corpus regression (bundled .fzn or CI-precompiled)
-cargo test -p propaga-flatzinc stdlib -- --nocapture
+# Stdlib corpus regression (bundled .fzn fixtures)
+cargo test -p propaga-flatzinc --test builtin_corpus -- --nocapture
 
 # Full compat report (requires MiniZinc)
 bash scripts/flatzinc-full-compat-report.sh

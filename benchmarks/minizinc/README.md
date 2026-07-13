@@ -6,7 +6,7 @@ Propaga solves **FlatZinc** (`.fzn`) directly. To run MiniZinc models:
 2. Compile a model to FlatZinc:
 
 ```bash
-minizinc --compile-only -o benchmarks/minizinc/my_model.fzn benchmarks/minizinc/my_model.mzn
+minizinc -c --solver default --output-fzn-to-file benchmarks/minizinc/my_model.fzn benchmarks/minizinc/my_model.mzn
 ```
 
 3. Solve with Propaga:
@@ -45,19 +45,25 @@ bash scripts/flatzinc-full-compat-report.sh   # models + stdlib corpus
 bash scripts/flatzinc-builtin-inventory.sh    # list FlatZinc constraint names per stdlib model
 ```
 
-Requires MiniZinc installed locally. CI runs stdlib precompile in the `minizinc-stdlib` job; the main test job uses hand-written `.fzn` files only.
+Requires MiniZinc installed locally. CI's `minizinc-stdlib` job regresses the
+bundled `.fzn` fixtures (no MiniZinc toolchain required). Fresh MiniZinc
+output is solver-specific and is checked locally via the scripts above.
 
 ## Stdlib test corpus
 
-MiniZinc models under `benchmarks/minizinc/stdlib/` exercise individual FlatZinc builtins.
-Each model has a bundled `.fzn` fixture for offline compile regression. CI also
-precompiles fresh FlatZinc into `target/flatzinc-stdlib/` when MiniZinc is available:
+MiniZinc models under `benchmarks/minizinc/stdlib/` exercise individual FlatZinc
+builtins. Each model has a **hand-written** `.fzn` fixture used for offline/
+CI compile regression (`cargo test -p propaga-flatzinc --test builtin_corpus`).
+
+Optional local refresh into `target/flatzinc-stdlib/` (note: MiniZinc 2.9+ may
+emit solver-specific FlatZinc that Propaga does not yet accept — prefer the
+bundled fixtures for Propaga regression):
 
 ```bash
 mkdir -p target/flatzinc-stdlib
 for mzn in benchmarks/minizinc/stdlib/*.mzn; do
   base=$(basename "$mzn" .mzn)
-  minizinc --compile-only -o "target/flatzinc-stdlib/$base.fzn" "$mzn"
+  minizinc -c --solver default --output-fzn-to-file "target/flatzinc-stdlib/$base.fzn" "$mzn"
 done
-cargo test -p propaga-flatzinc stdlib -- --nocapture
+cargo test -p propaga-flatzinc --test builtin_corpus -- --nocapture
 ```

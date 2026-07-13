@@ -36,20 +36,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install MiniZinc
+      - name: Stdlib FlatZinc corpus regression
         run: |
-          sudo apt-get update
-          sudo apt-get install -y minizinc
-      - name: Precompile MiniZinc stdlib corpus
-        run: |
-          bash scripts/flatzinc-builtin-inventory.sh
-          mkdir -p target/flatzinc-stdlib
-          for mzn in benchmarks/minizinc/stdlib/*.mzn; do
-            base=$(basename "$mzn" .mzn)
-            minizinc --compile-only -o "target/flatzinc-stdlib/$base.fzn" "$mzn"
-          done
-      - name: Builtin corpus compile regression
-        run: cargo test -p propaga-flatzinc all_stdlib_mzn_models_compile_when_fzn_present stdlib_corpus_lists_expected_models -- --nocapture
+          # Hand-written fixtures under benchmarks/minizinc/stdlib/*.fzn.
+          # Fresh MiniZinc output is solver-specific (annotations, fzn_*,
+          # array_int_lt) and is not the regression target; use local
+          # scripts/flatzinc-*.sh with MiniZinc installed for that path.
+          cargo test -p propaga-flatzinc --test builtin_corpus -- --nocapture
 
   msrv:
     runs-on: ubuntu-latest

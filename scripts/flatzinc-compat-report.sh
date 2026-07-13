@@ -15,7 +15,7 @@ fail=0
 for mzn in "$MODELS"/*.mzn; do
   base="$(basename "$mzn" .mzn)"
   fzn="$OUT/$base.fzn"
-  minizinc --compile-only -o "$fzn" "$mzn"
+  minizinc -c --solver default --output-fzn-to-file "$fzn" "$mzn"
   if cargo run -q -p propaga-cli -- solve --file "$fzn" --quiet >/dev/null 2>&1; then
     echo "OK  $base"
     pass=$((pass + 1))
