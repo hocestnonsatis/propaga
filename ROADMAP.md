@@ -4,15 +4,13 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- `sort` global decomposition
-- `array_float_element`, `array_var_float_element`, `array_float_maximum`, `array_float_minimum`
-- `float_dom`, `float_in` interval membership constraints
 - Float / set objectives in lexicographic and Pareto search
 - Incremental Pareto enumeration improvements
 
 ## Shipped in v1.0.0
 
 - FlatZinc 1.6 stdlib workflow: int / bool / set / float builtins, globals, and parameters
+- `sort`, `array_float_*`, `float_dom`, `float_in`
 - Float & set single-objective branch-and-bound
 - Stdlib corpus + CI precompile regression (`minizinc-stdlib` job)
 - `function` / `test` top-level skip; generic `min` / `max`

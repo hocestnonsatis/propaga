@@ -5,19 +5,26 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - TBD
+## [1.0.0] - 2026-07-13
 
 ### Added
 
 - Full MiniZinc FlatZinc 1.6 builtin support for the standard library workflow (int / bool / set / float).
 - Set parameters and extended predicate parameter types (`var set`, `var float`).
 - Float and set single-objective optimization (`minimize` / `maximize`).
-- Stdlib global decompositions: `count`, `among`, `at_least`, `at_most`, `distribute`, `nvalue`, lexicographic and monotonicity globals.
+- Stdlib global decompositions: `count`, `among`, `at_least`, `at_most`, `distribute`, `nvalue`, `sort`, lexicographic and monotonicity globals.
 - Integer / float primitives: `int_plus`, `int_lin_ne`, `int_min`/`int_max`/`int_pow`, generic `min`/`max`, full bool builtin set.
 - Float core: interval arithmetic, linear constraints, reified forms, unary transcendental ops (`float_sin`, `float_log2`, …).
+- Float array builtins: `array_float_element`, `array_var_float_element`, `array_float_maximum`, `array_float_minimum`.
+- Float membership: `float_dom`, `float_in`.
 - Set builtins beyond union/intersect: equality, reified comparisons, `set_in`, etc.
 - MiniZinc stdlib corpus (`benchmarks/minizinc/stdlib/`) with bundled FlatZinc fixtures and CI `minizinc-stdlib` job.
 - `scripts/flatzinc-full-compat-report.sh` acceptance gate for models + stdlib.
+
+### Fixed
+
+- `set_in` propagation no longer requires the int domain to contain every set GLB element.
+- Float linear `<=` / `>=` propagators now tighten the correct interval bounds.
 
 ### Changed
 
@@ -27,7 +34,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Known limitations
 
-- `sort`, `array_float_*`, `float_dom`, and `float_in` FlatZinc builtins are not yet supported.
 - Lexicographic and Pareto multi-objective search remain int-only.
 - Table-based int decompositions (`int_times`, `int_pow`, …) cap at 10 000 tuples.
 - Float propagation is interval-based (conservative, not exact real arithmetic).
