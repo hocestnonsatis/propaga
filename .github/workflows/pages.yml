@@ -26,9 +26,11 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      # WASM build uses stable (not MSRV): `cargo install wasm-pack` pulls
+      # cargo-platform which currently requires rustc ≥ 1.91.
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.88
+          targets: wasm32-unknown-unknown
       - run: bash scripts/build-wasm.sh
       - uses: actions/upload-pages-artifact@v3
         with:
