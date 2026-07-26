@@ -236,19 +236,21 @@ impl Propagator for FloatBinaryPropagator {
         let b_dom = FloatDomain::new(b.min, b.max);
 
         let result = match self.op {
-            FloatBinaryOp::Plus => a_dom.plus(b_dom),
-            FloatBinaryOp::Div => a_dom.divide(b_dom),
+            FloatBinaryOp::Plus => a_dom.plus(&b_dom),
+            FloatBinaryOp::Div => a_dom.divide(&b_dom),
         };
         changed |= ext.tighten_float_below(self.watched[2], result.lower_bound());
         changed |= ext.tighten_float_above(self.watched[2], result.upper_bound());
 
         if matches!(self.op, FloatBinaryOp::Plus) {
-            let c_snap = ext.float_domain(self.watched[2]).unwrap_or(c);
+            let c_snap = ext
+                .float_domain(self.watched[2])
+                .unwrap_or_else(|| c.clone());
             let c_interval = FloatDomain::new(c_snap.min, c_snap.max);
-            let a_from_c = c_interval.plus(-b_dom);
+            let a_from_c = c_interval.plus(&(-b_dom.clone()));
             changed |= ext.tighten_float_below(self.watched[0], a_from_c.lower_bound());
             changed |= ext.tighten_float_above(self.watched[0], a_from_c.upper_bound());
-            let b_from_c = c_interval.plus(-a_dom);
+            let b_from_c = c_interval.plus(&(-a_dom.clone()));
             changed |= ext.tighten_float_below(self.watched[1], b_from_c.lower_bound());
             changed |= ext.tighten_float_above(self.watched[1], b_from_c.upper_bound());
         }

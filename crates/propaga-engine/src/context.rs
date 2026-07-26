@@ -190,6 +190,7 @@ impl ExtendedPropagationContext for EnginePropagationContext<'_> {
         Some(FloatDomainSnapshot {
             min: float.lower_bound(),
             max: float.upper_bound(),
+            holes: float.holes().to_vec(),
         })
     }
 
@@ -251,6 +252,16 @@ impl ExtendedPropagationContext for EnginePropagationContext<'_> {
                 return domain;
             };
             AnyDomain::Float(float.remove_above(bound))
+        })
+    }
+
+    fn exclude_float_point(&mut self, var: VariableId, value: f64) -> bool {
+        let reason = self.propagator_reason(var, None, None);
+        self.mutate_any(var, reason, |domain| {
+            let AnyDomain::Float(float) = domain else {
+                return domain;
+            };
+            AnyDomain::Float(float.exclude(value))
         })
     }
 }

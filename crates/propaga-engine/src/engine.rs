@@ -180,7 +180,7 @@ impl Engine {
         let current = self
             .domain(var)
             .as_float()
-            .copied()
+            .cloned()
             .ok_or(PropagaError::TypeMismatch {
                 variable: var,
                 expected: "float".to_string(),
@@ -290,7 +290,7 @@ impl Engine {
         let current = self
             .domain(var)
             .as_float()
-            .copied()
+            .cloned()
             .ok_or(PropagaError::TypeMismatch {
                 variable: var,
                 expected: "float".to_string(),
@@ -319,7 +319,7 @@ impl Engine {
         let current = self
             .domain(var)
             .as_float()
-            .copied()
+            .cloned()
             .ok_or(PropagaError::TypeMismatch {
                 variable: var,
                 expected: "float".to_string(),

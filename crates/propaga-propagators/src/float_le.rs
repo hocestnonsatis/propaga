@@ -32,8 +32,12 @@ impl Propagator for FloatLePropagator {
         let mut changed = false;
         changed |= ext.tighten_float_above(self.watched[0], right.max);
         changed |= ext.tighten_float_below(self.watched[1], left.min);
-        let left_after = ext.float_domain(self.watched[0]).unwrap_or(left);
-        let right_after = ext.float_domain(self.watched[1]).unwrap_or(right);
+        let left_after = ext
+            .float_domain(self.watched[0])
+            .unwrap_or_else(|| left.clone());
+        let right_after = ext
+            .float_domain(self.watched[1])
+            .unwrap_or_else(|| right.clone());
         if left_after.is_empty() || right_after.is_empty() {
             return PropagationStatus::Failure;
         }

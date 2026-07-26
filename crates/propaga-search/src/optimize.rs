@@ -357,7 +357,7 @@ fn float_bound_is_feasible(
     direction: ObjectiveDirection,
     bound: f64,
 ) -> bool {
-    let Some(domain) = engine.domain(objective).as_float().copied() else {
+    let Some(domain) = engine.domain(objective).as_float().cloned() else {
         return false;
     };
     match direction {

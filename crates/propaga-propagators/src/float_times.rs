@@ -31,31 +31,43 @@ impl Propagator for FloatTimesPropagator {
         };
         let mut changed = false;
 
-        let product = FloatDomain::new(a.min, a.max).times(FloatDomain::new(b.min, b.max));
+        let product = FloatDomain::new(a.min, a.max).times(&FloatDomain::new(b.min, b.max));
         changed |= ext.tighten_float_below(self.watched[2], product.lower_bound());
         changed |= ext.tighten_float_above(self.watched[2], product.upper_bound());
 
-        let c_snap = ext.float_domain(self.watched[2]).unwrap_or(c);
-        let b_snap = ext.float_domain(self.watched[1]).unwrap_or(b);
-        let a_snap = ext.float_domain(self.watched[0]).unwrap_or(a);
+        let c_snap = ext
+            .float_domain(self.watched[2])
+            .unwrap_or_else(|| c.clone());
+        let b_snap = ext
+            .float_domain(self.watched[1])
+            .unwrap_or_else(|| b.clone());
+        let a_snap = ext
+            .float_domain(self.watched[0])
+            .unwrap_or_else(|| a.clone());
 
         let a_from_c = FloatDomain::new(c_snap.min, c_snap.max)
-            .divide(FloatDomain::new(b_snap.min, b_snap.max));
+            .divide(&FloatDomain::new(b_snap.min, b_snap.max));
         if a_from_c.lower_bound().is_finite() {
             changed |= ext.tighten_float_below(self.watched[0], a_from_c.lower_bound());
             changed |= ext.tighten_float_above(self.watched[0], a_from_c.upper_bound());
         }
 
         let b_from_c = FloatDomain::new(c_snap.min, c_snap.max)
-            .divide(FloatDomain::new(a_snap.min, a_snap.max));
+            .divide(&FloatDomain::new(a_snap.min, a_snap.max));
         if b_from_c.lower_bound().is_finite() {
             changed |= ext.tighten_float_below(self.watched[1], b_from_c.lower_bound());
             changed |= ext.tighten_float_above(self.watched[1], b_from_c.upper_bound());
         }
 
-        let a_after = ext.float_domain(self.watched[0]).unwrap_or(a);
-        let b_after = ext.float_domain(self.watched[1]).unwrap_or(b);
-        let c_after = ext.float_domain(self.watched[2]).unwrap_or(c);
+        let a_after = ext
+            .float_domain(self.watched[0])
+            .unwrap_or_else(|| a.clone());
+        let b_after = ext
+            .float_domain(self.watched[1])
+            .unwrap_or_else(|| b.clone());
+        let c_after = ext
+            .float_domain(self.watched[2])
+            .unwrap_or_else(|| c.clone());
         if a_after.is_empty() || b_after.is_empty() || c_after.is_empty() {
             return PropagationStatus::Failure;
         }

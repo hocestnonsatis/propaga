@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Interior float point exclusion without branching (requires richer float domain representation)
+- Richer float hole propagation through arithmetic / linear projections (holes currently dropped on derived intervals)
 
 ## Shipped after v1.0.0
 
@@ -18,6 +18,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - `FloatLinearNePropagator` + fixed `ReifiedFloatLinearEq(false)` (bound-touch / unit endpoint pruning; FlatZinc `float_lin_ne`)
 - Docs: COMPATIBILITY lex/Pareto notes cover float and set-cardinality objectives
 - DFS `solve_each` set in/out branching trail-correctness fix
+- `FloatDomain` interior holes + `exclude_float_point`; `FloatNe` / forbidden assignment / DFS use domain holes
 
 ## Shipped in v1.0.0
 

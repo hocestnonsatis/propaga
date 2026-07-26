@@ -482,6 +482,10 @@ impl ExtendedPropagationContext for MockSetCtx {
     fn tighten_float_above(&mut self, _: VariableId, _: f64) -> bool {
         false
     }
+
+    fn exclude_float_point(&mut self, _: VariableId, _: f64) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]

@@ -370,7 +370,7 @@ impl DepthFirstSearch {
     }
 
     fn explore_float(&mut self, engine: &mut Engine, var: VariableId) -> Option<Solution> {
-        let float = engine.domain(var).as_float().copied()?;
+        let float = engine.domain(var).as_float().cloned()?;
         if float.is_fixed() {
             return self.search(engine);
         }
@@ -395,7 +395,9 @@ impl DepthFirstSearch {
             return None;
         }
 
-        for (side, bound) in self.float_branch_cuts(var, float.lower_bound(), float.upper_bound()) {
+        for (side, bound) in
+            self.float_branch_cuts(engine, var, float.lower_bound(), float.upper_bound())
+        {
             self.record_branch();
             let level = engine.trail_mark();
             let status = match side {
@@ -545,7 +547,7 @@ impl DepthFirstSearch {
         var: VariableId,
         on_solution: &mut dyn FnMut(&Solution) -> bool,
     ) -> bool {
-        let Some(float) = engine.domain(var).as_float().copied() else {
+        let Some(float) = engine.domain(var).as_float().cloned() else {
             return true;
         };
         if float.is_fixed() {
@@ -566,7 +568,9 @@ impl DepthFirstSearch {
             }
             return true;
         }
-        for (side, bound) in self.float_branch_cuts(var, float.lower_bound(), float.upper_bound()) {
+        for (side, bound) in
+            self.float_branch_cuts(engine, var, float.lower_bound(), float.upper_bound())
+        {
             self.record_branch();
             let level = engine.trail_mark();
             let status = match side {
@@ -596,10 +600,16 @@ impl DepthFirstSearch {
 
     /// Branch cuts for an open float interval: `(side, bound)` pairs applied in order.
     ///
-    /// When a registered hole lies strictly inside `(lo, hi)`, splits as
+    /// When a registered or domain hole lies strictly inside `(lo, hi)`, splits as
     /// `x <= next_down(hole)` and `x >= next_up(hole)`. Otherwise bisects at the midpoint.
-    fn float_branch_cuts(&self, var: VariableId, lo: f64, hi: f64) -> [(FloatBranchSide, f64); 2] {
-        if let Some(hole) = self.best_interior_float_hole(var, lo, hi) {
+    fn float_branch_cuts(
+        &self,
+        engine: &Engine,
+        var: VariableId,
+        lo: f64,
+        hi: f64,
+    ) -> [(FloatBranchSide, f64); 2] {
+        if let Some(hole) = self.best_interior_float_hole(engine, var, lo, hi) {
             [
                 (FloatBranchSide::Above, next_float_down(hole)),
                 (FloatBranchSide::Below, next_float_up(hole)),
@@ -610,20 +620,40 @@ impl DepthFirstSearch {
         }
     }
 
-    fn best_interior_float_hole(&self, var: VariableId, lo: f64, hi: f64) -> Option<f64> {
+    fn best_interior_float_hole(
+        &self,
+        engine: &Engine,
+        var: VariableId,
+        lo: f64,
+        hi: f64,
+    ) -> Option<f64> {
         let mid = lo + (hi - lo) / 2.0;
-        self.float_holes.get(&var).and_then(|holes| {
-            holes
-                .iter()
-                .copied()
-                .filter(|&hole| hole > lo && hole < hi)
-                .min_by(|left, right| {
-                    let left_dist = (left - mid).abs();
-                    let right_dist = (right - mid).abs();
-                    left_dist
-                        .partial_cmp(&right_dist)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                })
+        let mut candidates: Vec<f64> = self
+            .float_holes
+            .get(&var)
+            .into_iter()
+            .flatten()
+            .copied()
+            .filter(|&hole| hole > lo && hole < hi)
+            .collect();
+        if let Some(domain) = engine.domain(var).as_float() {
+            candidates.extend(
+                domain
+                    .holes()
+                    .iter()
+                    .copied()
+                    .filter(|&hole| hole > lo && hole < hi),
+            );
+        }
+        candidates
+            .sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
+        candidates.dedup_by(|left, right| (*left - *right).abs() <= f64::EPSILON);
+        candidates.into_iter().min_by(|left, right| {
+            let left_dist = (left - mid).abs();
+            let right_dist = (right - mid).abs();
+            left_dist
+                .partial_cmp(&right_dist)
+                .unwrap_or(std::cmp::Ordering::Equal)
         })
     }
 
@@ -955,7 +985,7 @@ mod tests {
         let y = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 2.0)));
         let mut search = DepthFirstSearch::new(vec![y]);
         search.register_float_hole(y, 1.0);
-        let cuts = search.float_branch_cuts(y, 0.0, 2.0);
+        let cuts = search.float_branch_cuts(&engine, y, 0.0, 2.0);
         assert_eq!(cuts[0], (FloatBranchSide::Above, next_float_down(1.0)));
         assert_eq!(cuts[1], (FloatBranchSide::Below, next_float_up(1.0)));
     }

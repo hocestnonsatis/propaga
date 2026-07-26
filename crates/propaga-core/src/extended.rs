@@ -33,23 +33,46 @@ impl SetDomainSnapshot {
 }
 
 /// Snapshot of a float variable domain for propagation reads.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct FloatDomainSnapshot {
     /// Lower bound.
     pub min: f64,
     /// Upper bound.
     pub max: f64,
+    /// Excluded interior IEEE points.
+    pub holes: Vec<f64>,
 }
 
 impl FloatDomainSnapshot {
     #[must_use]
-    pub fn is_empty(self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.min > self.max
+            || ((self.max - self.min).abs() <= f64::EPSILON
+                && self
+                    .holes
+                    .iter()
+                    .any(|hole| (*hole - self.min).abs() <= f64::EPSILON))
     }
 
     #[must_use]
-    pub fn contains(self, value: f64) -> bool {
-        !self.is_empty() && value >= self.min && value <= self.max
+    pub fn is_fixed(&self) -> bool {
+        !self.is_empty()
+            && (self.max - self.min).abs() < f64::EPSILON
+            && !self
+                .holes
+                .iter()
+                .any(|hole| (*hole - self.min).abs() <= f64::EPSILON)
+    }
+
+    #[must_use]
+    pub fn contains(&self, value: f64) -> bool {
+        !self.is_empty()
+            && value >= self.min
+            && value <= self.max
+            && !self
+                .holes
+                .iter()
+                .any(|hole| (*hole - value).abs() <= f64::EPSILON)
     }
 }
 
@@ -67,4 +90,6 @@ pub trait ExtendedPropagationContext {
     ) -> bool;
     fn tighten_float_below(&mut self, var: VariableId, bound: f64) -> bool;
     fn tighten_float_above(&mut self, var: VariableId, bound: f64) -> bool;
+    /// Excludes one IEEE point from a float domain (bound tighten or interior hole).
+    fn exclude_float_point(&mut self, var: VariableId, value: f64) -> bool;
 }

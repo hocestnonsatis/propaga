@@ -2,8 +2,8 @@ use propaga_core::{PropagationContext, PropagationStatus, Propagator, VariableId
 
 /// Propagates floating-point disequality `left != right`.
 ///
-/// Interval domains cannot drop an interior point, so pruning happens when the
-/// forbidden value sits on an endpoint (or when both sides are fixed equal).
+/// When one side is fixed, the other excludes that IEEE point (bound tighten at
+/// endpoints, interior hole otherwise).
 #[derive(Clone, Debug)]
 pub struct FloatNePropagator {
     watched: [VariableId; 2],
@@ -42,8 +42,9 @@ impl Propagator for FloatNePropagator {
             return PropagationStatus::Failure;
         }
 
-        let left_fixed = (left.min - left.max).abs() <= f64::EPSILON;
-        let right_fixed = (right.min - right.max).abs() <= f64::EPSILON;
+        let left_fixed = (left.min - left.max).abs() <= f64::EPSILON && left.contains(left.min);
+        let right_fixed =
+            (right.min - right.max).abs() <= f64::EPSILON && right.contains(right.min);
 
         if left_fixed && right_fixed {
             return if (left.min - right.min).abs() <= f64::EPSILON {
@@ -53,16 +54,16 @@ impl Propagator for FloatNePropagator {
             };
         }
 
-        // Already separated.
+        // Already separated by bounds (holes ignored — still sound).
         if left.max < right.min || right.max < left.min {
             return PropagationStatus::OkNoChange;
         }
 
         let mut changed = false;
         if left_fixed {
-            changed |= exclude_endpoint_value(ext, self.watched[1], left.min);
+            changed |= ext.exclude_float_point(self.watched[1], left.min);
         } else if right_fixed {
-            changed |= exclude_endpoint_value(ext, self.watched[0], right.min);
+            changed |= ext.exclude_float_point(self.watched[0], right.min);
         }
 
         if ext
@@ -80,41 +81,6 @@ impl Propagator for FloatNePropagator {
         } else {
             PropagationStatus::OkNoChange
         }
-    }
-}
-
-fn exclude_endpoint_value(
-    ext: &mut dyn propaga_core::ExtendedPropagationContext,
-    var: VariableId,
-    value: f64,
-) -> bool {
-    let Some(domain) = ext.float_domain(var) else {
-        return false;
-    };
-    if (domain.min - value).abs() <= f64::EPSILON {
-        let up = next_up(value);
-        return ext.tighten_float_below(var, up);
-    }
-    if (domain.max - value).abs() <= f64::EPSILON {
-        let down = next_down(value);
-        return ext.tighten_float_above(var, down);
-    }
-    false
-}
-
-fn next_up(value: f64) -> f64 {
-    if value.is_infinite() && value.is_sign_positive() {
-        value
-    } else {
-        f64::from_bits(value.to_bits().saturating_add(1))
-    }
-}
-
-fn next_down(value: f64) -> f64 {
-    if value.is_infinite() && value.is_sign_negative() {
-        value
-    } else {
-        f64::from_bits(value.to_bits().saturating_sub(1))
     }
 }
 
@@ -142,6 +108,18 @@ mod tests {
         assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
         let domain = engine.domain(right).as_float().unwrap();
         assert!(domain.lower_bound() > 1.0);
+    }
+
+    #[test]
+    fn records_interior_hole_when_forbidden_value_is_interior() {
+        let mut engine = Engine::new();
+        let left = engine.new_variable(AnyDomain::Float(FloatDomain::fix(1.0)));
+        let right = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 2.0)));
+        engine.add_propagator(Box::new(FloatNePropagator::new(left, right)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let domain = engine.domain(right).as_float().unwrap();
+        assert!(!domain.contains(1.0));
+        assert_eq!(domain.holes(), &[1.0]);
     }
 
     #[test]

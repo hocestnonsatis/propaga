@@ -177,9 +177,7 @@ fn assignment_status(
             if domain.is_empty() {
                 return AssignmentStatus::Conflicts;
             }
-            if (domain.min - domain.max).abs() <= f64::EPSILON
-                && (domain.min - expected).abs() <= f64::EPSILON
-            {
+            if domain.is_fixed() && (domain.min - expected).abs() <= f64::EPSILON {
                 AssignmentStatus::Matches
             } else if domain.contains(*expected) {
                 AssignmentStatus::Open
@@ -249,37 +247,25 @@ fn forbid_value(
             let Some(domain) = ext.float_domain(var) else {
                 return PropagationStatus::Failure;
             };
-            if (domain.min - domain.max).abs() <= f64::EPSILON
-                && (domain.min - expected).abs() <= f64::EPSILON
-            {
+            if domain.is_fixed() && (domain.min - expected).abs() <= f64::EPSILON {
                 return PropagationStatus::Failure;
             }
-            // Prefer bound tightening when the forbidden point sits on an endpoint.
-            if (domain.min - expected).abs() <= f64::EPSILON {
-                let up = next_float_up(*expected);
-                let _ = ext.tighten_float_below(var, up);
-                return if ext
-                    .float_domain(var)
-                    .is_some_and(|domain| !domain.is_empty() && domain.min >= up)
-                {
-                    PropagationStatus::OkChanged
-                } else {
-                    PropagationStatus::Failure
-                };
+            if !domain.contains(*expected) {
+                return PropagationStatus::OkNoChange;
             }
-            if (domain.max - expected).abs() <= f64::EPSILON {
-                let down = next_float_down(*expected);
-                let _ = ext.tighten_float_above(var, down);
-                return if ext
-                    .float_domain(var)
-                    .is_some_and(|domain| !domain.is_empty() && domain.max <= down)
-                {
-                    PropagationStatus::OkChanged
-                } else {
-                    PropagationStatus::Failure
-                };
+            let before = domain.clone();
+            let changed = ext.exclude_float_point(var, *expected);
+            let Some(after) = ext.float_domain(var) else {
+                return PropagationStatus::Failure;
+            };
+            if after.is_empty() {
+                return PropagationStatus::Failure;
             }
-            PropagationStatus::OkNoChange
+            if changed || after != before {
+                PropagationStatus::OkChanged
+            } else {
+                PropagationStatus::OkNoChange
+            }
         }
         ForbiddenValue::Set(expected) => {
             let Some(ext) = ctx.as_extended() else {

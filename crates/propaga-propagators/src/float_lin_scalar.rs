@@ -386,7 +386,7 @@ fn next_down(value: f64) -> f64 {
     }
 }
 
-fn min_term(coeff: f64, domain: FloatDomainSnapshot) -> f64 {
+fn min_term(coeff: f64, domain: &FloatDomainSnapshot) -> f64 {
     if coeff >= 0.0 {
         coeff * domain.min
     } else {
@@ -394,7 +394,7 @@ fn min_term(coeff: f64, domain: FloatDomainSnapshot) -> f64 {
     }
 }
 
-fn max_term(coeff: f64, domain: FloatDomainSnapshot) -> f64 {
+fn max_term(coeff: f64, domain: &FloatDomainSnapshot) -> f64 {
     if coeff >= 0.0 {
         coeff * domain.max
     } else {
@@ -423,7 +423,7 @@ fn min_sum_domains(coeffs: &[f64], domains: &[FloatDomainSnapshot]) -> f64 {
     coeffs
         .iter()
         .zip(domains)
-        .map(|(&coeff, domain)| min_term(coeff, *domain))
+        .map(|(&coeff, domain)| min_term(coeff, domain))
         .sum()
 }
 
@@ -431,7 +431,7 @@ fn max_sum_domains(coeffs: &[f64], domains: &[FloatDomainSnapshot]) -> f64 {
     coeffs
         .iter()
         .zip(domains)
-        .map(|(&coeff, domain)| max_term(coeff, *domain))
+        .map(|(&coeff, domain)| max_term(coeff, domain))
         .sum()
 }
 
@@ -441,7 +441,7 @@ fn min_sum_excluding_domains(coeffs: &[f64], domains: &[FloatDomainSnapshot], sk
         .zip(domains)
         .enumerate()
         .filter(|(index, _)| *index != skip)
-        .map(|(_, (&coeff, domain))| min_term(coeff, *domain))
+        .map(|(_, (&coeff, domain))| min_term(coeff, domain))
         .sum()
 }
 
@@ -451,7 +451,7 @@ fn max_sum_excluding_domains(coeffs: &[f64], domains: &[FloatDomainSnapshot], sk
         .zip(domains)
         .enumerate()
         .filter(|(index, _)| *index != skip)
-        .map(|(_, (&coeff, domain))| max_term(coeff, *domain))
+        .map(|(_, (&coeff, domain))| max_term(coeff, domain))
         .sum()
 }
 
