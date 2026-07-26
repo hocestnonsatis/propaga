@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `encode_forbidden_float` excludes a continuous float point via reified `≤ next_down ∨ ≥ next_up`, and Pareto blocking adds those reifs as search decisions.
 - DFS float branching can split around registered blocked IEEE points; Pareto search feeds blocked float values into those split hints.
 - `FloatNePropagator` prunes forbidden float values at interval endpoints; `FloatEqReif(false)` delegates to it; FlatZinc `float_lt` uses strict `¬(b ≤ a)`.
+- `FloatLinearNePropagator` for `sum ≠ rhs` with bound-touch and unit-endpoint pruning; `ReifiedFloatLinearEq(false)` no longer posts contradictory `≤` and `≥` cuts.
 - `ExtendedPropagationContext::tighten_set_cardinality` for set-cardinality bound updates during propagation.
 
 ### Fixed

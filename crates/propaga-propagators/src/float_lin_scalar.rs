@@ -3,6 +3,42 @@ use propaga_core::{
     FloatDomainSnapshot, PropagationContext, PropagationStatus, Propagator, VariableId,
 };
 
+/// Propagates `sum(coeffs[i] * vars[i]) != rhs` with interval bound consistency.
+#[derive(Clone, Debug)]
+pub struct FloatLinearNePropagator {
+    watched: Vec<VariableId>,
+    coeffs: Vec<f64>,
+    rhs: f64,
+}
+
+impl FloatLinearNePropagator {
+    #[must_use]
+    pub fn new(coeffs: impl Into<Vec<f64>>, vars: impl Into<Vec<VariableId>>, rhs: f64) -> Self {
+        let coeffs = coeffs.into();
+        let vars = vars.into();
+        assert_eq!(coeffs.len(), vars.len());
+        Self {
+            watched: vars,
+            coeffs,
+            rhs,
+        }
+    }
+}
+
+impl Propagator for FloatLinearNePropagator {
+    fn watched_variables(&self) -> &[VariableId] {
+        &self.watched
+    }
+
+    fn priority(&self) -> u32 {
+        13
+    }
+
+    fn propagate(&mut self, ctx: &mut dyn PropagationContext) -> PropagationStatus {
+        propagate_float_ne(ctx, &self.coeffs, &self.watched, self.rhs)
+    }
+}
+
 /// Propagates `sum(coeffs[i] * vars[i]) <= rhs` with interval bound consistency.
 #[derive(Clone, Debug)]
 pub struct FloatLinearLePropagator {
@@ -141,7 +177,7 @@ impl Propagator for ReifiedFloatLinearLePropagator {
             changed |= tighten_reif(ctx, self.reif, 0);
         }
 
-        finish_reified_scalar(ctx, &self.watched, changed)
+        finish_reified_float_scalar(ctx, self.reif, &vars, changed)
     }
 }
 
@@ -207,16 +243,11 @@ impl Propagator for ReifiedFloatLinearEqPropagator {
                 changed |= ge == PropagationStatus::OkChanged;
             }
             Some(0) => {
-                let le = propagate_float_le(ctx, &self.coeffs, &vars, next_down(self.rhs));
-                if le.is_failure() {
-                    return le;
+                let status = propagate_float_ne(ctx, &self.coeffs, &vars, self.rhs);
+                if status.is_failure() {
+                    return status;
                 }
-                changed |= le == PropagationStatus::OkChanged;
-                let ge = propagate_float_ge(ctx, &self.coeffs, &vars, next_up(self.rhs));
-                if ge.is_failure() {
-                    return ge;
-                }
-                changed |= ge == PropagationStatus::OkChanged;
+                changed |= status == PropagationStatus::OkChanged;
             }
             _ => {}
         }
@@ -231,7 +262,7 @@ impl Propagator for ReifiedFloatLinearEqPropagator {
             changed |= tighten_reif(ctx, self.reif, 0);
         }
 
-        finish_reified_scalar(ctx, &self.watched, changed)
+        finish_reified_float_scalar(ctx, self.reif, &vars, changed)
     }
 }
 
@@ -309,16 +340,17 @@ impl Propagator for ReifiedFloatLinearGePropagator {
             changed |= tighten_reif(ctx, self.reif, 0);
         }
 
-        finish_reified_scalar(ctx, &self.watched, changed)
+        finish_reified_float_scalar(ctx, self.reif, &vars, changed)
     }
 }
 
-fn finish_reified_scalar(
-    ctx: &dyn PropagationContext,
-    watched: &[VariableId],
+fn finish_reified_float_scalar(
+    ctx: &mut dyn PropagationContext,
+    reif: VariableId,
+    float_vars: &[VariableId],
     changed: bool,
 ) -> PropagationStatus {
-    if watched.iter().any(|var| ctx.domain(*var).is_empty()) {
+    if ctx.domain(reif).is_empty() || any_empty(ctx, float_vars) {
         PropagationStatus::Failure
     } else if changed {
         PropagationStatus::OkChanged
@@ -528,5 +560,137 @@ fn propagate_float_ge(
         PropagationStatus::OkChanged
     } else {
         PropagationStatus::OkNoChange
+    }
+}
+
+fn propagate_float_ne(
+    ctx: &mut dyn PropagationContext,
+    coeffs: &[f64],
+    vars: &[VariableId],
+    rhs: f64,
+) -> PropagationStatus {
+    let Some(domains) = snapshot_domains(ctx, vars) else {
+        return PropagationStatus::Failure;
+    };
+
+    let min_total = min_sum_domains(coeffs, &domains);
+    let max_total = max_sum_domains(coeffs, &domains);
+
+    if min_total > rhs || max_total < rhs {
+        return PropagationStatus::OkNoChange;
+    }
+    if (min_total - max_total).abs() <= f64::EPSILON && (min_total - rhs).abs() <= f64::EPSILON {
+        return PropagationStatus::Failure;
+    }
+
+    // Only one side of sum ≠ rhs remains feasible.
+    if (min_total - rhs).abs() <= f64::EPSILON {
+        return propagate_float_ge(ctx, coeffs, vars, next_up(rhs));
+    }
+    if (max_total - rhs).abs() <= f64::EPSILON {
+        return propagate_float_le(ctx, coeffs, vars, next_down(rhs));
+    }
+
+    // When all but one term are fixed, exclude the unique equality-forcing value
+    // if it sits on an interval endpoint.
+    let Some(ext) = ctx.as_extended() else {
+        return PropagationStatus::OkNoChange;
+    };
+    let mut changed = false;
+    for (index, &var) in vars.iter().enumerate() {
+        let coeff = coeffs[index];
+        if coeff == 0.0 {
+            continue;
+        }
+        let other_min = min_sum_excluding_domains(coeffs, &domains, index);
+        let other_max = max_sum_excluding_domains(coeffs, &domains, index);
+        if (other_min - other_max).abs() > f64::EPSILON {
+            continue;
+        }
+        let required = (rhs - other_min) / coeff;
+        let Some(domain) = ext.float_domain(var) else {
+            continue;
+        };
+        if (domain.min - required).abs() <= f64::EPSILON {
+            changed |= ext.tighten_float_below(var, next_up(required));
+        } else if (domain.max - required).abs() <= f64::EPSILON {
+            changed |= ext.tighten_float_above(var, next_down(required));
+        }
+    }
+
+    if any_empty(ctx, vars) {
+        PropagationStatus::Failure
+    } else if changed {
+        PropagationStatus::OkChanged
+    } else {
+        PropagationStatus::OkNoChange
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use propaga_domains::{AnyDomain, FloatDomain, HybridDomain};
+    use propaga_engine::Engine;
+
+    #[test]
+    fn float_lin_ne_fails_when_sum_fixed_at_rhs() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::fix(2.0)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::fix(3.0)));
+        engine.add_propagator(Box::new(FloatLinearNePropagator::new(
+            vec![1.0, 1.0],
+            vec![x, y],
+            5.0,
+        )));
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn float_lin_ne_forces_above_when_sum_min_equals_rhs() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(1.0, 3.0)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::fix(4.0)));
+        engine.add_propagator(Box::new(FloatLinearNePropagator::new(
+            vec![1.0, 1.0],
+            vec![x, y],
+            5.0,
+        )));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let domain = engine.domain(x).as_float().unwrap();
+        assert!(domain.lower_bound() > 1.0);
+    }
+
+    #[test]
+    fn float_lin_ne_prunes_unit_endpoint() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(1.0, 3.0)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::fix(2.0)));
+        engine.add_propagator(Box::new(FloatLinearNePropagator::new(
+            vec![1.0, 1.0],
+            vec![x, y],
+            3.0,
+        )));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let domain = engine.domain(x).as_float().unwrap();
+        assert!(domain.lower_bound() > 1.0);
+    }
+
+    #[test]
+    fn reified_float_eq_false_uses_ne_not_both_bounds() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 4.0)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 4.0)));
+        let reif = engine.new_variable(HybridDomain::fix(0));
+        engine.add_propagator(Box::new(ReifiedFloatLinearEqPropagator::new(
+            vec![1.0, 1.0],
+            vec![x, y],
+            5.0,
+            reif,
+        )));
+        let status = engine.propagate_all().unwrap();
+        assert_ne!(status, PropagationStatus::Failure);
+        assert!(engine.domain(x).as_float().unwrap().lower_bound() <= 4.0);
+        assert!(engine.domain(y).as_float().unwrap().upper_bound() >= 0.0);
     }
 }

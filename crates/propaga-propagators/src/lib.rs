@@ -57,8 +57,8 @@ pub use equality::EqualityPropagator;
 pub use float_eq::FloatEqPropagator;
 pub use float_le::FloatLePropagator;
 pub use float_lin_scalar::{
-    FloatLinearGePropagator, FloatLinearLePropagator, ReifiedFloatLinearEqPropagator,
-    ReifiedFloatLinearGePropagator, ReifiedFloatLinearLePropagator,
+    FloatLinearGePropagator, FloatLinearLePropagator, FloatLinearNePropagator,
+    ReifiedFloatLinearEqPropagator, ReifiedFloatLinearGePropagator, ReifiedFloatLinearLePropagator,
 };
 pub use float_ne::FloatNePropagator;
 pub use float_ops::{

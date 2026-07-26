@@ -103,10 +103,7 @@ pub fn float_lin_eq(model: &mut Model, coeffs: &[f64], vars: &[VariableId], rhs:
 }
 
 pub fn float_lin_ne(model: &mut Model, coeffs: &[f64], vars: &[VariableId], rhs: f64) {
-    let reif = model.int_var(0, 1);
-    model.reified_float_scalar_eq(coeffs.to_vec(), vars.to_vec(), rhs, reif);
-    let zero = model.int_var_fixed(0);
-    model.equal(reif, zero);
+    model.float_scalar_ne(coeffs.to_vec(), vars.to_vec(), rhs);
 }
 
 pub fn float_lin_le_reif(

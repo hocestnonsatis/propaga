@@ -6,16 +6,16 @@ use propaga_propagators::{
     DiffnPropagator, DisjunctivePropagator, DisjunctiveTask, ElementPropagator, EqualityPropagator,
     FloatBinaryOp, FloatBinaryPropagator, FloatEqPropagator, FloatEqReifPropagator,
     FloatLePropagator, FloatLeReifPropagator, FloatLinearGePropagator, FloatLinearLePropagator,
-    FloatNePropagator, FloatTimesPropagator, FloatUnaryOp, FloatUnaryPropagator,
-    GlobalCardinalityPropagator, Int2FloatPropagator, InversePropagator, LessEqualPropagator,
-    LessThanPropagator, LinearEqPropagator, LinearScalarGePropagator, LinearScalarLePropagator,
-    NotEqualOffsetPropagator, RectangleSpec, RegularPropagator, ReifiedEqualityPropagator,
-    ReifiedFloatLinearEqPropagator, ReifiedFloatLinearGePropagator, ReifiedFloatLinearLePropagator,
-    ReifiedLessEqualPropagator, ReifiedLessThanPropagator, ReifiedNotEqualPropagator,
-    ReifiedScalarEqPropagator, ReifiedScalarGePropagator, ReifiedScalarLePropagator,
-    SetCardPropagator, SetEqReifPropagator, SetInPropagator, SetInReifPropagator,
-    SetIntersectPropagator, SetSubsetPropagator, SetSubsetReifPropagator, SetUnionPropagator,
-    TablePropagator, TaskSpec,
+    FloatLinearNePropagator, FloatNePropagator, FloatTimesPropagator, FloatUnaryOp,
+    FloatUnaryPropagator, GlobalCardinalityPropagator, Int2FloatPropagator, InversePropagator,
+    LessEqualPropagator, LessThanPropagator, LinearEqPropagator, LinearScalarGePropagator,
+    LinearScalarLePropagator, NotEqualOffsetPropagator, RectangleSpec, RegularPropagator,
+    ReifiedEqualityPropagator, ReifiedFloatLinearEqPropagator, ReifiedFloatLinearGePropagator,
+    ReifiedFloatLinearLePropagator, ReifiedLessEqualPropagator, ReifiedLessThanPropagator,
+    ReifiedNotEqualPropagator, ReifiedScalarEqPropagator, ReifiedScalarGePropagator,
+    ReifiedScalarLePropagator, SetCardPropagator, SetEqReifPropagator, SetInPropagator,
+    SetInReifPropagator, SetIntersectPropagator, SetSubsetPropagator, SetSubsetReifPropagator,
+    SetUnionPropagator, TablePropagator, TaskSpec,
 };
 use propaga_search::{
     DepthFirstSearch, LexicographicOptimization, LexicographicResult, Objective,
@@ -277,6 +277,17 @@ impl Model {
     ) {
         self.engine
             .add_propagator(Box::new(FloatLinearGePropagator::new(coeffs, vars, rhs)));
+    }
+
+    /// Posts `sum(coeffs[i] * vars[i]) != rhs` for float variables.
+    pub fn float_scalar_ne(
+        &mut self,
+        coeffs: impl Into<Vec<f64>>,
+        vars: impl Into<Vec<VariableId>>,
+        rhs: f64,
+    ) {
+        self.engine
+            .add_propagator(Box::new(FloatLinearNePropagator::new(coeffs, vars, rhs)));
     }
 
     /// Posts `sum(coeffs[i] * vars[i]) == rhs` for float variables.
