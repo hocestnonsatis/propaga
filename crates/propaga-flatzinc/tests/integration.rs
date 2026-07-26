@@ -271,6 +271,41 @@ fn minimizes_float_objective() {
 }
 
 #[test]
+fn lexicographic_float_then_int_objectives() {
+    let source = r#"
+        var 1.0..3.0: x;
+        var 1..3: y;
+        solve minimize x, y;
+    "#;
+    let program = parse(source).expect("parse");
+    let mut instance = compile(program).expect("compile lex float/int");
+    assert_eq!(instance.objectives.len(), 2);
+    assert!(matches!(
+        instance.objectives[0],
+        propaga_flatzinc::ObjectiveSpec::Float { .. }
+    ));
+    assert!(matches!(
+        instance.objectives[1],
+        propaga_flatzinc::ObjectiveSpec::Int { .. }
+    ));
+    let objectives = instance
+        .objectives
+        .iter()
+        .map(|objective| propaga_search::Objective {
+            target: objective.optimization_target(),
+            direction: objective.direction(),
+        })
+        .collect();
+    let result = instance
+        .model
+        .optimize_lexicographic(instance.solve_vars.clone(), objectives);
+    assert_eq!(
+        result.objective_values,
+        vec![ObjectiveValue::Float(1.0), ObjectiveValue::Int(1)]
+    );
+}
+
+#[test]
 fn compiles_set_minimize_instance() {
     let source = include_str!("../../../benchmarks/set_optimize.fzn");
     let program = parse(source).expect("parse");

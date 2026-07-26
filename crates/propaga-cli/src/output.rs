@@ -374,7 +374,11 @@ pub(crate) fn print_flatzinc_json(
                 .iter()
                 .map(|entry| {
                     json!({
-                        "objectives": entry.objective_values,
+                        "objectives": entry
+                            .objective_values
+                            .iter()
+                            .map(objective_value_json)
+                            .collect::<Vec<_>>(),
                         "variables": typed_assignment_json(names, order, &entry.assignment),
                     })
                 })

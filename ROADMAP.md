@@ -4,8 +4,11 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Float / set objectives in lexicographic and Pareto search
 - Incremental Pareto enumeration improvements
+
+## Shipped after v1.0.0
+
+- Float / set objectives in lexicographic and Pareto multi-objective search
 
 ## Shipped in v1.0.0
 

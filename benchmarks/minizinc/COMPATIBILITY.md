@@ -13,7 +13,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | Float interval arithmetic & linear constraints | **Supported** (sound intervals, not exact reals) |
 | Stdlib globals (`count`, `among`, `lex_*`, `nvalue`, …) | **Supported** (decomposition) |
 | Single-objective minimize / maximize | **Supported** (int, float, set cardinality) |
-| Lexicographic / Pareto multi-objective | **Supported** (int objectives only) |
+| Lexicographic / Pareto multi-objective | **Supported** (int, float, set-cardinality) |
 | `function` / `test` top-level | **Skipped** (like `annotation`) |
 | `sort`, `array_float_*`, `float_dom`, `float_in` | **Supported** (decomposition) |
 

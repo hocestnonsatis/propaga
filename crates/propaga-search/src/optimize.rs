@@ -193,7 +193,9 @@ impl OptimizationSearch {
     }
 }
 
-fn is_better(
+/// Returns `true` when `candidate` is strictly better than `best` under `direction`.
+#[must_use]
+pub fn is_better(
     direction: ObjectiveDirection,
     candidate: &ObjectiveValue,
     best: &ObjectiveValue,
@@ -364,7 +366,9 @@ fn float_bound_is_feasible(
     }
 }
 
-fn objective_value_from_solution(
+/// Reads the typed objective value for `target` from a solution (or fixed domain).
+#[must_use]
+pub fn objective_value_from_solution(
     engine: &Engine,
     target: OptimizationTarget,
     solution: &Solution,

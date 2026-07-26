@@ -32,8 +32,14 @@ fn pareto_minimize_two_objectives() {
     let result = model.pareto_optimize(
         vec![x, y],
         vec![
-            (x, ObjectiveDirection::Minimize),
-            (y, ObjectiveDirection::Minimize),
+            (
+                propaga_search::OptimizationTarget::Int(x),
+                ObjectiveDirection::Minimize,
+            ),
+            (
+                propaga_search::OptimizationTarget::Int(y),
+                ObjectiveDirection::Minimize,
+            ),
         ],
     );
     assert!(result.front.len() >= 2);

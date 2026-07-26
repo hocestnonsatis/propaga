@@ -94,8 +94,8 @@ pub struct CompiledInstance {
     pub objectives: Vec<ObjectiveSpec>,
     /// Whether the solve directive requests Pareto enumeration.
     pub pareto: bool,
-    /// Objective variables listed in `:: pareto([...])`.
-    pub pareto_objectives: Vec<VariableId>,
+    /// Typed objective targets listed in `:: pareto([...])` (minimize).
+    pub pareto_objectives: Vec<ObjectiveSpec>,
     /// Optional search configuration from FlatZinc annotations.
     pub annotation_search: Option<AnnotationSearchConfig>,
 }
@@ -210,11 +210,7 @@ pub fn compile(program: FlatZincProgram) -> Result<CompiledInstance, FlatZincErr
     };
 
     let pareto_objectives = if let Some(exprs) = &program.solve.annotations.pareto {
-        exprs
-            .iter()
-            .cloned()
-            .map(|expr| resolve_var(&env, expr))
-            .collect::<Result<Vec<_>, _>>()?
+        compile_objectives(&env, &model, exprs.clone(), ObjectiveDirection::Minimize)?
     } else {
         Vec::new()
     };

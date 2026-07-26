@@ -1,31 +1,59 @@
 use crate::config::SearchConfig;
 use crate::dfs::DepthFirstSearch;
-use crate::optimize::ObjectiveDirection;
+use crate::optimize::{
+    ObjectiveDirection, ObjectiveValue, OptimizationTarget, is_better,
+    objective_value_from_solution,
+};
 use crate::stats::SearchStats;
-use crate::value::{AssignmentValue, Solution};
+use crate::value::Solution;
 use propaga_core::VariableId;
 use propaga_engine::Engine;
 
 /// Returns `true` when `a` dominates `b` under the given directions.
-pub fn dominates(a: &[i32], b: &[i32], directions: &[ObjectiveDirection]) -> bool {
+#[must_use]
+pub fn dominates(
+    a: &[ObjectiveValue],
+    b: &[ObjectiveValue],
+    directions: &[ObjectiveDirection],
+) -> bool {
     assert_eq!(a.len(), b.len());
     assert_eq!(a.len(), directions.len());
     let mut strictly_better = false;
-    for ((&av, &bv), direction) in a.iter().zip(b.iter()).zip(directions.iter()) {
-        let better = match direction {
-            ObjectiveDirection::Minimize => av <= bv,
-            ObjectiveDirection::Maximize => av >= bv,
-        };
-        if !better {
+    for ((av, bv), direction) in a.iter().zip(b.iter()).zip(directions.iter()) {
+        if !weakly_better(*direction, av, bv) {
             return false;
         }
-        let strictly = match direction {
-            ObjectiveDirection::Minimize => av < bv,
-            ObjectiveDirection::Maximize => av > bv,
-        };
-        strictly_better |= strictly;
+        strictly_better |= is_better(*direction, av, bv);
     }
     strictly_better
+}
+
+fn weakly_better(direction: ObjectiveDirection, a: &ObjectiveValue, b: &ObjectiveValue) -> bool {
+    match (direction, a, b) {
+        (ObjectiveDirection::Minimize, ObjectiveValue::Int(av), ObjectiveValue::Int(bv)) => {
+            av <= bv
+        }
+        (ObjectiveDirection::Maximize, ObjectiveValue::Int(av), ObjectiveValue::Int(bv)) => {
+            av >= bv
+        }
+        (ObjectiveDirection::Minimize, ObjectiveValue::Float(av), ObjectiveValue::Float(bv)) => {
+            av <= bv
+        }
+        (ObjectiveDirection::Maximize, ObjectiveValue::Float(av), ObjectiveValue::Float(bv)) => {
+            av >= bv
+        }
+        (
+            ObjectiveDirection::Minimize,
+            ObjectiveValue::SetCardinality(av),
+            ObjectiveValue::SetCardinality(bv),
+        ) => av <= bv,
+        (
+            ObjectiveDirection::Maximize,
+            ObjectiveValue::SetCardinality(av),
+            ObjectiveValue::SetCardinality(bv),
+        ) => av >= bv,
+        _ => false,
+    }
 }
 
 /// One non-dominated solution with objective vector.
@@ -34,7 +62,7 @@ pub struct ParetoSolution {
     /// Variable assignment.
     pub assignment: Solution,
     /// Objective values in search order.
-    pub objective_values: Vec<i32>,
+    pub objective_values: Vec<ObjectiveValue>,
 }
 
 /// Result of Pareto front enumeration.
@@ -49,7 +77,7 @@ pub struct ParetoResult {
 /// Enumerates non-dominated solutions for multiple objectives.
 pub struct ParetoOptimization {
     variables: Vec<VariableId>,
-    objectives: Vec<(VariableId, ObjectiveDirection)>,
+    objectives: Vec<(OptimizationTarget, ObjectiveDirection)>,
     config: SearchConfig,
 }
 
@@ -58,7 +86,7 @@ impl ParetoOptimization {
     #[must_use]
     pub fn new(
         variables: impl Into<Vec<VariableId>>,
-        objectives: Vec<(VariableId, ObjectiveDirection)>,
+        objectives: Vec<(OptimizationTarget, ObjectiveDirection)>,
         config: SearchConfig,
     ) -> Self {
         Self {
@@ -77,7 +105,10 @@ impl ParetoOptimization {
 
         let mut front: Vec<ParetoSolution> = Vec::new();
         for solution in all_solutions {
-            let objective_values = objective_values(engine, &self.objectives, &solution);
+            let Some(objective_values) = objective_values(engine, &self.objectives, &solution)
+            else {
+                continue;
+            };
             if is_dominated_by_front(&objective_values, &front, &directions) {
                 continue;
             }
@@ -99,33 +130,17 @@ impl ParetoOptimization {
 
 fn objective_values(
     engine: &Engine,
-    objectives: &[(VariableId, ObjectiveDirection)],
+    objectives: &[(OptimizationTarget, ObjectiveDirection)],
     solution: &Solution,
-) -> Vec<i32> {
-    let map: std::collections::HashMap<_, _> = solution
-        .iter()
-        .filter_map(|(var, value)| match value {
-            AssignmentValue::Int(v) => Some((*var, *v)),
-            _ => None,
-        })
-        .collect();
+) -> Option<Vec<ObjectiveValue>> {
     objectives
         .iter()
-        .map(|(var, _)| {
-            map.get(var)
-                .copied()
-                .or_else(|| {
-                    engine
-                        .int_domain(*var)
-                        .and_then(|domain| domain.fixed_value())
-                })
-                .unwrap_or(0)
-        })
+        .map(|(target, _)| objective_value_from_solution(engine, *target, solution))
         .collect()
 }
 
 fn is_dominated_by_front(
-    values: &[i32],
+    values: &[ObjectiveValue],
     front: &[ParetoSolution],
     directions: &[ObjectiveDirection],
 ) -> bool {
@@ -137,19 +152,41 @@ fn is_dominated_by_front(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use propaga_domains::IntervalDomain;
+    use propaga_domains::{AnyDomain, IntervalDomain};
 
     #[test]
     fn dominates_minimize_pair() {
         let dirs = [ObjectiveDirection::Minimize, ObjectiveDirection::Minimize];
-        assert!(dominates(&[1, 2], &[2, 3], &dirs));
-        assert!(!dominates(&[2, 1], &[1, 2], &dirs));
+        assert!(dominates(
+            &[ObjectiveValue::Int(1), ObjectiveValue::Int(2)],
+            &[ObjectiveValue::Int(2), ObjectiveValue::Int(3)],
+            &dirs
+        ));
+        assert!(!dominates(
+            &[ObjectiveValue::Int(2), ObjectiveValue::Int(1)],
+            &[ObjectiveValue::Int(1), ObjectiveValue::Int(2)],
+            &dirs
+        ));
     }
 
     #[test]
     fn mixed_directions() {
         let dirs = [ObjectiveDirection::Minimize, ObjectiveDirection::Maximize];
-        assert!(dominates(&[1, 5], &[2, 4], &dirs));
+        assert!(dominates(
+            &[ObjectiveValue::Int(1), ObjectiveValue::Int(5)],
+            &[ObjectiveValue::Int(2), ObjectiveValue::Int(4)],
+            &dirs
+        ));
+    }
+
+    #[test]
+    fn dominates_float_pair() {
+        let dirs = [ObjectiveDirection::Minimize, ObjectiveDirection::Minimize];
+        assert!(dominates(
+            &[ObjectiveValue::Float(0.5), ObjectiveValue::Float(1.0)],
+            &[ObjectiveValue::Float(1.0), ObjectiveValue::Float(2.0)],
+            &dirs
+        ));
     }
 
     #[test]
@@ -168,24 +205,72 @@ mod tests {
         let mut search = ParetoOptimization::new(
             vec![x, y],
             vec![
-                (x, ObjectiveDirection::Minimize),
-                (y, ObjectiveDirection::Minimize),
+                (OptimizationTarget::Int(x), ObjectiveDirection::Minimize),
+                (OptimizationTarget::Int(y), ObjectiveDirection::Minimize),
             ],
             SearchConfig::without_learning(),
         );
         let result = search.optimize(&mut engine);
         assert!(result.front.len() >= 2);
+        assert!(result.front.iter().any(|entry| {
+            entry.objective_values == vec![ObjectiveValue::Int(1), ObjectiveValue::Int(3)]
+        }));
+        assert!(result.front.iter().any(|entry| {
+            entry.objective_values == vec![ObjectiveValue::Int(3), ObjectiveValue::Int(1)]
+        }));
+    }
+
+    #[test]
+    fn finds_pareto_front_for_set_cardinality_objectives() {
+        let mut engine = Engine::new();
+        let s1 = engine.new_variable(AnyDomain::Set(
+            propaga_domains::SetIntervalDomain::universe(1..=2).with_cardinality(1, 2),
+        ));
+        let s2 = engine.new_variable(AnyDomain::Set(
+            propaga_domains::SetIntervalDomain::universe(1..=2).with_cardinality(1, 2),
+        ));
+        engine.add_propagator(Box::new(propaga_propagators::SetCardPropagator::new(s1)));
+        engine.add_propagator(Box::new(propaga_propagators::SetCardPropagator::new(s2)));
+        let _ = engine.commit_initial_propagation();
+
+        let mut search = ParetoOptimization::new(
+            vec![s1, s2],
+            vec![
+                (
+                    OptimizationTarget::SetCardinality(s1),
+                    ObjectiveDirection::Minimize,
+                ),
+                (
+                    OptimizationTarget::SetCardinality(s2),
+                    ObjectiveDirection::Minimize,
+                ),
+            ],
+            SearchConfig::without_learning(),
+        );
+        let result = search.optimize(&mut engine);
         assert!(
-            result
-                .front
-                .iter()
-                .any(|entry| entry.objective_values == vec![1, 3])
+            !result.front.is_empty(),
+            "expected a non-empty set-cardinality Pareto front"
         );
         assert!(
             result
                 .front
                 .iter()
-                .any(|entry| entry.objective_values == vec![3, 1])
+                .all(|entry| entry.objective_values.len() == 2)
+        );
+        assert!(
+            result.front.iter().all(|entry| {
+                entry
+                    .objective_values
+                    .iter()
+                    .all(|value| matches!(value, ObjectiveValue::SetCardinality(_)))
+            }),
+            "front={:?}",
+            result
+                .front
+                .iter()
+                .map(|e| &e.objective_values)
+                .collect::<Vec<_>>()
         );
     }
 }

@@ -712,7 +712,7 @@ impl Model {
     pub fn pareto_optimize(
         &mut self,
         variables: impl Into<Vec<VariableId>>,
-        objectives: Vec<(VariableId, ObjectiveDirection)>,
+        objectives: Vec<(propaga_search::OptimizationTarget, ObjectiveDirection)>,
     ) -> ParetoResult {
         let _ = self.propagate();
         let mut search = ParetoOptimization::new(variables, objectives, self.search_config);

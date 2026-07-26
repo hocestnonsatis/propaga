@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Lexicographic and Pareto multi-objective search now accept float and set-cardinality objectives (same typed targets as single-objective optimization).
+
+### Fixed
+
+- Lexicographic search restores the engine after each objective's branch-and-bound so interior optima are pinned correctly before optimizing the next priority.
+
 ## [1.0.0] - 2026-07-13
 
 ### Added

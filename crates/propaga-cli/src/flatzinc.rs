@@ -5,8 +5,8 @@ use crate::puzzle_io::{GlobalOptions, OutputFormat};
 use propaga_core::VariableId;
 use propaga_flatzinc::{OutputDirective, compile, parse};
 use propaga_search::{
-    Objective, ObjectiveDirection, ObjectiveValue, ParetoSolution, PortfolioConfig, SearchStats,
-    Solution,
+    Objective, ObjectiveDirection, ObjectiveValue, OptimizationTarget, ParetoSolution,
+    PortfolioConfig, SearchStats, Solution,
 };
 use std::collections::HashMap;
 use std::fs;
@@ -126,10 +126,15 @@ fn solve_source(source: &str, options: GlobalOptions) -> Result<SolveOutcome, St
         objective_direction,
         pareto_solutions,
     ) = if instance.pareto {
-        let objectives: Vec<(VariableId, ObjectiveDirection)> = instance
+        let objectives: Vec<(OptimizationTarget, ObjectiveDirection)> = instance
             .pareto_objectives
             .iter()
-            .map(|&var| (var, ObjectiveDirection::Minimize))
+            .map(|objective| {
+                (
+                    objective.optimization_target(),
+                    ObjectiveDirection::Minimize,
+                )
+            })
             .collect();
         let result = instance
             .model
@@ -141,16 +146,9 @@ fn solve_source(source: &str, options: GlobalOptions) -> Result<SolveOutcome, St
             result.stats,
             first
                 .as_ref()
-                .and_then(|entry| entry.objective_values.first().copied())
-                .map(ObjectiveValue::Int),
+                .and_then(|entry| entry.objective_values.first().cloned()),
             first
-                .map(|entry| {
-                    entry
-                        .objective_values
-                        .into_iter()
-                        .map(ObjectiveValue::Int)
-                        .collect()
-                })
+                .map(|entry| entry.objective_values)
                 .unwrap_or_default(),
             found,
             Some(ObjectiveDirection::Minimize),
@@ -162,7 +160,7 @@ fn solve_source(source: &str, options: GlobalOptions) -> Result<SolveOutcome, St
                 .objectives
                 .iter()
                 .map(|objective| Objective {
-                    var: objective.var(),
+                    target: objective.optimization_target(),
                     direction: objective.direction(),
                 })
                 .collect();
@@ -177,16 +175,8 @@ fn solve_source(source: &str, options: GlobalOptions) -> Result<SolveOutcome, St
             (
                 result.solution,
                 result.stats,
-                result
-                    .objective_values
-                    .first()
-                    .copied()
-                    .map(ObjectiveValue::Int),
-                result
-                    .objective_values
-                    .into_iter()
-                    .map(ObjectiveValue::Int)
-                    .collect(),
+                result.objective_values.first().cloned(),
+                result.objective_values,
                 found,
                 direction,
                 Vec::new(),
