@@ -240,6 +240,7 @@ fn forbid_value(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use propaga_core::DomainView;
     use propaga_domains::{AnyDomain, IntervalDomain, SetIntervalDomain};
     use propaga_engine::Engine;
 
