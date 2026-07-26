@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FloatNePropagator` prunes forbidden float values at interval endpoints; `FloatEqReif(false)` delegates to it; FlatZinc `float_lt` uses strict `¬(b ≤ a)`.
 - `FloatLinearNePropagator` for `sum ≠ rhs` with bound-touch and unit-endpoint pruning; `ReifiedFloatLinearEq(false)` no longer posts contradictory `≤` and `≥` cuts.
 - `FloatDomain` can record interior excluded IEEE points; `ExtendedPropagationContext::exclude_float_point` wires exclusion into `FloatNe` / assignment blocking, and DFS prefers splitting at domain holes.
+- Hole-aware float arithmetic: `FloatDomain::affine` and fixed-operand `plus`/`times`/`divide` preserve holes; `FloatEq` shares holes; plus/times/div propagators project holes when a side is fixed.
 - `ExtendedPropagationContext::tighten_set_cardinality` for set-cardinality bound updates during propagation.
 
 ### Fixed
@@ -28,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Known limitations
 
-- Float arithmetic / linear projections still drop holes (sound over-approx); hole-aware projection is future work.
+- Float linear projections (`float_lin_*`) still drop holes except via bound-touch / unit-endpoint cases; full hole-aware linear mapping is future work.
 - Float propagation remains interval-based (sound, not exact real arithmetic).
 
 ## [1.0.0] - 2026-07-13

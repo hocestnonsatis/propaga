@@ -137,11 +137,48 @@ impl FloatDomain {
         Self::from_parts(self.min, self.max.min(bound), self.holes.clone())
     }
 
+    /// Creates a domain from bounds and excluded interior points.
+    #[must_use]
+    pub fn from_bounds_with_holes(min: f64, max: f64, holes: &[f64]) -> Self {
+        Self::from_parts(min, max, holes.to_vec())
+    }
+
+    /// Maps this domain through `scale * x + shift`, preserving holes.
+    #[must_use]
+    pub fn affine(&self, scale: f64, shift: f64) -> Self {
+        if self.is_empty() || !scale.is_finite() || !shift.is_finite() {
+            return Self::new(1.0, 0.0);
+        }
+        if scale == 0.0 {
+            return Self::fix(shift);
+        }
+        let (min, max) = if scale > 0.0 {
+            (scale * self.min + shift, scale * self.max + shift)
+        } else {
+            (scale * self.max + shift, scale * self.min + shift)
+        };
+        let holes = self
+            .holes
+            .iter()
+            .map(|hole| scale * hole + shift)
+            .filter(|hole| hole.is_finite())
+            .collect();
+        Self::from_parts(min, max, holes)
+    }
+
     /// Returns the interval product `self * other`.
+    ///
+    /// When either operand is fixed, holes are mapped through the affine product.
     #[must_use]
     pub fn times(&self, other: &Self) -> Self {
         if self.is_empty() || other.is_empty() {
             return Self::new(1.0, 0.0);
+        }
+        if other.is_fixed() {
+            return self.affine(other.min, 0.0);
+        }
+        if self.is_fixed() {
+            return other.affine(self.min, 0.0);
         }
         let corners = [
             self.min * other.min,
@@ -157,6 +194,7 @@ impl FloatDomain {
     /// Returns a sound interval quotient `self / divisor`.
     ///
     /// When `divisor` contains zero the result is unbounded (no tightening).
+    /// When `divisor` is a nonzero fixed point, holes are mapped through the quotient.
     #[must_use]
     pub fn divide(&self, divisor: &Self) -> Self {
         if self.is_empty() || divisor.is_empty() {
@@ -164,6 +202,9 @@ impl FloatDomain {
         }
         if divisor.contains(0.0) {
             return Self::new(f64::NEG_INFINITY, f64::INFINITY);
+        }
+        if divisor.is_fixed() {
+            return self.affine(1.0 / divisor.min, 0.0);
         }
         let corners = [
             self.min / divisor.min,
@@ -177,10 +218,18 @@ impl FloatDomain {
     }
 
     /// Returns the interval sum `self + other`.
+    ///
+    /// When either operand is fixed, holes are mapped through the translation.
     #[must_use]
     pub fn plus(&self, other: &Self) -> Self {
         if self.is_empty() || other.is_empty() {
             return Self::new(1.0, 0.0);
+        }
+        if other.is_fixed() {
+            return self.affine(1.0, other.min);
+        }
+        if self.is_fixed() {
+            return other.affine(1.0, self.min);
         }
         Self::new(self.min + other.min, self.max + other.max)
     }
@@ -339,6 +388,24 @@ mod tests {
         let domain = FloatDomain::new(1.0, 2.0).exclude(1.0);
         assert!(domain.lower_bound() > 1.0);
         assert!(domain.holes().is_empty());
+    }
+
+    #[test]
+    fn plus_maps_holes_when_other_operand_is_fixed() {
+        let left = FloatDomain::new(0.0, 2.0).exclude(1.0);
+        let right = FloatDomain::fix(3.0);
+        let sum = left.plus(&right);
+        assert!(!sum.contains(4.0));
+        assert_eq!(sum.holes(), &[4.0]);
+    }
+
+    #[test]
+    fn times_maps_holes_when_factor_is_fixed() {
+        let left = FloatDomain::new(0.0, 2.0).exclude(1.0);
+        let right = FloatDomain::fix(2.0);
+        let product = left.times(&right);
+        assert!(!product.contains(2.0));
+        assert_eq!(product.holes(), &[2.0]);
     }
 
     #[test]

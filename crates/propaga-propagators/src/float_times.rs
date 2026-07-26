@@ -31,9 +31,14 @@ impl Propagator for FloatTimesPropagator {
         };
         let mut changed = false;
 
-        let product = FloatDomain::new(a.min, a.max).times(&FloatDomain::new(b.min, b.max));
+        let a_dom = FloatDomain::from_bounds_with_holes(a.min, a.max, &a.holes);
+        let b_dom = FloatDomain::from_bounds_with_holes(b.min, b.max, &b.holes);
+        let product = a_dom.times(&b_dom);
         changed |= ext.tighten_float_below(self.watched[2], product.lower_bound());
         changed |= ext.tighten_float_above(self.watched[2], product.upper_bound());
+        for hole in product.holes() {
+            changed |= ext.exclude_float_point(self.watched[2], *hole);
+        }
 
         let c_snap = ext
             .float_domain(self.watched[2])
@@ -45,18 +50,28 @@ impl Propagator for FloatTimesPropagator {
             .float_domain(self.watched[0])
             .unwrap_or_else(|| a.clone());
 
-        let a_from_c = FloatDomain::new(c_snap.min, c_snap.max)
-            .divide(&FloatDomain::new(b_snap.min, b_snap.max));
+        let a_from_c =
+            FloatDomain::from_bounds_with_holes(c_snap.min, c_snap.max, &c_snap.holes).divide(
+                &FloatDomain::from_bounds_with_holes(b_snap.min, b_snap.max, &b_snap.holes),
+            );
         if a_from_c.lower_bound().is_finite() {
             changed |= ext.tighten_float_below(self.watched[0], a_from_c.lower_bound());
             changed |= ext.tighten_float_above(self.watched[0], a_from_c.upper_bound());
+            for hole in a_from_c.holes() {
+                changed |= ext.exclude_float_point(self.watched[0], *hole);
+            }
         }
 
-        let b_from_c = FloatDomain::new(c_snap.min, c_snap.max)
-            .divide(&FloatDomain::new(a_snap.min, a_snap.max));
+        let b_from_c =
+            FloatDomain::from_bounds_with_holes(c_snap.min, c_snap.max, &c_snap.holes).divide(
+                &FloatDomain::from_bounds_with_holes(a_snap.min, a_snap.max, &a_snap.holes),
+            );
         if b_from_c.lower_bound().is_finite() {
             changed |= ext.tighten_float_below(self.watched[1], b_from_c.lower_bound());
             changed |= ext.tighten_float_above(self.watched[1], b_from_c.upper_bound());
+            for hole in b_from_c.holes() {
+                changed |= ext.exclude_float_point(self.watched[1], *hole);
+            }
         }
 
         let a_after = ext
@@ -96,6 +111,17 @@ mod tests {
         let c_domain = engine.domain(c).as_float().unwrap();
         assert!((c_domain.lower_bound() - 8.0).abs() < f64::EPSILON);
         assert!((c_domain.upper_bound() - 15.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn projects_holes_when_factor_is_fixed() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 2.0).exclude(1.0)));
+        let b = engine.new_variable(AnyDomain::Float(FloatDomain::fix(2.0)));
+        let c = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 10.0)));
+        engine.add_propagator(Box::new(FloatTimesPropagator::new(a, b, c)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(!engine.domain(c).as_float().unwrap().contains(2.0));
     }
 
     #[test]

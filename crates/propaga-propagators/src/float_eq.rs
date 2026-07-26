@@ -43,6 +43,22 @@ impl Propagator for FloatEqPropagator {
         if left_after.is_empty() || right_after.is_empty() {
             return PropagationStatus::Failure;
         }
+        // Equality shares excluded IEEE points inside the common interval.
+        for hole in &left_after.holes {
+            changed |= ext.exclude_float_point(self.watched[1], *hole);
+        }
+        for hole in &right_after.holes {
+            changed |= ext.exclude_float_point(self.watched[0], *hole);
+        }
+        if ext
+            .float_domain(self.watched[0])
+            .is_some_and(|domain| domain.is_empty())
+            || ext
+                .float_domain(self.watched[1])
+                .is_some_and(|domain| domain.is_empty())
+        {
+            return PropagationStatus::Failure;
+        }
         if changed {
             PropagationStatus::OkChanged
         } else {
@@ -91,6 +107,17 @@ mod tests {
         let right = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 4.0)));
         engine.add_propagator(Box::new(FloatEqPropagator::new(left, right)));
         assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn shares_interior_holes_under_equality() {
+        let mut engine = Engine::new();
+        let left = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 2.0).exclude(1.0)));
+        let right = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 2.0)));
+        engine.add_propagator(Box::new(FloatEqPropagator::new(left, right)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(!engine.domain(right).as_float().unwrap().contains(1.0));
+        assert_eq!(engine.domain(right).as_float().unwrap().holes(), &[1.0]);
     }
 
     #[test]

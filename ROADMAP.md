@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Richer float hole propagation through arithmetic / linear projections (holes currently dropped on derived intervals)
+- Hole-aware float linear projections (`float_lin_*`) when coefficients allow fixed-side affine mapping
 
 ## Shipped after v1.0.0
 
@@ -19,6 +19,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Docs: COMPATIBILITY lex/Pareto notes cover float and set-cardinality objectives
 - DFS `solve_each` set in/out branching trail-correctness fix
 - `FloatDomain` interior holes + `exclude_float_point`; `FloatNe` / forbidden assignment / DFS use domain holes
+- Hole-aware float arithmetic: `affine` / fixed-operand `plus`/`times`/`divide`, equality hole sharing, binary plus/times/div propagators project holes
 
 ## Shipped in v1.0.0
 
