@@ -5,17 +5,17 @@ use propaga_propagators::{
     AllDifferentPropagator, CardinalityBound, CircuitPropagator, CumulativePropagator,
     DiffnPropagator, DisjunctivePropagator, DisjunctiveTask, ElementPropagator, EqualityPropagator,
     FloatBinaryOp, FloatBinaryPropagator, FloatEqPropagator, FloatEqReifPropagator,
-    FloatLePropagator, FloatLeReifPropagator, FloatLinearGePropagator, FloatLinearLePropagator,
-    FloatLinearNePropagator, FloatNePropagator, FloatTimesPropagator, FloatUnaryOp,
-    FloatUnaryPropagator, GlobalCardinalityPropagator, Int2FloatPropagator, InversePropagator,
-    LessEqualPropagator, LessThanPropagator, LinearEqPropagator, LinearScalarGePropagator,
-    LinearScalarLePropagator, NotEqualOffsetPropagator, RectangleSpec, RegularPropagator,
-    ReifiedEqualityPropagator, ReifiedFloatLinearEqPropagator, ReifiedFloatLinearGePropagator,
-    ReifiedFloatLinearLePropagator, ReifiedLessEqualPropagator, ReifiedLessThanPropagator,
-    ReifiedNotEqualPropagator, ReifiedScalarEqPropagator, ReifiedScalarGePropagator,
-    ReifiedScalarLePropagator, SetCardPropagator, SetEqReifPropagator, SetInPropagator,
-    SetInReifPropagator, SetIntersectPropagator, SetSubsetPropagator, SetSubsetReifPropagator,
-    SetUnionPropagator, TablePropagator, TaskSpec,
+    FloatLePropagator, FloatLeReifPropagator, FloatLinearEqPropagator, FloatLinearGePropagator,
+    FloatLinearLePropagator, FloatLinearNePropagator, FloatNePropagator, FloatTimesPropagator,
+    FloatUnaryOp, FloatUnaryPropagator, GlobalCardinalityPropagator, Int2FloatPropagator,
+    InversePropagator, LessEqualPropagator, LessThanPropagator, LinearEqPropagator,
+    LinearScalarGePropagator, LinearScalarLePropagator, NotEqualOffsetPropagator, RectangleSpec,
+    RegularPropagator, ReifiedEqualityPropagator, ReifiedFloatLinearEqPropagator,
+    ReifiedFloatLinearGePropagator, ReifiedFloatLinearLePropagator, ReifiedLessEqualPropagator,
+    ReifiedLessThanPropagator, ReifiedNotEqualPropagator, ReifiedScalarEqPropagator,
+    ReifiedScalarGePropagator, ReifiedScalarLePropagator, SetCardPropagator, SetEqReifPropagator,
+    SetInPropagator, SetInReifPropagator, SetIntersectPropagator, SetSubsetPropagator,
+    SetSubsetReifPropagator, SetUnionPropagator, TablePropagator, TaskSpec,
 };
 use propaga_search::{
     DepthFirstSearch, LexicographicOptimization, LexicographicResult, Objective,
@@ -297,16 +297,8 @@ impl Model {
         vars: impl Into<Vec<VariableId>>,
         rhs: f64,
     ) {
-        let coeffs = coeffs.into();
-        let vars = vars.into();
         self.engine
-            .add_propagator(Box::new(FloatLinearLePropagator::new(
-                coeffs.clone(),
-                vars.clone(),
-                rhs,
-            )));
-        self.engine
-            .add_propagator(Box::new(FloatLinearGePropagator::new(coeffs, vars, rhs)));
+            .add_propagator(Box::new(FloatLinearEqPropagator::new(coeffs, vars, rhs)));
     }
 
     /// Posts `reif <=> sum(coeffs[i] * vars[i]) <= rhs` for float variables.

@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Hole-aware float linear projections (`float_lin_*`) when coefficients allow fixed-side affine mapping
+- Hole-aware unary float maps (`abs`, `sqrt`, …) when the transform is locally invertible / monotonic
 
 ## Shipped after v1.0.0
 
@@ -20,6 +20,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - DFS `solve_each` set in/out branching trail-correctness fix
 - `FloatDomain` interior holes + `exclude_float_point`; `FloatNe` / forbidden assignment / DFS use domain holes
 - Hole-aware float arithmetic: `affine` / fixed-operand `plus`/`times`/`divide`, equality hole sharing, binary plus/times/div propagators project holes
+- Hole-aware float linear: `FloatLinearEqPropagator`, interior `float_lin_ne` exclusion, affine hole sharing when two vars remain free
 
 ## Shipped in v1.0.0
 

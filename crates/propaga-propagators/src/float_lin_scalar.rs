@@ -3,6 +3,38 @@ use propaga_core::{
     FloatDomainSnapshot, PropagationContext, PropagationStatus, Propagator, VariableId,
 };
 
+/// Propagates `sum(coeffs[i] * vars[i]) == rhs` with interval bounds and hole projection.
+#[derive(Clone, Debug)]
+pub struct FloatLinearEqPropagator {
+    watched: Vec<VariableId>,
+    coeffs: Vec<f64>,
+    rhs: f64,
+}
+
+impl FloatLinearEqPropagator {
+    #[must_use]
+    pub fn new(coeffs: impl Into<Vec<f64>>, vars: impl Into<Vec<VariableId>>, rhs: f64) -> Self {
+        let coeffs = coeffs.into();
+        let vars = vars.into();
+        assert_eq!(coeffs.len(), vars.len());
+        Self {
+            watched: vars,
+            coeffs,
+            rhs,
+        }
+    }
+}
+
+impl Propagator for FloatLinearEqPropagator {
+    fn watched_variables(&self) -> &[VariableId] {
+        &self.watched
+    }
+
+    fn propagate(&mut self, ctx: &mut dyn PropagationContext) -> PropagationStatus {
+        propagate_float_eq(ctx, &self.coeffs, &self.watched, self.rhs)
+    }
+}
+
 /// Propagates `sum(coeffs[i] * vars[i]) != rhs` with interval bound consistency.
 #[derive(Clone, Debug)]
 pub struct FloatLinearNePropagator {
@@ -231,16 +263,11 @@ impl Propagator for ReifiedFloatLinearEqPropagator {
 
         match reif_literal(ctx, self.reif) {
             Some(1) => {
-                let le = propagate_float_le(ctx, &self.coeffs, &vars, self.rhs);
-                if le.is_failure() {
-                    return le;
+                let status = propagate_float_eq(ctx, &self.coeffs, &vars, self.rhs);
+                if status.is_failure() {
+                    return status;
                 }
-                changed |= le == PropagationStatus::OkChanged;
-                let ge = propagate_float_ge(ctx, &self.coeffs, &vars, self.rhs);
-                if ge.is_failure() {
-                    return ge;
-                }
-                changed |= ge == PropagationStatus::OkChanged;
+                changed |= status == PropagationStatus::OkChanged;
             }
             Some(0) => {
                 let status = propagate_float_ne(ctx, &self.coeffs, &vars, self.rhs);
@@ -592,7 +619,7 @@ fn propagate_float_ne(
     }
 
     // When all but one term are fixed, exclude the unique equality-forcing value
-    // if it sits on an interval endpoint.
+    // (endpoint shrink or interior hole).
     let Some(ext) = ctx.as_extended() else {
         return PropagationStatus::OkNoChange;
     };
@@ -608,13 +635,8 @@ fn propagate_float_ne(
             continue;
         }
         let required = (rhs - other_min) / coeff;
-        let Some(domain) = ext.float_domain(var) else {
-            continue;
-        };
-        if (domain.min - required).abs() <= f64::EPSILON {
-            changed |= ext.tighten_float_below(var, next_up(required));
-        } else if (domain.max - required).abs() <= f64::EPSILON {
-            changed |= ext.tighten_float_above(var, next_down(required));
+        if required.is_finite() {
+            changed |= ext.exclude_float_point(var, required);
         }
     }
 
@@ -625,6 +647,86 @@ fn propagate_float_ne(
     } else {
         PropagationStatus::OkNoChange
     }
+}
+
+/// Propagates `sum(coeffs[i] * vars[i]) == rhs` with bounds and hole projection.
+fn propagate_float_eq(
+    ctx: &mut dyn PropagationContext,
+    coeffs: &[f64],
+    vars: &[VariableId],
+    rhs: f64,
+) -> PropagationStatus {
+    let le = propagate_float_le(ctx, coeffs, vars, rhs);
+    if le.is_failure() {
+        return le;
+    }
+    let ge = propagate_float_ge(ctx, coeffs, vars, rhs);
+    if ge.is_failure() {
+        return ge;
+    }
+    let mut changed = le == PropagationStatus::OkChanged || ge == PropagationStatus::OkChanged;
+    changed |= project_float_lin_eq_holes(ctx, coeffs, vars, rhs);
+
+    if any_empty(ctx, vars) {
+        PropagationStatus::Failure
+    } else if changed {
+        PropagationStatus::OkChanged
+    } else {
+        PropagationStatus::OkNoChange
+    }
+}
+
+/// When all but two terms are fixed under equality, map holes through the affine link.
+fn project_float_lin_eq_holes(
+    ctx: &mut dyn PropagationContext,
+    coeffs: &[f64],
+    vars: &[VariableId],
+    rhs: f64,
+) -> bool {
+    let Some(domains) = snapshot_domains(ctx, vars) else {
+        return false;
+    };
+    let free: Vec<usize> = domains
+        .iter()
+        .enumerate()
+        .filter(|(_, domain)| !domain.is_fixed())
+        .map(|(index, _)| index)
+        .collect();
+    if free.len() != 2 {
+        return false;
+    }
+    let i = free[0];
+    let j = free[1];
+    let ci = coeffs[i];
+    let cj = coeffs[j];
+    if ci == 0.0 || cj == 0.0 {
+        return false;
+    }
+    let fixed_sum: f64 = coeffs
+        .iter()
+        .zip(&domains)
+        .enumerate()
+        .filter(|(index, _)| *index != i && *index != j)
+        .map(|(_, (&coeff, domain))| coeff * domain.min)
+        .sum();
+    let rhs_prime = rhs - fixed_sum;
+    let Some(ext) = ctx.as_extended() else {
+        return false;
+    };
+    let mut changed = false;
+    for hole in &domains[j].holes {
+        let mapped = (rhs_prime - cj * hole) / ci;
+        if mapped.is_finite() {
+            changed |= ext.exclude_float_point(vars[i], mapped);
+        }
+    }
+    for hole in &domains[i].holes {
+        let mapped = (rhs_prime - ci * hole) / cj;
+        if mapped.is_finite() {
+            changed |= ext.exclude_float_point(vars[j], mapped);
+        }
+    }
+    changed
 }
 
 #[cfg(test)]
@@ -674,6 +776,34 @@ mod tests {
         assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
         let domain = engine.domain(x).as_float().unwrap();
         assert!(domain.lower_bound() > 1.0);
+    }
+
+    #[test]
+    fn float_lin_ne_excludes_interior_when_others_fixed() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::fix(2.0)));
+        engine.add_propagator(Box::new(FloatLinearNePropagator::new(
+            vec![1.0, 1.0],
+            vec![x, y],
+            5.0,
+        )));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(!engine.domain(x).as_float().unwrap().contains(3.0));
+    }
+
+    #[test]
+    fn float_lin_eq_shares_holes_across_affine_link() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0).exclude(2.0)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0)));
+        engine.add_propagator(Box::new(FloatLinearEqPropagator::new(
+            vec![1.0, 1.0],
+            vec![x, y],
+            5.0,
+        )));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(!engine.domain(y).as_float().unwrap().contains(3.0));
     }
 
     #[test]
