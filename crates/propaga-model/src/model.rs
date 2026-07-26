@@ -6,9 +6,9 @@ use propaga_propagators::{
     DiffnPropagator, DisjunctivePropagator, DisjunctiveTask, ElementPropagator, EqualityPropagator,
     FloatBinaryOp, FloatBinaryPropagator, FloatEqPropagator, FloatEqReifPropagator,
     FloatLePropagator, FloatLeReifPropagator, FloatLinearGePropagator, FloatLinearLePropagator,
-    FloatTimesPropagator, FloatUnaryOp, FloatUnaryPropagator, GlobalCardinalityPropagator,
-    Int2FloatPropagator, InversePropagator, LessEqualPropagator, LessThanPropagator,
-    LinearEqPropagator, LinearScalarGePropagator, LinearScalarLePropagator,
+    FloatNePropagator, FloatTimesPropagator, FloatUnaryOp, FloatUnaryPropagator,
+    GlobalCardinalityPropagator, Int2FloatPropagator, InversePropagator, LessEqualPropagator,
+    LessThanPropagator, LinearEqPropagator, LinearScalarGePropagator, LinearScalarLePropagator,
     NotEqualOffsetPropagator, RectangleSpec, RegularPropagator, ReifiedEqualityPropagator,
     ReifiedFloatLinearEqPropagator, ReifiedFloatLinearGePropagator, ReifiedFloatLinearLePropagator,
     ReifiedLessEqualPropagator, ReifiedLessThanPropagator, ReifiedNotEqualPropagator,
@@ -178,6 +178,19 @@ impl Model {
     pub fn float_eq(&mut self, left: VariableId, right: VariableId) {
         self.engine
             .add_propagator(Box::new(FloatEqPropagator::new(left, right)));
+    }
+
+    /// Posts `left != right` for float variables.
+    pub fn float_ne(&mut self, left: VariableId, right: VariableId) {
+        self.engine
+            .add_propagator(Box::new(FloatNePropagator::new(left, right)));
+    }
+
+    /// Posts `left < right` for float variables (strict).
+    pub fn float_lt(&mut self, left: VariableId, right: VariableId) {
+        let zero = self.int_var_fixed(0);
+        // ¬(right ≤ left) ⇔ left < right
+        self.float_le_reif(right, left, zero);
     }
 
     /// Posts `reif <=> left == right` for float variables.

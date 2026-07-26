@@ -53,15 +53,11 @@ pub fn float_round(model: &mut Model, a: VariableId, b: VariableId) {
 }
 
 pub fn float_lt(model: &mut Model, a: VariableId, b: VariableId) {
-    model.float_le(a, b);
-    float_ne(model, a, b);
+    model.float_lt(a, b);
 }
 
 pub fn float_ne(model: &mut Model, a: VariableId, b: VariableId) {
-    let reif = model.int_var(0, 1);
-    model.float_eq_reif(a, b, reif);
-    let zero = model.int_var_fixed(0);
-    model.equal(reif, zero);
+    model.float_ne(a, b);
 }
 
 pub fn float_max(model: &mut Model, a: VariableId, b: VariableId, c: VariableId) {

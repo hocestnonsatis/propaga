@@ -19,6 +19,7 @@ mod equality;
 mod float_eq;
 mod float_le;
 mod float_lin_scalar;
+mod float_ne;
 mod float_ops;
 mod float_times;
 mod forbidden_assignment;
@@ -59,6 +60,7 @@ pub use float_lin_scalar::{
     FloatLinearGePropagator, FloatLinearLePropagator, ReifiedFloatLinearEqPropagator,
     ReifiedFloatLinearGePropagator, ReifiedFloatLinearLePropagator,
 };
+pub use float_ne::FloatNePropagator;
 pub use float_ops::{
     FloatBinaryOp, FloatBinaryPropagator, FloatEqReifPropagator, FloatLeReifPropagator,
     FloatUnaryOp, FloatUnaryPropagator, Int2FloatPropagator,

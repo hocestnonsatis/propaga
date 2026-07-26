@@ -4,7 +4,8 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Stronger float inequality / disequality propagation beyond interval endpoints
+- Stronger `float_lin_ne` / reified linear float disequality when sums are fixed at bounds
+- Interior float point exclusion without branching (requires richer float domain representation)
 
 ## Shipped after v1.0.0
 
@@ -14,6 +15,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Non-int assignment blocking (`ForbiddenAssignmentPropagator`); Pareto search uses cuts + blocking for all objective types
 - Continuous float point exclusion via `encode_forbidden_float` (reif OR) wired into Pareto assignment blocking
 - DFS float branching prefers splitting around registered blocked IEEE points (`with_float_holes` / Pareto hole tracking)
+- Stronger float `!=` / `<`: `FloatNePropagator` endpoint pruning, strengthened `FloatEqReif`, strict `float_lt` via `¬(b ≤ a)`
 
 ## Shipped in v1.0.0
 

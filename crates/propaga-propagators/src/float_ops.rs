@@ -3,6 +3,7 @@ use propaga_domains::FloatDomain;
 
 use super::float_eq::FloatEqPropagator;
 use super::float_le::FloatLePropagator;
+use super::float_ne::FloatNePropagator;
 use crate::reified::reif_literal;
 
 #[derive(Clone, Debug)]
@@ -24,23 +25,59 @@ impl Propagator for FloatEqReifPropagator {
         &self.watched
     }
 
+    fn priority(&self) -> u32 {
+        12
+    }
+
     fn propagate(&mut self, ctx: &mut dyn PropagationContext) -> PropagationStatus {
         let (left_id, right_id, reif_id) = (self.watched[0], self.watched[1], self.watched[2]);
-        if ctx.fixed_value(reif_id) == Some(1) {
-            let mut eq = FloatEqPropagator::new(left_id, right_id);
-            return eq.propagate(ctx);
+        let mut changed = false;
+
+        match reif_literal(ctx, reif_id) {
+            Some(1) => {
+                let mut eq = FloatEqPropagator::new(left_id, right_id);
+                return eq.propagate(ctx);
+            }
+            Some(0) => {
+                let mut ne = FloatNePropagator::new(left_id, right_id);
+                return ne.propagate(ctx);
+            }
+            _ => {}
         }
-        if ctx.fixed_value(reif_id) == Some(0)
-            && let Some(ext) = ctx.as_extended()
+
+        if let Some(ext) = ctx.as_extended()
             && let (Some(left), Some(right)) =
                 (ext.float_domain(left_id), ext.float_domain(right_id))
-            && left.min == left.max
-            && right.min == right.max
-            && (left.min - right.min).abs() < f64::EPSILON
         {
-            return PropagationStatus::Failure;
+            let left_fixed = (left.min - left.max).abs() <= f64::EPSILON;
+            let right_fixed = (right.min - right.max).abs() <= f64::EPSILON;
+            if left_fixed && right_fixed {
+                if (left.min - right.min).abs() <= f64::EPSILON {
+                    changed |= tighten_reif(ctx, reif_id, 1);
+                } else {
+                    changed |= tighten_reif(ctx, reif_id, 0);
+                }
+            } else if left.max < right.min || right.max < left.min {
+                changed |= tighten_reif(ctx, reif_id, 0);
+            }
         }
-        PropagationStatus::OkNoChange
+
+        if ctx.domain(reif_id).is_empty()
+            || ctx
+                .as_extended()
+                .and_then(|ext| ext.float_domain(left_id))
+                .is_some_and(|d| d.is_empty())
+            || ctx
+                .as_extended()
+                .and_then(|ext| ext.float_domain(right_id))
+                .is_some_and(|d| d.is_empty())
+        {
+            PropagationStatus::Failure
+        } else if changed {
+            PropagationStatus::OkChanged
+        } else {
+            PropagationStatus::OkNoChange
+        }
     }
 }
 
@@ -378,5 +415,28 @@ mod tests {
         assert!(!status.is_failure());
         let domain = engine.domain(left).as_float().unwrap();
         assert!(domain.lower_bound() > 1.0);
+    }
+
+    #[test]
+    fn float_eq_reif_false_prunes_endpoint() {
+        let mut engine = Engine::new();
+        let left = engine.new_variable(AnyDomain::Float(FloatDomain::fix(1.0)));
+        let right = engine.new_variable(AnyDomain::Float(FloatDomain::new(1.0, 3.0)));
+        let reif = engine.new_variable(HybridDomain::fix(0));
+        engine.add_propagator(Box::new(FloatEqReifPropagator::new(left, right, reif)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let domain = engine.domain(right).as_float().unwrap();
+        assert!(domain.lower_bound() > 1.0);
+    }
+
+    #[test]
+    fn float_eq_reif_infers_false_when_disjoint() {
+        let mut engine = Engine::new();
+        let left = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 1.0)));
+        let right = engine.new_variable(AnyDomain::Float(FloatDomain::new(2.0, 3.0)));
+        let reif = engine.new_variable(HybridDomain::new(0, 1));
+        engine.add_propagator(Box::new(FloatEqReifPropagator::new(left, right, reif)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert_eq!(engine.hybrid_domain(reif).fixed_value(), Some(0));
     }
 }
