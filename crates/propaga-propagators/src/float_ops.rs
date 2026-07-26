@@ -88,8 +88,13 @@ impl Propagator for FloatLeReifPropagator {
                 if left.max <= right.min {
                     return PropagationStatus::Failure;
                 }
-                changed |= ext.tighten_float_above(left_id, next_up(right.max));
-                changed |= ext.tighten_float_below(right_id, next_down(left.min));
+                // ¬(left ≤ right) ⇒ left > right.max and right < left.min
+                changed |= ext.tighten_float_below(left_id, next_up(right.max));
+                let left_min = ext
+                    .float_domain(left_id)
+                    .map(|domain| domain.min)
+                    .unwrap_or(left.min);
+                changed |= ext.tighten_float_above(right_id, next_down(left_min));
             }
             _ => {}
         }
@@ -353,5 +358,25 @@ impl Propagator for Int2FloatPropagator {
         } else {
             PropagationStatus::OkNoChange
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use propaga_domains::{AnyDomain, HybridDomain};
+    use propaga_engine::Engine;
+
+    #[test]
+    fn float_le_reif_false_forces_strict_greater() {
+        let mut engine = Engine::new();
+        let left = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 2.0)));
+        let right = engine.new_variable(AnyDomain::Float(FloatDomain::fix(1.0)));
+        let reif = engine.new_variable(HybridDomain::new(0, 1));
+        engine.add_propagator(Box::new(FloatLeReifPropagator::new(left, right, reif)));
+        let status = engine.fix_variable(reif, 0).unwrap();
+        assert!(!status.is_failure());
+        let domain = engine.domain(left).as_float().unwrap();
+        assert!(domain.lower_bound() > 1.0);
     }
 }

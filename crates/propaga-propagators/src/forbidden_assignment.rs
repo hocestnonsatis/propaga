@@ -1,11 +1,15 @@
 use propaga_core::{PropagationContext, PropagationStatus, Propagator, VariableId};
+use propaga_domains::{AnyDomain, FloatDomain, HybridDomain};
+use propaga_engine::Engine;
+
+use crate::float_ops::FloatLeReifPropagator;
 
 /// Typed value forbidden for a variable in a blocked assignment.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ForbiddenValue {
     /// Forbidden integer assignment.
     Int(i32),
-    /// Forbidden floating-point assignment.
+    /// Forbidden floating-point assignment (exact fixed point / bound endpoint).
     Float(f64),
     /// Forbidden exact set membership (sorted unique elements).
     Set(Vec<i32>),
@@ -13,9 +17,10 @@ pub enum ForbiddenValue {
 
 /// Forbids rediscovering one complete variable assignment.
 ///
-/// Integer components unit-propagate like a nogood. Float and set components
-/// fail when fixed to the forbidden value; set domains that are already fixed
-/// to the forbidden membership are rejected immediately.
+/// Integer components unit-propagate like a nogood. Continuous float values should
+/// usually be encoded via [`encode_forbidden_float`] so search can branch on the
+/// reified disjunction that excludes a single IEEE point. Set components fail or
+/// branch away from the forbidden set.
 #[derive(Clone, Debug)]
 pub struct ForbiddenAssignmentPropagator {
     watched: Vec<VariableId>,
@@ -33,6 +38,68 @@ impl ForbiddenAssignmentPropagator {
             }
         }
         Self { watched, forbidden }
+    }
+}
+
+/// Result of encoding a forbidden float point as a reified disjunction.
+#[derive(Clone, Debug)]
+pub struct EncodedForbiddenFloat {
+    /// Literals to include in a [`ForbiddenAssignmentPropagator`].
+    pub forbidden: Vec<(VariableId, ForbiddenValue)>,
+    /// Boolean decision variables that should be searchable (reif_le, reif_ge).
+    pub decision_vars: Vec<VariableId>,
+}
+
+/// Encodes “`var` equals `value`” as two boolean literals that are both zero iff
+/// the float is trapped at that IEEE point (`next_down < x < next_up`).
+///
+/// Posts `FloatLeReif` propagators so assigning either reif to `1` forces the float
+/// strictly below or above `value`. Include the returned forbidden pairs in a
+/// [`ForbiddenAssignmentPropagator`] and add [`EncodedForbiddenFloat::decision_vars`]
+/// to the search variable list so DFS can branch on the disjunction.
+#[must_use]
+pub fn encode_forbidden_float(
+    engine: &mut Engine,
+    var: VariableId,
+    value: f64,
+) -> EncodedForbiddenFloat {
+    let down = next_float_down(value);
+    let up = next_float_up(value);
+    if !down.is_finite() || !up.is_finite() || !(down < value && value < up) {
+        return EncodedForbiddenFloat {
+            forbidden: vec![(var, ForbiddenValue::Float(value))],
+            decision_vars: Vec::new(),
+        };
+    }
+
+    let bound_lo = engine.new_variable(AnyDomain::Float(FloatDomain::fix(down)));
+    let bound_hi = engine.new_variable(AnyDomain::Float(FloatDomain::fix(up)));
+    let reif_le = engine.new_variable(HybridDomain::new(0, 1));
+    let reif_ge = engine.new_variable(HybridDomain::new(0, 1));
+    engine.add_propagator(Box::new(FloatLeReifPropagator::new(var, bound_lo, reif_le)));
+    engine.add_propagator(Box::new(FloatLeReifPropagator::new(bound_hi, var, reif_ge)));
+    EncodedForbiddenFloat {
+        forbidden: vec![
+            (reif_le, ForbiddenValue::Int(0)),
+            (reif_ge, ForbiddenValue::Int(0)),
+        ],
+        decision_vars: vec![reif_le, reif_ge],
+    }
+}
+
+fn next_float_up(value: f64) -> f64 {
+    if value.is_infinite() && value.is_sign_positive() {
+        value
+    } else {
+        f64::from_bits(value.to_bits().saturating_add(1))
+    }
+}
+
+fn next_float_down(value: f64) -> f64 {
+    if value.is_infinite() && value.is_sign_negative() {
+        value
+    } else {
+        f64::from_bits(value.to_bits().saturating_sub(1))
     }
 }
 
@@ -185,11 +252,34 @@ fn forbid_value(
             if (domain.min - domain.max).abs() <= f64::EPSILON
                 && (domain.min - expected).abs() <= f64::EPSILON
             {
-                PropagationStatus::Failure
-            } else {
-                // Continuous intervals cannot drop a single interior point.
-                PropagationStatus::OkNoChange
+                return PropagationStatus::Failure;
             }
+            // Prefer bound tightening when the forbidden point sits on an endpoint.
+            if (domain.min - expected).abs() <= f64::EPSILON {
+                let up = next_float_up(*expected);
+                let _ = ext.tighten_float_below(var, up);
+                return if ext
+                    .float_domain(var)
+                    .is_some_and(|domain| !domain.is_empty() && domain.min >= up)
+                {
+                    PropagationStatus::OkChanged
+                } else {
+                    PropagationStatus::Failure
+                };
+            }
+            if (domain.max - expected).abs() <= f64::EPSILON {
+                let down = next_float_down(*expected);
+                let _ = ext.tighten_float_above(var, down);
+                return if ext
+                    .float_domain(var)
+                    .is_some_and(|domain| !domain.is_empty() && domain.max <= down)
+                {
+                    PropagationStatus::OkChanged
+                } else {
+                    PropagationStatus::Failure
+                };
+            }
+            PropagationStatus::OkNoChange
         }
         ForbiddenValue::Set(expected) => {
             let Some(ext) = ctx.as_extended() else {
@@ -216,7 +306,6 @@ fn forbid_value(
                     PropagationStatus::OkNoChange
                 };
             }
-            // Force one undecided element opposite to the forbidden membership.
             let pivot = undecided[0];
             let changed = if expected.contains(&pivot) {
                 ext.force_set_out(var, pivot)
@@ -274,6 +363,56 @@ mod tests {
             set,
             ForbiddenValue::Set(vec![1, 2]),
         )])));
+        let status = engine.commit_initial_propagation().unwrap();
+        assert!(status.is_failure());
+    }
+
+    #[test]
+    fn forbids_float_endpoint_by_bound_tightening() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(IntervalDomain::fix(1));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::new(1.0, 2.0)));
+        engine.add_propagator(Box::new(ForbiddenAssignmentPropagator::new(vec![
+            (x, ForbiddenValue::Int(1)),
+            (y, ForbiddenValue::Float(1.0)),
+        ])));
+        let status = engine.commit_initial_propagation().unwrap();
+        assert!(!status.is_failure());
+        let domain = engine.domain(y).as_float().unwrap();
+        assert!(domain.lower_bound() > 1.0);
+    }
+
+    #[test]
+    fn encode_forbidden_float_unit_props_through_reif_branch() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(IntervalDomain::fix(1));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 2.0)));
+        let encoded = encode_forbidden_float(&mut engine, y, 1.0);
+        assert_eq!(encoded.decision_vars.len(), 2);
+        let reif_le = encoded.decision_vars[0];
+        let mut forbidden = vec![(x, ForbiddenValue::Int(1))];
+        forbidden.extend(encoded.forbidden);
+        engine.add_propagator(Box::new(ForbiddenAssignmentPropagator::new(forbidden)));
+        // Choosing “not ≤ next_down(1)” forces the complementary ≥ next_up(1) branch.
+        let status = engine.fix_variable(reif_le, 0).unwrap();
+        assert!(!status.is_failure());
+        let domain = engine.domain(y).as_float().unwrap();
+        assert!(
+            domain.lower_bound() > 1.0,
+            "expected y forced above 1.0, got [{}, {}]",
+            domain.lower_bound(),
+            domain.upper_bound()
+        );
+    }
+
+    #[test]
+    fn encode_forbidden_float_fails_when_fixed_at_point() {
+        let mut engine = Engine::new();
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::fix(1.0)));
+        let encoded = encode_forbidden_float(&mut engine, y, 1.0);
+        engine.add_propagator(Box::new(ForbiddenAssignmentPropagator::new(
+            encoded.forbidden,
+        )));
         let status = engine.commit_initial_propagation().unwrap();
         assert!(status.is_failure());
     }

@@ -7,7 +7,7 @@ use propaga_core::VariableId;
 use propaga_engine::Engine;
 use propaga_propagators::{
     DominanceCutDirection, DominanceCutPropagator, DominanceCutTarget,
-    ForbiddenAssignmentPropagator, ForbiddenValue,
+    ForbiddenAssignmentPropagator, ForbiddenValue, encode_forbidden_float,
 };
 use std::collections::HashSet;
 
@@ -137,7 +137,7 @@ impl ParetoOptimization {
 
             if is_dominated_by_front(&objective_values, &front, &directions) {
                 let cut_ok = post_dominance_cut(engine, &self.objectives, &objective_values);
-                let block_ok = block_assignment(engine, &solution);
+                let block_ok = block_assignment(engine, &mut self.variables, &solution);
                 if !cut_ok && !block_ok {
                     break;
                 }
@@ -153,7 +153,7 @@ impl ParetoOptimization {
             });
 
             let cut_ok = post_dominance_cut(engine, &self.objectives, &objective_values);
-            let block_ok = block_assignment(engine, &solution);
+            let block_ok = block_assignment(engine, &mut self.variables, &solution);
             if !cut_ok && !block_ok {
                 break;
             }
@@ -230,21 +230,34 @@ fn post_dominance_cut(
     }
 }
 
-fn block_assignment(engine: &mut Engine, solution: &Solution) -> bool {
+fn block_assignment(
+    engine: &mut Engine,
+    decision_vars: &mut Vec<VariableId>,
+    solution: &Solution,
+) -> bool {
     if solution.is_empty() {
         return false;
     }
-    let forbidden = solution
-        .iter()
-        .map(|(var, value)| {
-            let forbidden = match value {
-                AssignmentValue::Int(value) => ForbiddenValue::Int(*value),
-                AssignmentValue::Float(value) => ForbiddenValue::Float(*value),
-                AssignmentValue::Set(values) => ForbiddenValue::Set(values.clone()),
-            };
-            (*var, forbidden)
-        })
-        .collect();
+    let mut forbidden = Vec::with_capacity(solution.len());
+    for (var, value) in solution {
+        match value {
+            AssignmentValue::Int(value) => {
+                forbidden.push((*var, ForbiddenValue::Int(*value)));
+            }
+            AssignmentValue::Float(value) => {
+                let encoded = encode_forbidden_float(engine, *var, *value);
+                for reif in &encoded.decision_vars {
+                    if !decision_vars.contains(reif) {
+                        decision_vars.push(*reif);
+                    }
+                }
+                forbidden.extend(encoded.forbidden);
+            }
+            AssignmentValue::Set(values) => {
+                forbidden.push((*var, ForbiddenValue::Set(values.clone())));
+            }
+        }
+    }
     engine.add_propagator(Box::new(ForbiddenAssignmentPropagator::new(forbidden)));
     match engine.commit_initial_propagation() {
         Ok(status) => !status.is_failure(),

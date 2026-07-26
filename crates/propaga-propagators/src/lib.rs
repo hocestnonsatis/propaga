@@ -64,7 +64,9 @@ pub use float_ops::{
     FloatUnaryOp, FloatUnaryPropagator, Int2FloatPropagator,
 };
 pub use float_times::FloatTimesPropagator;
-pub use forbidden_assignment::{ForbiddenAssignmentPropagator, ForbiddenValue};
+pub use forbidden_assignment::{
+    EncodedForbiddenFloat, ForbiddenAssignmentPropagator, ForbiddenValue, encode_forbidden_float,
+};
 pub use gcc::{CardinalityBound, GlobalCardinalityPropagator};
 pub use inverse::InversePropagator;
 pub use less_equal::LessEqualPropagator;
