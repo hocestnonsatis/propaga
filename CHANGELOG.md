@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Lexicographic search restores the engine after each objective's branch-and-bound so interior optima are pinned correctly before optimizing the next priority.
 - `FloatLeReifPropagator` with reif=false now tightens the correct float bounds (strict greater-than encoding).
+- DFS `solve_each` set branching no longer applies in/out forces eagerly before trail marks (both membership branches are explored).
+
+### Known limitations
+
+- Float domains remain single intervals; excluding an interior IEEE point still needs reified disjunction and/or hole-aware branching.
+- Float propagation is interval-based (sound, not exact real arithmetic).
 
 ## [1.0.0] - 2026-07-13
 

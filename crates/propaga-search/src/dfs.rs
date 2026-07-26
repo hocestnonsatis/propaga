@@ -510,13 +510,15 @@ impl DepthFirstSearch {
             return self.collect_each(engine, on_solution);
         }
         let value = undecided[0];
-        for branch in [
-            engine.force_set_in(var, value),
-            engine.force_set_out(var, value),
-        ] {
+        for force_in in [true, false] {
             self.record_branch();
             let level = engine.trail_mark();
-            match branch {
+            let status = if force_in {
+                engine.force_set_in(var, value)
+            } else {
+                engine.force_set_out(var, value)
+            };
+            match status {
                 Ok(PropagationStatus::Failure) => {
                     let _ = self.handle_failure(engine, level);
                 }
@@ -919,6 +921,30 @@ mod tests {
         let solution = search.solve(&mut engine).expect("solution exists");
         assert_eq!(solution, vec![(start_b, AssignmentValue::Int(4))]);
         assert_eq!(search.stats().nodes, 1);
+    }
+
+    #[test]
+    fn collect_each_enumerates_both_set_membership_branches() {
+        use propaga_domains::{AnyDomain, SetIntervalDomain};
+
+        let mut engine = Engine::new();
+        let set = engine.new_variable(AnyDomain::Set(SetIntervalDomain::universe(1..=1)));
+        let mut search = DepthFirstSearch::new(vec![set]);
+        let mut solutions = Vec::new();
+        search.solve_each(&mut engine, |solution| {
+            solutions.push(solution.clone());
+            true
+        });
+        assert_eq!(solutions.len(), 2);
+        let mut memberships: Vec<Vec<i32>> = solutions
+            .into_iter()
+            .map(|solution| match &solution[0].1 {
+                AssignmentValue::Set(values) => values.clone(),
+                other => panic!("expected set assignment, got {other:?}"),
+            })
+            .collect();
+        memberships.sort();
+        assert_eq!(memberships, vec![vec![], vec![1]]);
     }
 
     #[test]

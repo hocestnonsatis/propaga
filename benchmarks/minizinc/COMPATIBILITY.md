@@ -127,8 +127,8 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 |-----------|--------|-------|
 | `solve satisfy;` | Supported | |
 | `solve minimize x;` / `maximize x;` | Supported | Int, float, or set (cardinality) objective |
-| `solve minimize x, y;` | Supported | Lexicographic (int objectives) |
-| `solve :: pareto([...]) satisfy` | Supported | Int objectives; CLI JSON `pareto_solutions` |
+| `solve minimize x, y;` | Supported | Lexicographic (int, float, set-cardinality) |
+| `solve :: pareto([...]) satisfy` | Supported | Int / float / set-cardinality; CLI JSON `pareto_solutions` |
 
 ## Search annotations
 

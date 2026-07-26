@@ -16,6 +16,8 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - DFS float branching prefers splitting around registered blocked IEEE points (`with_float_holes` / Pareto hole tracking)
 - Stronger float `!=` / `<`: `FloatNePropagator` endpoint pruning, strengthened `FloatEqReif`, strict `float_lt` via `¬(b ≤ a)`
 - `FloatLinearNePropagator` + fixed `ReifiedFloatLinearEq(false)` (bound-touch / unit endpoint pruning; FlatZinc `float_lin_ne`)
+- Docs: COMPATIBILITY lex/Pareto notes cover float and set-cardinality objectives
+- DFS `solve_each` set in/out branching trail-correctness fix
 
 ## Shipped in v1.0.0
 
