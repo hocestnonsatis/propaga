@@ -343,13 +343,13 @@ impl Propagator for FloatUnaryPropagator {
         let Some(ext) = ctx.as_extended() else {
             return PropagationStatus::OkNoChange;
         };
-        let (Some(input), Some(_output)) = (
+        let (Some(input), Some(output)) = (
             ext.float_domain(self.watched[0]),
             ext.float_domain(self.watched[1]),
         ) else {
             return PropagationStatus::Failure;
         };
-        let input_dom = FloatDomain::new(input.min, input.max);
+        let input_dom = FloatDomain::from_bounds_with_holes(input.min, input.max, &input.holes);
         let mapped = match self.op {
             FloatUnaryOp::Abs => input_dom.abs(),
             FloatUnaryOp::Sqrt => input_dom.sqrt(),
@@ -364,9 +364,53 @@ impl Propagator for FloatUnaryPropagator {
         let mut changed = false;
         changed |= ext.tighten_float_below(self.watched[1], mapped.lower_bound());
         changed |= ext.tighten_float_above(self.watched[1], mapped.upper_bound());
-        if ext
+        for hole in mapped.holes() {
+            changed |= ext.exclude_float_point(self.watched[1], *hole);
+        }
+
+        // Reverse-project output holes through locally invertible maps.
+        let output_snap = ext
             .float_domain(self.watched[1])
+            .unwrap_or_else(|| output.clone());
+        match self.op {
+            FloatUnaryOp::Abs if input_dom.lower_bound() >= 0.0 => {
+                for hole in &output_snap.holes {
+                    changed |= ext.exclude_float_point(self.watched[0], *hole);
+                }
+            }
+            FloatUnaryOp::Abs if input_dom.upper_bound() <= 0.0 => {
+                for hole in &output_snap.holes {
+                    changed |= ext.exclude_float_point(self.watched[0], -hole);
+                }
+            }
+            FloatUnaryOp::Sqrt => {
+                for hole in &output_snap.holes {
+                    if *hole >= 0.0 {
+                        changed |= ext.exclude_float_point(self.watched[0], hole * hole);
+                    }
+                }
+            }
+            FloatUnaryOp::Exp => {
+                for hole in &output_snap.holes {
+                    if *hole > 0.0 {
+                        changed |= ext.exclude_float_point(self.watched[0], hole.ln());
+                    }
+                }
+            }
+            FloatUnaryOp::Ln => {
+                for hole in &output_snap.holes {
+                    changed |= ext.exclude_float_point(self.watched[0], hole.exp());
+                }
+            }
+            _ => {}
+        }
+
+        if ext
+            .float_domain(self.watched[0])
             .is_some_and(|d| d.is_empty())
+            || ext
+                .float_domain(self.watched[1])
+                .is_some_and(|d| d.is_empty())
         {
             return PropagationStatus::Failure;
         }
@@ -450,6 +494,31 @@ mod tests {
         )));
         assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
         assert!(!engine.domain(c).as_float().unwrap().contains(4.0));
+    }
+
+    #[test]
+    fn float_sqrt_projects_holes_forward_and_back() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 9.0).exclude(4.0)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0)));
+        engine.add_propagator(Box::new(FloatUnaryPropagator::new(
+            x,
+            y,
+            FloatUnaryOp::Sqrt,
+        )));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(!engine.domain(y).as_float().unwrap().contains(2.0));
+
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 9.0)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0).exclude(2.0)));
+        engine.add_propagator(Box::new(FloatUnaryPropagator::new(
+            x,
+            y,
+            FloatUnaryOp::Sqrt,
+        )));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(!engine.domain(x).as_float().unwrap().contains(4.0));
     }
 
     #[test]

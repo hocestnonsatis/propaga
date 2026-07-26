@@ -234,7 +234,7 @@ impl FloatDomain {
         Self::new(self.min + other.min, self.max + other.max)
     }
 
-    /// Returns a sound absolute value interval.
+    /// Returns a sound absolute value interval, preserving holes when safe.
     #[must_use]
     pub fn abs(&self) -> Self {
         if self.is_empty() {
@@ -244,12 +244,24 @@ impl FloatDomain {
             return self.clone();
         }
         if self.max <= 0.0 {
-            return Self::new(-self.max, -self.min);
+            return -self.clone();
         }
-        Self::new(0.0, self.min.abs().max(self.max.abs()))
+        let max_abs = self.min.abs().max(self.max.abs());
+        let mut result = Self::new(0.0, max_abs);
+        for &hole in &self.holes {
+            let image = hole.abs();
+            // 0 remains a limit point of abs even if 0 itself is excluded.
+            if image == 0.0 {
+                continue;
+            }
+            if !self.contains(image) && !self.contains(-image) {
+                result = result.exclude(image);
+            }
+        }
+        result
     }
 
-    /// Returns a sound square root interval.
+    /// Returns a sound square root interval, mapping nonnegative holes.
     #[must_use]
     pub fn sqrt(&self) -> Self {
         if self.is_empty() || self.max < 0.0 {
@@ -257,7 +269,14 @@ impl FloatDomain {
         }
         let min = self.min.max(0.0).sqrt();
         let max = self.max.max(0.0).sqrt();
-        Self::new(min, max)
+        let holes = self
+            .holes
+            .iter()
+            .copied()
+            .filter(|hole| *hole >= 0.0)
+            .map(f64::sqrt)
+            .collect::<Vec<_>>();
+        Self::from_parts(min, max, holes)
     }
 
     /// Returns a conservative sine interval.
@@ -292,22 +311,32 @@ impl FloatDomain {
         )
     }
 
-    /// Returns a conservative natural logarithm interval.
+    /// Returns a conservative natural logarithm interval, mapping positive holes.
     #[must_use]
     pub fn ln(&self) -> Self {
         if self.is_empty() || self.max <= 0.0 {
             return Self::new(1.0, 0.0);
         }
-        Self::new(self.min.max(0.0).ln(), self.max.ln())
+        let min = self.min.max(0.0).ln();
+        let max = self.max.ln();
+        let holes = self
+            .holes
+            .iter()
+            .copied()
+            .filter(|hole| *hole > 0.0)
+            .map(f64::ln)
+            .collect::<Vec<_>>();
+        Self::from_parts(min, max, holes)
     }
 
-    /// Returns a conservative exponential interval.
+    /// Returns a conservative exponential interval, mapping holes.
     #[must_use]
     pub fn exp(&self) -> Self {
         if self.is_empty() {
             return Self::new(1.0, 0.0);
         }
-        Self::new(self.min.exp(), self.max.exp())
+        let holes = self.holes.iter().copied().map(f64::exp).collect::<Vec<_>>();
+        Self::from_parts(self.min.exp(), self.max.exp(), holes)
     }
 
     /// Returns a conservative ceiling interval.
@@ -406,6 +435,36 @@ mod tests {
         let product = left.times(&right);
         assert!(!product.contains(2.0));
         assert_eq!(product.holes(), &[2.0]);
+    }
+
+    #[test]
+    fn abs_preserves_holes_on_nonnegative_domain() {
+        let domain = FloatDomain::new(0.0, 3.0).exclude(1.0);
+        assert_eq!(domain.abs().holes(), &[1.0]);
+    }
+
+    #[test]
+    fn abs_maps_holes_on_nonpositive_domain() {
+        let domain = FloatDomain::new(-3.0, 0.0).exclude(-2.0);
+        let abs = domain.abs();
+        assert!(!abs.contains(2.0));
+        assert_eq!(abs.holes(), &[2.0]);
+    }
+
+    #[test]
+    fn abs_excludes_image_only_when_both_preimages_blocked() {
+        let one_side = FloatDomain::new(-3.0, 3.0).exclude(2.0);
+        assert!(one_side.abs().contains(2.0));
+        let both = FloatDomain::new(-3.0, 3.0).exclude(2.0).exclude(-2.0);
+        assert!(!both.abs().contains(2.0));
+    }
+
+    #[test]
+    fn sqrt_and_exp_map_holes() {
+        let sqrt = FloatDomain::new(0.0, 9.0).exclude(4.0).sqrt();
+        assert!(!sqrt.contains(2.0));
+        let exp = FloatDomain::new(0.0, 2.0).exclude(1.0).exp();
+        assert!(!exp.contains(1.0_f64.exp()));
     }
 
     #[test]

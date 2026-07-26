@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FloatDomain` can record interior excluded IEEE points; `ExtendedPropagationContext::exclude_float_point` wires exclusion into `FloatNe` / assignment blocking, and DFS prefers splitting at domain holes.
 - Hole-aware float arithmetic: `FloatDomain::affine` and fixed-operand `plus`/`times`/`divide` preserve holes; `FloatEq` shares holes; plus/times/div propagators project holes when a side is fixed.
 - `FloatLinearEqPropagator` for `float_lin_eq` with affine hole sharing when two variables remain free; `float_lin_ne` excludes interior equality-forcing points when other terms are fixed.
+- Unary float maps (`abs`, `sqrt`, `ln`, `exp`) preserve or safely project holes; `FloatUnaryPropagator` reverse-projects through locally invertible cases.
 - `ExtendedPropagationContext::tighten_set_cardinality` for set-cardinality bound updates during propagation.
 
 ### Fixed
@@ -30,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Known limitations
 
-- Unary float maps still drop holes on derived intervals (except where arithmetic already projects).
+- Non-injective unary maps (`sin`, `cos`, `ceil`, `floor`, `round`) still drop holes on derived intervals.
 - Float propagation remains interval-based (sound, not exact real arithmetic).
 
 ## [1.0.0] - 2026-07-13

@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Hole-aware unary float maps (`abs`, `sqrt`, …) when the transform is locally invertible / monotonic
+- Hole-aware float element / membership propagators (`array_float_element`, `float_in`) when the selected value carries holes
 
 ## Shipped after v1.0.0
 
@@ -21,6 +21,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - `FloatDomain` interior holes + `exclude_float_point`; `FloatNe` / forbidden assignment / DFS use domain holes
 - Hole-aware float arithmetic: `affine` / fixed-operand `plus`/`times`/`divide`, equality hole sharing, binary plus/times/div propagators project holes
 - Hole-aware float linear: `FloatLinearEqPropagator`, interior `float_lin_ne` exclusion, affine hole sharing when two vars remain free
+- Hole-aware unary float maps: `abs`/`sqrt`/`ln`/`exp` preserve or safely project holes; unary propagator reverse-projects invertible cases
 
 ## Shipped in v1.0.0
 
