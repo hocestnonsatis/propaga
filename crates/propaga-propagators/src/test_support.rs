@@ -458,6 +458,23 @@ impl ExtendedPropagationContext for MockSetCtx {
         snap.lub.len() != before
     }
 
+    fn tighten_set_cardinality(
+        &mut self,
+        var: VariableId,
+        card_min: usize,
+        card_max: usize,
+    ) -> bool {
+        let Some(snap) = self.sets.get_mut(&var) else {
+            return false;
+        };
+        if snap.card_min == card_min && snap.card_max == card_max {
+            return false;
+        }
+        snap.card_min = card_min;
+        snap.card_max = card_max;
+        true
+    }
+
     fn tighten_float_below(&mut self, _: VariableId, _: f64) -> bool {
         false
     }

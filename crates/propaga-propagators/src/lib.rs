@@ -47,7 +47,9 @@ pub use clause::ClausePropagator;
 pub use cumulative::CumulativePropagator;
 pub use diffn::{DiffnPropagator, RectangleSpec};
 pub use disjunctive::{DisjunctivePropagator, DisjunctiveTask};
-pub use dominance_cut::{DominanceCutDirection, IntDominanceCutPropagator};
+pub use dominance_cut::{
+    DominanceCutDirection, DominanceCutPropagator, DominanceCutTarget, IntDominanceCutPropagator,
+};
 pub use element::ElementPropagator;
 pub use equality::EqualityPropagator;
 pub use float_eq::FloatEqPropagator;

@@ -59,6 +59,12 @@ pub trait ExtendedPropagationContext {
     fn float_domain(&self, var: VariableId) -> Option<FloatDomainSnapshot>;
     fn force_set_in(&mut self, var: VariableId, value: i32) -> bool;
     fn force_set_out(&mut self, var: VariableId, value: i32) -> bool;
+    fn tighten_set_cardinality(
+        &mut self,
+        var: VariableId,
+        card_min: usize,
+        card_max: usize,
+    ) -> bool;
     fn tighten_float_below(&mut self, var: VariableId, bound: f64) -> bool;
     fn tighten_float_above(&mut self, var: VariableId, bound: f64) -> bool;
 }

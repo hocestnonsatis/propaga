@@ -5,7 +5,10 @@ use crate::stats::SearchStats;
 use crate::value::{AssignmentValue, Solution};
 use propaga_core::{NogoodLiteral, VariableId};
 use propaga_engine::Engine;
-use propaga_propagators::{DominanceCutDirection, IntDominanceCutPropagator, NogoodPropagator};
+use propaga_propagators::{
+    DominanceCutDirection, DominanceCutPropagator, DominanceCutTarget, NogoodPropagator,
+};
+use std::collections::HashSet;
 
 /// Returns `true` when `a` dominates `b` under the given directions.
 #[must_use]
@@ -94,11 +97,12 @@ impl ParetoOptimization {
         }
     }
 
-    /// Enumerates the Pareto front incrementally.
+    /// Enumerates the Pareto front incrementally with dominance-cut pruning.
     ///
-    /// All-integer objectives use repeated search with dominance cuts that prune
-    /// weakly-dominated orthants. Other objective mixes stream solutions via DFS
-    /// and maintain the front online without buffering the full feasible set.
+    /// Integer objectives use repeated search with typed dominance cuts plus
+    /// assignment blocking. Float / set-cardinality mixes stream solutions and
+    /// update the front online (cuts for those types are available via
+    /// [`DominanceCutPropagator`] and applied in propagator unit tests).
     pub fn optimize(&mut self, engine: &mut Engine) -> ParetoResult {
         if self
             .objectives
@@ -145,6 +149,7 @@ impl ParetoOptimization {
         let directions: Vec<_> = self.objectives.iter().map(|(_, d)| *d).collect();
         let mut front: Vec<ParetoSolution> = Vec::new();
         let mut total_stats = SearchStats::default();
+        let mut seen = HashSet::new();
 
         loop {
             if engine.trail_depth() > 0 {
@@ -158,17 +163,24 @@ impl ParetoOptimization {
             };
             merge_stats(&mut total_stats, dfs.stats());
 
+            if !seen.insert(assignment_fingerprint(&solution)) {
+                break;
+            }
+
             let Some(objective_values) =
                 objective_values_from_assignment(&self.objectives, &solution)
             else {
                 break;
             };
 
+            if engine.trail_depth() > 0 {
+                engine.trail_backtrack(0);
+            }
+
             if is_dominated_by_front(&objective_values, &front, &directions) {
-                if engine.trail_depth() > 0 {
-                    engine.trail_backtrack(0);
-                }
-                if !block_int_assignment(engine, &solution) {
+                let cut_ok = post_dominance_cut(engine, &self.objectives, &objective_values);
+                let block_ok = block_int_assignment(engine, &solution);
+                if !cut_ok && !block_ok {
                     break;
                 }
                 continue;
@@ -182,12 +194,11 @@ impl ParetoOptimization {
                 objective_values: objective_values.clone(),
             });
 
-            if engine.trail_depth() > 0 {
-                engine.trail_backtrack(0);
-            }
-            if !post_int_dominance_cut(engine, &self.objectives, &objective_values)
-                && !block_int_assignment(engine, &solution)
-            {
+            // Always try both: a cut may not exclude the incumbent when several
+            // objectives remain improvable, so blocking prevents rediscovery.
+            let cut_ok = post_dominance_cut(engine, &self.objectives, &objective_values);
+            let block_ok = block_int_assignment(engine, &solution);
+            if !cut_ok && !block_ok {
                 break;
             }
         }
@@ -199,26 +210,64 @@ impl ParetoOptimization {
     }
 }
 
-fn post_int_dominance_cut(
+fn assignment_fingerprint(solution: &Solution) -> String {
+    let mut parts: Vec<String> = solution
+        .iter()
+        .map(|(var, value)| {
+            let key = format!("{var:?}");
+            match value {
+                AssignmentValue::Int(value) => format!("{key}=i{value}"),
+                AssignmentValue::Float(value) => format!("{key}=f{value}"),
+                AssignmentValue::Set(values) => format!("{key}=s{values:?}"),
+            }
+        })
+        .collect();
+    parts.sort();
+    parts.join("|")
+}
+
+fn post_dominance_cut(
     engine: &mut Engine,
     objectives: &[(OptimizationTarget, ObjectiveDirection)],
     values: &[ObjectiveValue],
 ) -> bool {
     let mut cuts = Vec::with_capacity(objectives.len());
     for ((target, direction), value) in objectives.iter().zip(values.iter()) {
-        let (OptimizationTarget::Int(var), ObjectiveValue::Int(threshold)) = (target, value) else {
-            return false;
-        };
         let cut_direction = match direction {
             ObjectiveDirection::Minimize => DominanceCutDirection::Minimize,
             ObjectiveDirection::Maximize => DominanceCutDirection::Maximize,
         };
-        cuts.push((*var, cut_direction, *threshold));
+        let cut = match (target, value) {
+            (OptimizationTarget::Int(var), ObjectiveValue::Int(threshold)) => {
+                DominanceCutTarget::Int {
+                    var: *var,
+                    direction: cut_direction,
+                    value: *threshold,
+                }
+            }
+            (OptimizationTarget::Float(var), ObjectiveValue::Float(threshold)) => {
+                DominanceCutTarget::Float {
+                    var: *var,
+                    direction: cut_direction,
+                    value: *threshold,
+                }
+            }
+            (
+                OptimizationTarget::SetCardinality(var),
+                ObjectiveValue::SetCardinality(threshold),
+            ) => DominanceCutTarget::SetCardinality {
+                var: *var,
+                direction: cut_direction,
+                value: *threshold,
+            },
+            _ => return false,
+        };
+        cuts.push(cut);
     }
     if cuts.is_empty() {
         return false;
     }
-    engine.add_propagator(Box::new(IntDominanceCutPropagator::new(cuts)));
+    engine.add_propagator(Box::new(DominanceCutPropagator::new(cuts)));
     match engine.commit_initial_propagation() {
         Ok(status) => !status.is_failure(),
         Err(_) => false,

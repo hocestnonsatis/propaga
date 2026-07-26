@@ -219,6 +219,21 @@ impl ExtendedPropagationContext for EnginePropagationContext<'_> {
         })
     }
 
+    fn tighten_set_cardinality(
+        &mut self,
+        var: VariableId,
+        card_min: usize,
+        card_max: usize,
+    ) -> bool {
+        let reason = self.propagator_reason(var, None, None);
+        self.mutate_any(var, reason, |domain| {
+            let AnyDomain::Set(set) = domain else {
+                return domain;
+            };
+            AnyDomain::Set(set.with_cardinality(card_min, card_max))
+        })
+    }
+
     fn tighten_float_below(&mut self, var: VariableId, bound: f64) -> bool {
         let reason = self.propagator_reason(var, None, None);
         self.mutate_any(var, reason, |domain| {
