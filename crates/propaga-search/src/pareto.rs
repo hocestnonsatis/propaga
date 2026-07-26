@@ -3,8 +3,9 @@ use crate::dfs::DepthFirstSearch;
 use crate::optimize::{ObjectiveDirection, ObjectiveValue, OptimizationTarget, is_better};
 use crate::stats::SearchStats;
 use crate::value::{AssignmentValue, Solution};
-use propaga_core::VariableId;
+use propaga_core::{NogoodLiteral, VariableId};
 use propaga_engine::Engine;
+use propaga_propagators::{DominanceCutDirection, IntDominanceCutPropagator, NogoodPropagator};
 
 /// Returns `true` when `a` dominates `b` under the given directions.
 #[must_use]
@@ -95,9 +96,22 @@ impl ParetoOptimization {
 
     /// Enumerates the Pareto front incrementally.
     ///
-    /// Solutions are streamed from DFS without retaining the full feasible set;
-    /// the non-dominated front is updated online as each solution is found.
+    /// All-integer objectives use repeated search with dominance cuts that prune
+    /// weakly-dominated orthants. Other objective mixes stream solutions via DFS
+    /// and maintain the front online without buffering the full feasible set.
     pub fn optimize(&mut self, engine: &mut Engine) -> ParetoResult {
+        if self
+            .objectives
+            .iter()
+            .all(|(target, _)| matches!(target, OptimizationTarget::Int(_)))
+        {
+            self.optimize_with_dominance_cuts(engine)
+        } else {
+            self.optimize_streaming(engine)
+        }
+    }
+
+    fn optimize_streaming(&mut self, engine: &mut Engine) -> ParetoResult {
         let mut dfs = DepthFirstSearch::with_config(self.variables.clone(), self.config);
         let directions: Vec<_> = self.objectives.iter().map(|(_, d)| *d).collect();
         let mut front: Vec<ParetoSolution> = Vec::new();
@@ -126,6 +140,119 @@ impl ParetoOptimization {
             stats: dfs.stats(),
         }
     }
+
+    fn optimize_with_dominance_cuts(&mut self, engine: &mut Engine) -> ParetoResult {
+        let directions: Vec<_> = self.objectives.iter().map(|(_, d)| *d).collect();
+        let mut front: Vec<ParetoSolution> = Vec::new();
+        let mut total_stats = SearchStats::default();
+
+        loop {
+            if engine.trail_depth() > 0 {
+                engine.trail_backtrack(0);
+            }
+
+            let mut dfs = DepthFirstSearch::with_config(self.variables.clone(), self.config);
+            let Some(solution) = dfs.solve(engine) else {
+                merge_stats(&mut total_stats, dfs.stats());
+                break;
+            };
+            merge_stats(&mut total_stats, dfs.stats());
+
+            let Some(objective_values) =
+                objective_values_from_assignment(&self.objectives, &solution)
+            else {
+                break;
+            };
+
+            if is_dominated_by_front(&objective_values, &front, &directions) {
+                if engine.trail_depth() > 0 {
+                    engine.trail_backtrack(0);
+                }
+                if !block_int_assignment(engine, &solution) {
+                    break;
+                }
+                continue;
+            }
+
+            front.retain(|entry| {
+                !dominates(&objective_values, &entry.objective_values, &directions)
+            });
+            front.push(ParetoSolution {
+                assignment: solution.clone(),
+                objective_values: objective_values.clone(),
+            });
+
+            if engine.trail_depth() > 0 {
+                engine.trail_backtrack(0);
+            }
+            if !post_int_dominance_cut(engine, &self.objectives, &objective_values)
+                && !block_int_assignment(engine, &solution)
+            {
+                break;
+            }
+        }
+
+        ParetoResult {
+            front,
+            stats: total_stats,
+        }
+    }
+}
+
+fn post_int_dominance_cut(
+    engine: &mut Engine,
+    objectives: &[(OptimizationTarget, ObjectiveDirection)],
+    values: &[ObjectiveValue],
+) -> bool {
+    let mut cuts = Vec::with_capacity(objectives.len());
+    for ((target, direction), value) in objectives.iter().zip(values.iter()) {
+        let (OptimizationTarget::Int(var), ObjectiveValue::Int(threshold)) = (target, value) else {
+            return false;
+        };
+        let cut_direction = match direction {
+            ObjectiveDirection::Minimize => DominanceCutDirection::Minimize,
+            ObjectiveDirection::Maximize => DominanceCutDirection::Maximize,
+        };
+        cuts.push((*var, cut_direction, *threshold));
+    }
+    if cuts.is_empty() {
+        return false;
+    }
+    engine.add_propagator(Box::new(IntDominanceCutPropagator::new(cuts)));
+    match engine.commit_initial_propagation() {
+        Ok(status) => !status.is_failure(),
+        Err(_) => false,
+    }
+}
+
+fn block_int_assignment(engine: &mut Engine, solution: &Solution) -> bool {
+    let literals: Vec<_> = solution
+        .iter()
+        .filter_map(|(var, value)| match value {
+            AssignmentValue::Int(value) => Some(NogoodLiteral {
+                variable: *var,
+                value: *value,
+            }),
+            _ => None,
+        })
+        .collect();
+    if literals.is_empty() {
+        return false;
+    }
+    engine.add_propagator(Box::new(NogoodPropagator::new(literals)));
+    match engine.commit_initial_propagation() {
+        Ok(status) => !status.is_failure(),
+        Err(_) => false,
+    }
+}
+
+fn merge_stats(total: &mut SearchStats, partial: SearchStats) {
+    total.nodes += partial.nodes;
+    total.backtracks += partial.backtracks;
+    total.conflicts += partial.conflicts;
+    total.nogoods_learned += partial.nogoods_learned;
+    total.restarts += partial.restarts;
+    total.timed_out |= partial.timed_out;
 }
 
 fn objective_values_from_assignment(
@@ -238,6 +365,29 @@ mod tests {
         assert!(result.front.iter().any(|entry| {
             entry.objective_values == vec![ObjectiveValue::Int(3), ObjectiveValue::Int(1)]
         }));
+    }
+
+    #[test]
+    fn dominance_cuts_find_full_int_front() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(IntervalDomain::new(1, 4));
+        let y = engine.new_variable(IntervalDomain::new(1, 4));
+        let sum = engine.new_variable(IntervalDomain::fix(5));
+        engine.add_propagator(Box::new(propaga_propagators::LinearEqPropagator::new(
+            x, y, sum,
+        )));
+        let _ = engine.commit_initial_propagation();
+        let mut search = ParetoOptimization::new(
+            vec![x, y],
+            vec![
+                (OptimizationTarget::Int(x), ObjectiveDirection::Minimize),
+                (OptimizationTarget::Int(y), ObjectiveDirection::Minimize),
+            ],
+            SearchConfig::without_learning(),
+        );
+        let result = search.optimize(&mut engine);
+        // All points on x+y=5 are mutually non-dominated for bi-minimize.
+        assert_eq!(result.front.len(), 4);
     }
 
     #[test]

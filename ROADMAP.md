@@ -4,12 +4,13 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Dominance-cut pruning during Pareto search (OR-encoding over improving objectives)
+- Float / set-cardinality dominance cuts for Pareto search
 
 ## Shipped after v1.0.0
 
 - Float / set objectives in lexicographic and Pareto multi-objective search
 - Incremental Pareto front maintenance (streamed DFS, online filtering)
+- Integer Pareto dominance-cut pruning (`IntDominanceCutPropagator`)
 
 ## Shipped in v1.0.0
 
