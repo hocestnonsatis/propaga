@@ -21,6 +21,7 @@ mod float_le;
 mod float_lin_scalar;
 mod float_ops;
 mod float_times;
+mod forbidden_assignment;
 mod gcc;
 mod inverse;
 mod less_equal;
@@ -63,6 +64,7 @@ pub use float_ops::{
     FloatUnaryOp, FloatUnaryPropagator, Int2FloatPropagator,
 };
 pub use float_times::FloatTimesPropagator;
+pub use forbidden_assignment::{ForbiddenAssignmentPropagator, ForbiddenValue};
 pub use gcc::{CardinalityBound, GlobalCardinalityPropagator};
 pub use inverse::InversePropagator;
 pub use less_equal::LessEqualPropagator;

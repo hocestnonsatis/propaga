@@ -4,13 +4,14 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Wire float/set dominance cuts into Pareto search (non-int assignment blocking)
+- Further float branching / exact assignment blocking refinements for continuous objectives
 
 ## Shipped after v1.0.0
 
 - Float / set objectives in lexicographic and Pareto multi-objective search
 - Incremental Pareto front maintenance (streamed DFS, online filtering)
-- Typed Pareto dominance cuts (`DominanceCutPropagator` for int / float / set-cardinality); integer Pareto search uses cuts between solutions
+- Typed Pareto dominance cuts (`DominanceCutPropagator` for int / float / set-cardinality)
+- Non-int assignment blocking (`ForbiddenAssignmentPropagator`); Pareto search uses cuts + blocking for all objective types
 
 ## Shipped in v1.0.0
 

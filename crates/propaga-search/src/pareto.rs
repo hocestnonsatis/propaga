@@ -3,10 +3,11 @@ use crate::dfs::DepthFirstSearch;
 use crate::optimize::{ObjectiveDirection, ObjectiveValue, OptimizationTarget, is_better};
 use crate::stats::SearchStats;
 use crate::value::{AssignmentValue, Solution};
-use propaga_core::{NogoodLiteral, VariableId};
+use propaga_core::VariableId;
 use propaga_engine::Engine;
 use propaga_propagators::{
-    DominanceCutDirection, DominanceCutPropagator, DominanceCutTarget, NogoodPropagator,
+    DominanceCutDirection, DominanceCutPropagator, DominanceCutTarget,
+    ForbiddenAssignmentPropagator, ForbiddenValue,
 };
 use std::collections::HashSet;
 
@@ -99,53 +100,10 @@ impl ParetoOptimization {
 
     /// Enumerates the Pareto front incrementally with dominance-cut pruning.
     ///
-    /// Integer objectives use repeated search with typed dominance cuts plus
-    /// assignment blocking. Float / set-cardinality mixes stream solutions and
-    /// update the front online (cuts for those types are available via
-    /// [`DominanceCutPropagator`] and applied in propagator unit tests).
+    /// After each non-dominated solution, a typed dominance cut prunes the
+    /// weakly-dominated orthant and the exact assignment is blocked so search
+    /// cannot rediscover the same point.
     pub fn optimize(&mut self, engine: &mut Engine) -> ParetoResult {
-        if self
-            .objectives
-            .iter()
-            .all(|(target, _)| matches!(target, OptimizationTarget::Int(_)))
-        {
-            self.optimize_with_dominance_cuts(engine)
-        } else {
-            self.optimize_streaming(engine)
-        }
-    }
-
-    fn optimize_streaming(&mut self, engine: &mut Engine) -> ParetoResult {
-        let mut dfs = DepthFirstSearch::with_config(self.variables.clone(), self.config);
-        let directions: Vec<_> = self.objectives.iter().map(|(_, d)| *d).collect();
-        let mut front: Vec<ParetoSolution> = Vec::new();
-        let objectives = self.objectives.clone();
-
-        dfs.solve_each(engine, |solution| {
-            let Some(objective_values) = objective_values_from_assignment(&objectives, solution)
-            else {
-                return true;
-            };
-            if is_dominated_by_front(&objective_values, &front, &directions) {
-                return true;
-            }
-            front.retain(|entry| {
-                !dominates(&objective_values, &entry.objective_values, &directions)
-            });
-            front.push(ParetoSolution {
-                assignment: solution.clone(),
-                objective_values,
-            });
-            true
-        });
-
-        ParetoResult {
-            front,
-            stats: dfs.stats(),
-        }
-    }
-
-    fn optimize_with_dominance_cuts(&mut self, engine: &mut Engine) -> ParetoResult {
         let directions: Vec<_> = self.objectives.iter().map(|(_, d)| *d).collect();
         let mut front: Vec<ParetoSolution> = Vec::new();
         let mut total_stats = SearchStats::default();
@@ -179,7 +137,7 @@ impl ParetoOptimization {
 
             if is_dominated_by_front(&objective_values, &front, &directions) {
                 let cut_ok = post_dominance_cut(engine, &self.objectives, &objective_values);
-                let block_ok = block_int_assignment(engine, &solution);
+                let block_ok = block_assignment(engine, &solution);
                 if !cut_ok && !block_ok {
                     break;
                 }
@@ -194,10 +152,8 @@ impl ParetoOptimization {
                 objective_values: objective_values.clone(),
             });
 
-            // Always try both: a cut may not exclude the incumbent when several
-            // objectives remain improvable, so blocking prevents rediscovery.
             let cut_ok = post_dominance_cut(engine, &self.objectives, &objective_values);
-            let block_ok = block_int_assignment(engine, &solution);
+            let block_ok = block_assignment(engine, &solution);
             if !cut_ok && !block_ok {
                 break;
             }
@@ -274,21 +230,22 @@ fn post_dominance_cut(
     }
 }
 
-fn block_int_assignment(engine: &mut Engine, solution: &Solution) -> bool {
-    let literals: Vec<_> = solution
-        .iter()
-        .filter_map(|(var, value)| match value {
-            AssignmentValue::Int(value) => Some(NogoodLiteral {
-                variable: *var,
-                value: *value,
-            }),
-            _ => None,
-        })
-        .collect();
-    if literals.is_empty() {
+fn block_assignment(engine: &mut Engine, solution: &Solution) -> bool {
+    if solution.is_empty() {
         return false;
     }
-    engine.add_propagator(Box::new(NogoodPropagator::new(literals)));
+    let forbidden = solution
+        .iter()
+        .map(|(var, value)| {
+            let forbidden = match value {
+                AssignmentValue::Int(value) => ForbiddenValue::Int(*value),
+                AssignmentValue::Float(value) => ForbiddenValue::Float(*value),
+                AssignmentValue::Set(values) => ForbiddenValue::Set(values.clone()),
+            };
+            (*var, forbidden)
+        })
+        .collect();
+    engine.add_propagator(Box::new(ForbiddenAssignmentPropagator::new(forbidden)));
     match engine.commit_initial_propagation() {
         Ok(status) => !status.is_failure(),
         Err(_) => false,
@@ -435,7 +392,6 @@ mod tests {
             SearchConfig::without_learning(),
         );
         let result = search.optimize(&mut engine);
-        // All points on x+y=5 are mutually non-dominated for bi-minimize.
         assert_eq!(result.front.len(), 4);
     }
 
@@ -478,11 +434,12 @@ mod tests {
                 .all(|entry| entry.objective_values.len() == 2)
         );
         assert!(
-            result.front.iter().all(|entry| {
-                entry
-                    .objective_values
-                    .iter()
-                    .all(|value| matches!(value, ObjectiveValue::SetCardinality(_)))
+            result.front.iter().any(|entry| {
+                entry.objective_values
+                    == vec![
+                        ObjectiveValue::SetCardinality(1),
+                        ObjectiveValue::SetCardinality(1),
+                    ]
             }),
             "front={:?}",
             result
