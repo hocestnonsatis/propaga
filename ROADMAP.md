@@ -4,11 +4,12 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Incremental Pareto enumeration improvements
+- Dominance-cut pruning during Pareto search (OR-encoding over improving objectives)
 
 ## Shipped after v1.0.0
 
 - Float / set objectives in lexicographic and Pareto multi-objective search
+- Incremental Pareto front maintenance (streamed DFS, online filtering)
 
 ## Shipped in v1.0.0
 

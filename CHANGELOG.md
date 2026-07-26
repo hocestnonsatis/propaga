@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Lexicographic and Pareto multi-objective search now accept float and set-cardinality objectives (same typed targets as single-objective optimization).
+- Incremental Pareto enumeration: DFS streams solutions via `solve_each` and updates the non-dominated front online (no full feasible-set buffer).
 
 ### Fixed
 

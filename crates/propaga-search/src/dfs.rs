@@ -124,17 +124,31 @@ impl DepthFirstSearch {
         self.solve_all_limited(engine, None)
     }
 
+    /// Invokes `on_solution` for each feasible solution without retaining them all.
+    ///
+    /// Returns early when `on_solution` returns `false`.
+    pub fn solve_each(
+        &mut self,
+        engine: &mut Engine,
+        mut on_solution: impl FnMut(&Solution) -> bool,
+    ) {
+        self.begin_search();
+        if self.propagate_root(engine) {
+            self.collect_each(engine, &mut on_solution);
+        }
+    }
+
     /// Returns up to `limit` solutions found by exhaustive DFS.
     pub fn solve_all_limited(
         &mut self,
         engine: &mut Engine,
         limit: Option<usize>,
     ) -> Vec<Solution> {
-        self.begin_search();
         let mut solutions = Vec::new();
-        if self.propagate_root(engine) {
-            self.collect_all(engine, &mut solutions, limit);
-        }
+        self.solve_each(engine, |solution| {
+            solutions.push(solution.clone());
+            limit.is_none_or(|max| solutions.len() < max)
+        });
         solutions
     }
 
@@ -408,50 +422,39 @@ impl DepthFirstSearch {
         None
     }
 
-    fn collect_all(
+    fn collect_each(
         &mut self,
         engine: &mut Engine,
-        solutions: &mut Vec<Solution>,
-        limit: Option<usize>,
-    ) {
+        on_solution: &mut dyn FnMut(&Solution) -> bool,
+    ) -> bool {
         if self.check_timeout() {
-            return;
-        }
-
-        if limit.is_some_and(|max| solutions.len() >= max) {
-            return;
+            return false;
         }
 
         if engine.is_solved() {
-            solutions.push(self.collect_solution(engine));
+            let solution = self.collect_solution(engine);
             if matches!(
                 self.config.restart_policy,
                 crate::config::RestartPolicy::OnSolution
             ) {
                 self.pending_solution_restart = true;
             }
-            return;
+            return on_solution(&solution);
         }
 
         let assignment = branch_assignments_from_explanation(engine.explanation());
         if self.is_pruned(&assignment) {
-            return;
+            return true;
         }
 
         let Some(var) = self.select_variable(engine) else {
-            return;
+            return true;
         };
 
         match engine.domain(var).kind() {
-            DomainKind::Int => {
-                self.collect_int_branches(engine, var, &assignment, solutions, limit);
-            }
-            DomainKind::Set => {
-                self.collect_set_branches(engine, var, solutions, limit);
-            }
-            DomainKind::Float => {
-                self.collect_float_branches(engine, var, solutions, limit);
-            }
+            DomainKind::Int => self.collect_int_branches(engine, var, &assignment, on_solution),
+            DomainKind::Set => self.collect_set_branches(engine, var, on_solution),
+            DomainKind::Float => self.collect_float_branches(engine, var, on_solution),
         }
     }
 
@@ -460,9 +463,8 @@ impl DepthFirstSearch {
         engine: &mut Engine,
         var: VariableId,
         assignment: &[(VariableId, i32)],
-        solutions: &mut Vec<Solution>,
-        limit: Option<usize>,
-    ) {
+        on_solution: &mut dyn FnMut(&Solution) -> bool,
+    ) -> bool {
         for value in self.ordered_values(engine, var) {
             if self.would_prune(assignment, var, value) {
                 continue;
@@ -475,14 +477,12 @@ impl DepthFirstSearch {
                     let _ = self.handle_failure(engine, level);
                 }
                 Ok(_) => {
-                    self.collect_all(engine, solutions, limit);
-                    if limit.is_some_and(|max| solutions.len() >= max) {
-                        self.stats.record_backtrack();
-                        engine.trail_backtrack(level);
-                        return;
-                    }
+                    let cont = self.collect_each(engine, on_solution);
                     self.stats.record_backtrack();
                     engine.trail_backtrack(level);
+                    if !cont {
+                        return false;
+                    }
                 }
                 Err(_) => {
                     self.stats.record_backtrack();
@@ -490,21 +490,20 @@ impl DepthFirstSearch {
                 }
             }
         }
+        true
     }
 
     fn collect_set_branches(
         &mut self,
         engine: &mut Engine,
         var: VariableId,
-        solutions: &mut Vec<Solution>,
-        limit: Option<usize>,
-    ) {
+        on_solution: &mut dyn FnMut(&Solution) -> bool,
+    ) -> bool {
         let Some(undecided) = engine.domain(var).as_set().map(|set| set.undecided()) else {
-            return;
+            return true;
         };
         if undecided.is_empty() {
-            self.collect_all(engine, solutions, limit);
-            return;
+            return self.collect_each(engine, on_solution);
         }
         let value = undecided[0];
         for branch in [
@@ -518,14 +517,12 @@ impl DepthFirstSearch {
                     let _ = self.handle_failure(engine, level);
                 }
                 Ok(_) => {
-                    self.collect_all(engine, solutions, limit);
-                    if limit.is_some_and(|max| solutions.len() >= max) {
-                        self.stats.record_backtrack();
-                        engine.trail_backtrack(level);
-                        return;
-                    }
+                    let cont = self.collect_each(engine, on_solution);
                     self.stats.record_backtrack();
                     engine.trail_backtrack(level);
+                    if !cont {
+                        return false;
+                    }
                 }
                 Err(_) => {
                     self.stats.record_backtrack();
@@ -533,21 +530,20 @@ impl DepthFirstSearch {
                 }
             }
         }
+        true
     }
 
     fn collect_float_branches(
         &mut self,
         engine: &mut Engine,
         var: VariableId,
-        solutions: &mut Vec<Solution>,
-        limit: Option<usize>,
-    ) {
+        on_solution: &mut dyn FnMut(&Solution) -> bool,
+    ) -> bool {
         let Some(float) = engine.domain(var).as_float().copied() else {
-            return;
+            return true;
         };
         if float.is_fixed() {
-            self.collect_all(engine, solutions, limit);
-            return;
+            return self.collect_each(engine, on_solution);
         }
         let width = float.upper_bound() - float.lower_bound();
         if width <= f64::EPSILON {
@@ -556,10 +552,13 @@ impl DepthFirstSearch {
             if let Ok(PropagationStatus::Failure) = engine.fix_float(var, float.lower_bound()) {
                 let _ = self.handle_failure(engine, level);
             } else {
-                self.collect_all(engine, solutions, limit);
+                let cont = self.collect_each(engine, on_solution);
                 engine.trail_backtrack(level);
+                if !cont {
+                    return false;
+                }
             }
-            return;
+            return true;
         }
         let mid = float.lower_bound() + width / 2.0;
         for branch in [
@@ -573,14 +572,12 @@ impl DepthFirstSearch {
                     let _ = self.handle_failure(engine, level);
                 }
                 Ok(_) => {
-                    self.collect_all(engine, solutions, limit);
-                    if limit.is_some_and(|max| solutions.len() >= max) {
-                        self.stats.record_backtrack();
-                        engine.trail_backtrack(level);
-                        return;
-                    }
+                    let cont = self.collect_each(engine, on_solution);
                     self.stats.record_backtrack();
                     engine.trail_backtrack(level);
+                    if !cont {
+                        return false;
+                    }
                 }
                 Err(_) => {
                     self.stats.record_backtrack();
@@ -588,6 +585,7 @@ impl DepthFirstSearch {
                 }
             }
         }
+        true
     }
 
     fn handle_failure(&mut self, engine: &mut Engine, level: usize) -> bool {

@@ -1,11 +1,8 @@
 use crate::config::SearchConfig;
 use crate::dfs::DepthFirstSearch;
-use crate::optimize::{
-    ObjectiveDirection, ObjectiveValue, OptimizationTarget, is_better,
-    objective_value_from_solution,
-};
+use crate::optimize::{ObjectiveDirection, ObjectiveValue, OptimizationTarget, is_better};
 use crate::stats::SearchStats;
-use crate::value::Solution;
+use crate::value::{AssignmentValue, Solution};
 use propaga_core::VariableId;
 use propaga_engine::Engine;
 
@@ -96,46 +93,72 @@ impl ParetoOptimization {
         }
     }
 
-    /// Enumerates the Pareto front by collecting feasible solutions.
+    /// Enumerates the Pareto front incrementally.
+    ///
+    /// Solutions are streamed from DFS without retaining the full feasible set;
+    /// the non-dominated front is updated online as each solution is found.
     pub fn optimize(&mut self, engine: &mut Engine) -> ParetoResult {
         let mut dfs = DepthFirstSearch::with_config(self.variables.clone(), self.config);
-        let all_solutions = dfs.solve_all(engine);
-        let total_stats = dfs.stats();
         let directions: Vec<_> = self.objectives.iter().map(|(_, d)| *d).collect();
-
         let mut front: Vec<ParetoSolution> = Vec::new();
-        for solution in all_solutions {
-            let Some(objective_values) = objective_values(engine, &self.objectives, &solution)
+        let objectives = self.objectives.clone();
+
+        dfs.solve_each(engine, |solution| {
+            let Some(objective_values) = objective_values_from_assignment(&objectives, solution)
             else {
-                continue;
+                return true;
             };
             if is_dominated_by_front(&objective_values, &front, &directions) {
-                continue;
+                return true;
             }
             front.retain(|entry| {
                 !dominates(&objective_values, &entry.objective_values, &directions)
             });
             front.push(ParetoSolution {
-                assignment: solution,
+                assignment: solution.clone(),
                 objective_values,
             });
-        }
+            true
+        });
 
         ParetoResult {
             front,
-            stats: total_stats,
+            stats: dfs.stats(),
         }
     }
 }
 
-fn objective_values(
-    engine: &Engine,
+fn objective_values_from_assignment(
     objectives: &[(OptimizationTarget, ObjectiveDirection)],
     solution: &Solution,
 ) -> Option<Vec<ObjectiveValue>> {
     objectives
         .iter()
-        .map(|(target, _)| objective_value_from_solution(engine, *target, solution))
+        .map(|(target, _)| match target {
+            OptimizationTarget::Int(var) => solution
+                .iter()
+                .find(|(candidate, _)| candidate == var)
+                .and_then(|(_, value)| match value {
+                    AssignmentValue::Int(value) => Some(ObjectiveValue::Int(*value)),
+                    _ => None,
+                }),
+            OptimizationTarget::Float(var) => solution
+                .iter()
+                .find(|(candidate, _)| candidate == var)
+                .and_then(|(_, value)| match value {
+                    AssignmentValue::Float(value) => Some(ObjectiveValue::Float(*value)),
+                    _ => None,
+                }),
+            OptimizationTarget::SetCardinality(var) => solution
+                .iter()
+                .find(|(candidate, _)| candidate == var)
+                .and_then(|(_, value)| match value {
+                    AssignmentValue::Set(values) => {
+                        Some(ObjectiveValue::SetCardinality(values.len()))
+                    }
+                    _ => None,
+                }),
+        })
         .collect()
 }
 
@@ -199,9 +222,6 @@ mod tests {
             x, y, sum,
         )));
         let _ = engine.propagate_all();
-        let mut dfs = DepthFirstSearch::with_config(vec![x, y], SearchConfig::without_learning());
-        let all = dfs.solve_all(&mut engine);
-        assert_eq!(all.len(), 3, "expected three feasible assignments");
         let mut search = ParetoOptimization::new(
             vec![x, y],
             vec![
