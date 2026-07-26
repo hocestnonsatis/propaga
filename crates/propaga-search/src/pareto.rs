@@ -9,7 +9,7 @@ use propaga_propagators::{
     DominanceCutDirection, DominanceCutPropagator, DominanceCutTarget,
     ForbiddenAssignmentPropagator, ForbiddenValue, encode_forbidden_float,
 };
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// Returns `true` when `a` dominates `b` under the given directions.
 #[must_use]
@@ -81,6 +81,7 @@ pub struct ParetoOptimization {
     variables: Vec<VariableId>,
     objectives: Vec<(OptimizationTarget, ObjectiveDirection)>,
     config: SearchConfig,
+    float_holes: HashMap<VariableId, Vec<f64>>,
 }
 
 impl ParetoOptimization {
@@ -95,6 +96,7 @@ impl ParetoOptimization {
             variables: variables.into(),
             objectives,
             config,
+            float_holes: HashMap::new(),
         }
     }
 
@@ -114,7 +116,8 @@ impl ParetoOptimization {
                 engine.trail_backtrack(0);
             }
 
-            let mut dfs = DepthFirstSearch::with_config(self.variables.clone(), self.config);
+            let mut dfs = DepthFirstSearch::with_config(self.variables.clone(), self.config)
+                .with_float_holes(self.float_holes.clone());
             let Some(solution) = dfs.solve(engine) else {
                 merge_stats(&mut total_stats, dfs.stats());
                 break;
@@ -137,7 +140,12 @@ impl ParetoOptimization {
 
             if is_dominated_by_front(&objective_values, &front, &directions) {
                 let cut_ok = post_dominance_cut(engine, &self.objectives, &objective_values);
-                let block_ok = block_assignment(engine, &mut self.variables, &solution);
+                let block_ok = block_assignment(
+                    engine,
+                    &mut self.variables,
+                    &mut self.float_holes,
+                    &solution,
+                );
                 if !cut_ok && !block_ok {
                     break;
                 }
@@ -153,7 +161,12 @@ impl ParetoOptimization {
             });
 
             let cut_ok = post_dominance_cut(engine, &self.objectives, &objective_values);
-            let block_ok = block_assignment(engine, &mut self.variables, &solution);
+            let block_ok = block_assignment(
+                engine,
+                &mut self.variables,
+                &mut self.float_holes,
+                &solution,
+            );
             if !cut_ok && !block_ok {
                 break;
             }
@@ -233,6 +246,7 @@ fn post_dominance_cut(
 fn block_assignment(
     engine: &mut Engine,
     decision_vars: &mut Vec<VariableId>,
+    float_holes: &mut HashMap<VariableId, Vec<f64>>,
     solution: &Solution,
 ) -> bool {
     if solution.is_empty() {
@@ -245,6 +259,13 @@ fn block_assignment(
                 forbidden.push((*var, ForbiddenValue::Int(*value)));
             }
             AssignmentValue::Float(value) => {
+                let holes = float_holes.entry(*var).or_default();
+                if !holes
+                    .iter()
+                    .any(|hole| (*hole - *value).abs() <= f64::EPSILON)
+                {
+                    holes.push(*value);
+                }
                 let encoded = encode_forbidden_float(engine, *var, *value);
                 for reif in &encoded.decision_vars {
                     if !decision_vars.contains(reif) {

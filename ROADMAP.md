@@ -4,7 +4,6 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Prefer splitting float domains around blocked IEEE points during DFS (faster than reif-only branching)
 - Stronger float inequality / disequality propagation beyond interval endpoints
 
 ## Shipped after v1.0.0
@@ -14,6 +13,8 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Typed Pareto dominance cuts (`DominanceCutPropagator` for int / float / set-cardinality)
 - Non-int assignment blocking (`ForbiddenAssignmentPropagator`); Pareto search uses cuts + blocking for all objective types
 - Continuous float point exclusion via `encode_forbidden_float` (reif OR) wired into Pareto assignment blocking
+- DFS float branching prefers splitting around registered blocked IEEE points (`with_float_holes` / Pareto hole tracking)
+- DFS float branching prefers splitting around registered blocked IEEE points (`with_float_holes` / Pareto hole tracking)
 
 ## Shipped in v1.0.0
 

@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Typed Pareto dominance cuts (`DominanceCutPropagator`) for int, float, and set-cardinality thresholds; Pareto search posts cuts between solutions for all objective types.
 - `ForbiddenAssignmentPropagator` blocks rediscovery of int / float / set assignments during Pareto enumeration.
 - `encode_forbidden_float` excludes a continuous float point via reified `≤ next_down ∨ ≥ next_up`, and Pareto blocking adds those reifs as search decisions.
+- DFS float branching can split around registered blocked IEEE points; Pareto search feeds blocked float values into those split hints.
 - `ExtendedPropagationContext::tighten_set_cardinality` for set-cardinality bound updates during propagation.
 
 ### Fixed

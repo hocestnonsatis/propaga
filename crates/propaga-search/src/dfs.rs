@@ -1,6 +1,7 @@
 use crate::config::SearchConfig;
 use crate::conflict::{ConflictAnalyzer, NogoodStore};
 use crate::lcg::ClauseStore;
+use crate::optimize::{next_float_down, next_float_up};
 use crate::stats::{SearchStats, branch_assignments_from_explanation};
 use crate::value::{AssignmentValue, Solution};
 use propaga_core::{DomainView, NogoodLiteral, PropagationStatus, VariableId};
@@ -25,6 +26,8 @@ pub struct DepthFirstSearch {
     activities: HashMap<VariableId, u32>,
     pending_solution_restart: bool,
     deadline: Option<Instant>,
+    /// IEEE points to prefer splitting around when branching on float domains.
+    float_holes: HashMap<VariableId, Vec<f64>>,
 }
 
 impl DepthFirstSearch {
@@ -50,6 +53,7 @@ impl DepthFirstSearch {
             activities: HashMap::new(),
             pending_solution_restart: false,
             deadline: None,
+            float_holes: HashMap::new(),
         }
     }
 
@@ -64,6 +68,24 @@ impl DepthFirstSearch {
                 ..SearchConfig::default()
             },
         )
+    }
+
+    /// Registers IEEE points that float branching should split around when interior.
+    #[must_use]
+    pub fn with_float_holes(mut self, float_holes: HashMap<VariableId, Vec<f64>>) -> Self {
+        self.float_holes = float_holes;
+        self
+    }
+
+    /// Records a blocked float value to prefer as a split point.
+    pub fn register_float_hole(&mut self, var: VariableId, value: f64) {
+        let holes = self.float_holes.entry(var).or_default();
+        if !holes
+            .iter()
+            .any(|hole| (*hole - value).abs() <= f64::EPSILON)
+        {
+            holes.push(value);
+        }
     }
 
     /// Returns statistics from the most recent search.
@@ -373,49 +395,31 @@ impl DepthFirstSearch {
             return None;
         }
 
-        let mid = float.lower_bound() + width / 2.0;
-
-        self.record_branch();
-        let level = engine.trail_mark();
-        match engine.tighten_float_above(var, mid) {
-            Ok(PropagationStatus::Failure) => {
-                let jumped = self.handle_failure(engine, level);
-                if jumped {
-                    return None;
+        for (side, bound) in self.float_branch_cuts(var, float.lower_bound(), float.upper_bound()) {
+            self.record_branch();
+            let level = engine.trail_mark();
+            let status = match side {
+                FloatBranchSide::Above => engine.tighten_float_above(var, bound),
+                FloatBranchSide::Below => engine.tighten_float_below(var, bound),
+            };
+            match status {
+                Ok(PropagationStatus::Failure) => {
+                    let jumped = self.handle_failure(engine, level);
+                    if jumped {
+                        return None;
+                    }
                 }
-            }
-            Ok(_) => {
-                if let Some(solution) = self.search(engine) {
-                    return Some(solution);
+                Ok(_) => {
+                    if let Some(solution) = self.search(engine) {
+                        return Some(solution);
+                    }
+                    self.stats.record_backtrack();
+                    engine.trail_backtrack(level);
                 }
-                self.stats.record_backtrack();
-                engine.trail_backtrack(level);
-            }
-            Err(_) => {
-                self.stats.record_backtrack();
-                engine.trail_backtrack(level);
-            }
-        }
-
-        self.record_branch();
-        let level = engine.trail_mark();
-        match engine.tighten_float_below(var, mid) {
-            Ok(PropagationStatus::Failure) => {
-                let jumped = self.handle_failure(engine, level);
-                if jumped {
-                    return None;
+                Err(_) => {
+                    self.stats.record_backtrack();
+                    engine.trail_backtrack(level);
                 }
-            }
-            Ok(_) => {
-                if let Some(solution) = self.search(engine) {
-                    return Some(solution);
-                }
-                self.stats.record_backtrack();
-                engine.trail_backtrack(level);
-            }
-            Err(_) => {
-                self.stats.record_backtrack();
-                engine.trail_backtrack(level);
             }
         }
 
@@ -560,14 +564,14 @@ impl DepthFirstSearch {
             }
             return true;
         }
-        let mid = float.lower_bound() + width / 2.0;
-        for branch in [
-            engine.tighten_float_above(var, mid),
-            engine.tighten_float_below(var, mid),
-        ] {
+        for (side, bound) in self.float_branch_cuts(var, float.lower_bound(), float.upper_bound()) {
             self.record_branch();
             let level = engine.trail_mark();
-            match branch {
+            let status = match side {
+                FloatBranchSide::Above => engine.tighten_float_above(var, bound),
+                FloatBranchSide::Below => engine.tighten_float_below(var, bound),
+            };
+            match status {
                 Ok(PropagationStatus::Failure) => {
                     let _ = self.handle_failure(engine, level);
                 }
@@ -586,6 +590,39 @@ impl DepthFirstSearch {
             }
         }
         true
+    }
+
+    /// Branch cuts for an open float interval: `(side, bound)` pairs applied in order.
+    ///
+    /// When a registered hole lies strictly inside `(lo, hi)`, splits as
+    /// `x <= next_down(hole)` and `x >= next_up(hole)`. Otherwise bisects at the midpoint.
+    fn float_branch_cuts(&self, var: VariableId, lo: f64, hi: f64) -> [(FloatBranchSide, f64); 2] {
+        if let Some(hole) = self.best_interior_float_hole(var, lo, hi) {
+            [
+                (FloatBranchSide::Above, next_float_down(hole)),
+                (FloatBranchSide::Below, next_float_up(hole)),
+            ]
+        } else {
+            let mid = lo + (hi - lo) / 2.0;
+            [(FloatBranchSide::Above, mid), (FloatBranchSide::Below, mid)]
+        }
+    }
+
+    fn best_interior_float_hole(&self, var: VariableId, lo: f64, hi: f64) -> Option<f64> {
+        let mid = lo + (hi - lo) / 2.0;
+        self.float_holes.get(&var).and_then(|holes| {
+            holes
+                .iter()
+                .copied()
+                .filter(|&hole| hole > lo && hole < hi)
+                .min_by(|left, right| {
+                    let left_dist = (left - mid).abs();
+                    let right_dist = (right - mid).abs();
+                    left_dist
+                        .partial_cmp(&right_dist)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+        })
     }
 
     fn handle_failure(&mut self, engine: &mut Engine, level: usize) -> bool {
@@ -831,6 +868,14 @@ fn variable_index(order: &[VariableId], var: VariableId) -> usize {
         .unwrap_or(usize::MAX)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FloatBranchSide {
+    /// Tighten the upper bound (`remove_above`).
+    Above,
+    /// Tighten the lower bound (`remove_below`).
+    Below,
+}
+
 fn weighted_score(engine: &Engine, var: VariableId, weight: Option<u32>) -> u64 {
     let size = engine.domain(var).size() as u64;
     let weight = weight.unwrap_or(1).max(1) as u64;
@@ -874,6 +919,42 @@ mod tests {
         let solution = search.solve(&mut engine).expect("solution exists");
         assert_eq!(solution, vec![(start_b, AssignmentValue::Int(4))]);
         assert_eq!(search.stats().nodes, 1);
+    }
+
+    #[test]
+    fn float_branch_cuts_prefer_registered_hole() {
+        use propaga_domains::{AnyDomain, FloatDomain};
+
+        let mut engine = Engine::new();
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 2.0)));
+        let mut search = DepthFirstSearch::new(vec![y]);
+        search.register_float_hole(y, 1.0);
+        let cuts = search.float_branch_cuts(y, 0.0, 2.0);
+        assert_eq!(cuts[0], (FloatBranchSide::Above, next_float_down(1.0)));
+        assert_eq!(cuts[1], (FloatBranchSide::Below, next_float_up(1.0)));
+    }
+
+    #[test]
+    fn float_hole_split_finds_solution_away_from_point() {
+        use propaga_domains::{AnyDomain, FloatDomain};
+        use propaga_propagators::{ForbiddenAssignmentPropagator, encode_forbidden_float};
+
+        let mut engine = Engine::new();
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 2.0)));
+        let encoded = encode_forbidden_float(&mut engine, y, 1.0);
+        engine.add_propagator(Box::new(ForbiddenAssignmentPropagator::new(
+            encoded.forbidden,
+        )));
+        let mut search = DepthFirstSearch::new(vec![y]);
+        search.register_float_hole(y, 1.0);
+        let solution = search.solve(&mut engine).expect("solution exists");
+        let AssignmentValue::Float(value) = solution[0].1 else {
+            panic!("expected float assignment");
+        };
+        assert!(
+            (value - 1.0).abs() > 0.0,
+            "hole split should avoid exact blocked point, got {value}"
+        );
     }
 
     #[test]

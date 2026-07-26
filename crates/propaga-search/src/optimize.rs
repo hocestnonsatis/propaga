@@ -427,7 +427,7 @@ pub fn objective_value_from_solution(
     }
 }
 
-fn next_float_up(value: f64) -> f64 {
+pub(crate) fn next_float_up(value: f64) -> f64 {
     if value.is_infinite() && value.is_sign_positive() {
         value
     } else {
@@ -435,7 +435,7 @@ fn next_float_up(value: f64) -> f64 {
     }
 }
 
-fn next_float_down(value: f64) -> f64 {
+pub(crate) fn next_float_down(value: f64) -> f64 {
     if value.is_infinite() && value.is_sign_negative() {
         value
     } else {
