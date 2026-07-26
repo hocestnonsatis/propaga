@@ -86,7 +86,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `float_lin_*_reif` | Supported | Reified float linear |
 | `float_*_reif` | Supported | Reified float comparisons |
 | `float_dom`, `float_in` | Supported | Interval union / membership decomposition |
-| `array_float_element`, `array_var_float_element`, `array_float_maximum`, `array_float_minimum` | Supported | Reified decomposition |
+| `array_float_element`, `array_var_float_element`, `array_float_maximum`, `array_float_minimum` | Supported | Native float element + max/min decomposition |
 
 **Soundness note:** Float propagation is **interval-based**. Bounds are conservative; non-convex unary functions (e.g. `sin`) widen to `[-1, 1]` when the input span exceeds one period.
 

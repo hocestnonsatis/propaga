@@ -4,18 +4,19 @@ use propaga_engine::Engine;
 use propaga_propagators::{
     AllDifferentPropagator, CardinalityBound, CircuitPropagator, CumulativePropagator,
     DiffnPropagator, DisjunctivePropagator, DisjunctiveTask, ElementPropagator, EqualityPropagator,
-    FloatBinaryOp, FloatBinaryPropagator, FloatEqPropagator, FloatEqReifPropagator,
-    FloatLePropagator, FloatLeReifPropagator, FloatLinearEqPropagator, FloatLinearGePropagator,
-    FloatLinearLePropagator, FloatLinearNePropagator, FloatNePropagator, FloatTimesPropagator,
-    FloatUnaryOp, FloatUnaryPropagator, GlobalCardinalityPropagator, Int2FloatPropagator,
-    InversePropagator, LessEqualPropagator, LessThanPropagator, LinearEqPropagator,
-    LinearScalarGePropagator, LinearScalarLePropagator, NotEqualOffsetPropagator, RectangleSpec,
-    RegularPropagator, ReifiedEqualityPropagator, ReifiedFloatLinearEqPropagator,
-    ReifiedFloatLinearGePropagator, ReifiedFloatLinearLePropagator, ReifiedLessEqualPropagator,
-    ReifiedLessThanPropagator, ReifiedNotEqualPropagator, ReifiedScalarEqPropagator,
-    ReifiedScalarGePropagator, ReifiedScalarLePropagator, SetCardPropagator, SetEqReifPropagator,
-    SetInPropagator, SetInReifPropagator, SetIntersectPropagator, SetSubsetPropagator,
-    SetSubsetReifPropagator, SetUnionPropagator, TablePropagator, TaskSpec,
+    FloatBinaryOp, FloatBinaryPropagator, FloatElementPropagator, FloatEqPropagator,
+    FloatEqReifPropagator, FloatLePropagator, FloatLeReifPropagator, FloatLinearEqPropagator,
+    FloatLinearGePropagator, FloatLinearLePropagator, FloatLinearNePropagator, FloatNePropagator,
+    FloatTimesPropagator, FloatUnaryOp, FloatUnaryPropagator, GlobalCardinalityPropagator,
+    Int2FloatPropagator, InversePropagator, LessEqualPropagator, LessThanPropagator,
+    LinearEqPropagator, LinearScalarGePropagator, LinearScalarLePropagator,
+    NotEqualOffsetPropagator, RectangleSpec, RegularPropagator, ReifiedEqualityPropagator,
+    ReifiedFloatLinearEqPropagator, ReifiedFloatLinearGePropagator, ReifiedFloatLinearLePropagator,
+    ReifiedLessEqualPropagator, ReifiedLessThanPropagator, ReifiedNotEqualPropagator,
+    ReifiedScalarEqPropagator, ReifiedScalarGePropagator, ReifiedScalarLePropagator,
+    SetCardPropagator, SetEqReifPropagator, SetInPropagator, SetInReifPropagator,
+    SetIntersectPropagator, SetSubsetPropagator, SetSubsetReifPropagator, SetUnionPropagator,
+    TablePropagator, TaskSpec,
 };
 use propaga_search::{
     DepthFirstSearch, LexicographicOptimization, LexicographicResult, Objective,
@@ -521,6 +522,17 @@ impl Model {
     ) {
         self.engine
             .add_propagator(Box::new(ElementPropagator::new(index, array, value)));
+    }
+
+    /// Posts `value == array[index]` for float variables (0-based index).
+    pub fn float_element(
+        &mut self,
+        index: VariableId,
+        array: impl Into<Vec<VariableId>>,
+        value: VariableId,
+    ) {
+        self.engine
+            .add_propagator(Box::new(FloatElementPropagator::new(index, array, value)));
     }
 
     /// Posts a cumulative scheduling constraint over `tasks`.

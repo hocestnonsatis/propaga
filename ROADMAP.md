@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Hole-aware float element / membership propagators (`array_float_element`, `float_in`) when the selected value carries holes
+- Stronger non-injective unary float hole handling (`sin`/`cos`/`ceil`/`floor`) where local injectivity allows, or other ROADMAP polish
 
 ## Shipped after v1.0.0
 
@@ -22,6 +22,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Hole-aware float arithmetic: `affine` / fixed-operand `plus`/`times`/`divide`, equality hole sharing, binary plus/times/div propagators project holes
 - Hole-aware float linear: `FloatLinearEqPropagator`, interior `float_lin_ne` exclusion, affine hole sharing when two vars remain free
 - Hole-aware unary float maps: `abs`/`sqrt`/`ln`/`exp` preserve or safely project holes; unary propagator reverse-projects invertible cases
+- Native `FloatElementPropagator` for `array_*_float_element` with hole sharing and common-absent hole projection
 
 ## Shipped in v1.0.0
 

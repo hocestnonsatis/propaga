@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Hole-aware float arithmetic: `FloatDomain::affine` and fixed-operand `plus`/`times`/`divide` preserve holes; `FloatEq` shares holes; plus/times/div propagators project holes when a side is fixed.
 - `FloatLinearEqPropagator` for `float_lin_eq` with affine hole sharing when two variables remain free; `float_lin_ne` excludes interior equality-forcing points when other terms are fixed.
 - Unary float maps (`abs`, `sqrt`, `ln`, `exp`) preserve or safely project holes; `FloatUnaryPropagator` reverse-projects through locally invertible cases.
+- `FloatElementPropagator` for float `array_element`: shares holes when the index is fixed and projects holes absent from every remaining candidate.
 - `ExtendedPropagationContext::tighten_set_cardinality` for set-cardinality bound updates during propagation.
 
 ### Fixed

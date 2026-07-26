@@ -221,20 +221,14 @@ pub fn float_dom(model: &mut Model, x: VariableId, values: &[f64]) {
     model.scalar_ge(vec![1; reifs.len()], reifs, 1);
 }
 
-/// Posts `value = array[index]` for a float array.
+/// Posts `value = array[index]` for a float array (0-based index).
 pub fn array_var_float_element(
     model: &mut Model,
     array: &[VariableId],
     index: VariableId,
     value: VariableId,
 ) {
-    for (offset, &elem) in array.iter().enumerate() {
-        let idx = i32::try_from(offset).expect("array index offset fits in i32");
-        let idx_var = model.int_var_fixed(idx);
-        let reif = model.int_var(0, 1);
-        model.reified_equal(index, idx_var, reif);
-        model.float_eq_reif(elem, value, reif);
-    }
+    model.float_element(index, array.to_vec(), value);
 }
 
 /// Posts `m = max(xs)` for float variables.

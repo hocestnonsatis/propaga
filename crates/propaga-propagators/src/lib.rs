@@ -16,6 +16,7 @@ mod disjunctive;
 mod dominance_cut;
 mod element;
 mod equality;
+mod float_element;
 mod float_eq;
 mod float_le;
 mod float_lin_scalar;
@@ -54,6 +55,7 @@ pub use dominance_cut::{
 };
 pub use element::ElementPropagator;
 pub use equality::EqualityPropagator;
+pub use float_element::FloatElementPropagator;
 pub use float_eq::FloatEqPropagator;
 pub use float_le::FloatLePropagator;
 pub use float_lin_scalar::{
