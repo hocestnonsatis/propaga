@@ -1,30 +1,6 @@
 use propaga_core::VariableId;
 use propaga_model::Model;
 
-fn aux_set_from(
-    model: &mut Model,
-    templates: &[VariableId],
-    card_min: usize,
-    card_max: usize,
-) -> VariableId {
-    let mut low = i32::MAX;
-    let mut high = i32::MIN;
-    let mut any = false;
-    for &template in templates {
-        if let Some(set) = model.engine().domain(template).as_set() {
-            for &value in set.lub() {
-                any = true;
-                low = low.min(value);
-                high = high.max(value);
-            }
-        }
-    }
-    if !any {
-        return model.set_var_aux(0, 0, 0, 0);
-    }
-    model.set_var_aux(low, high, card_min, card_max)
-}
-
 /// Posts `left == right` for set variables.
 pub fn set_eq(model: &mut Model, left: VariableId, right: VariableId) {
     model.set_subset(left, right);
@@ -67,11 +43,7 @@ pub fn set_diff(model: &mut Model, left: VariableId, right: VariableId, result: 
 
 /// Posts `result = left △ right`.
 pub fn set_symdiff(model: &mut Model, left: VariableId, right: VariableId, result: VariableId) {
-    let union = aux_set_from(model, &[left, right], 0, usize::MAX);
-    let inter = aux_set_from(model, &[left, right], 0, usize::MAX);
-    model.set_union(left, right, union);
-    model.set_intersect(left, right, inter);
-    set_diff(model, union, inter, result);
+    model.set_symdiff(left, right, result);
 }
 
 /// Posts `reif <=> left == right`.

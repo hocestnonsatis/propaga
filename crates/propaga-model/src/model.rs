@@ -16,7 +16,7 @@ use propaga_propagators::{
     ReifiedScalarEqPropagator, ReifiedScalarGePropagator, ReifiedScalarLePropagator,
     SetCardPropagator, SetDiffPropagator, SetEqReifPropagator, SetInPropagator,
     SetInReifPropagator, SetIntersectPropagator, SetSubsetPropagator, SetSubsetReifPropagator,
-    SetUnionPropagator, TablePropagator, TaskSpec,
+    SetSymDiffPropagator, SetUnionPropagator, TablePropagator, TaskSpec,
 };
 use propaga_search::{
     DepthFirstSearch, LexicographicOptimization, LexicographicResult, Objective,
@@ -289,6 +289,12 @@ impl Model {
     pub fn set_diff(&mut self, left: VariableId, right: VariableId, result: VariableId) {
         self.engine
             .add_propagator(Box::new(SetDiffPropagator::new(left, right, result)));
+    }
+
+    /// Posts `result = left △ right`.
+    pub fn set_symdiff(&mut self, left: VariableId, right: VariableId, result: VariableId) {
+        self.engine
+            .add_propagator(Box::new(SetSymDiffPropagator::new(left, right, result)));
     }
 
     /// Posts `c = a * b` for float variables.

@@ -42,6 +42,7 @@ mod set_in;
 mod set_intersect;
 mod set_reif;
 mod set_subset;
+mod set_symdiff;
 mod set_union;
 mod table;
 
@@ -96,5 +97,6 @@ pub use set_in::SetInPropagator;
 pub use set_intersect::SetIntersectPropagator;
 pub use set_reif::{SetEqReifPropagator, SetInReifPropagator, SetSubsetReifPropagator};
 pub use set_subset::SetSubsetPropagator;
+pub use set_symdiff::SetSymDiffPropagator;
 pub use set_union::SetUnionPropagator;
 pub use table::TablePropagator;
