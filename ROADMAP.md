@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish / corpus outside recent search-annotation and set-cardinality fixtures
+- Small polish / corpus outside reverse_split / restart_constant fixture
 
 ## Shipped after v1.0.0
 
@@ -27,7 +27,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - COMPATIBILITY.md float hole semantics section; README FlatZinc gap blurb refreshed
 - Search annotations: `float_search` / `set_search`, `indomain_random` / `indomain_reverse_split`, selector aliases
 - Multi-phase `seq_search` and `indomain_interval` value ordering
-- Stdlib CI corpus fixtures for `seq_search`, `search_selectors`, `float_search_ann`, `set_search_ann`, `bool_search_ann`, `indomain_random_ann` (compile + SAT; portfolio SAT for `seq_search`)
+- Stdlib CI corpus fixtures for `seq_search`, `search_selectors`, `float_search_ann`, `set_search_ann`, `bool_search_ann`, `indomain_random_ann`, `reverse_split_ann` (compile + SAT; portfolio SAT for `seq_search`)
 - Portfolio search (`solve_portfolio` / `--workers`) propagates `search_phases` to every worker
 - `SetUnionPropagator` cardinality bound tightening via `tighten_set_cardinality`
 - `SetIntersectPropagator` cardinality bound tightening via `tighten_set_cardinality`
@@ -40,6 +40,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Stdlib corpus fixture `bool_search_ann` (`bool_search` + `restart_geometric`, compile + SAT)
 - BnB / lex / Pareto wire `search_phases` like portfolio
 - Stdlib corpus fixture `indomain_random_ann`; CI smoke for `set_intersect.fzn`
+- Stdlib corpus fixture `reverse_split_ann` (`indomain_reverse_split` + `restart_constant`)
 
 ## Shipped in v1.0.0
 
