@@ -154,6 +154,21 @@ impl Propagator for SetLexReifPropagator {
             };
         }
 
+        if ctx.fixed_value(reif) == Some(0) {
+            // ¬(A ≤ B) ≡ B < A; ¬(A < B) ≡ B ≤ A.
+            let negated = match self.op {
+                SetLexOp::Le => SetLexOp::Lt,
+                SetLexOp::Lt => SetLexOp::Le,
+            };
+            let mut inner = SetLexPropagator::new(right_id, left_id, negated);
+            return match inner.propagate(ctx) {
+                PropagationStatus::Failure => PropagationStatus::Failure,
+                PropagationStatus::OkChanged => PropagationStatus::OkChanged,
+                PropagationStatus::OkNoChange if changed => PropagationStatus::OkChanged,
+                other => other,
+            };
+        }
+
         if changed {
             PropagationStatus::OkChanged
         } else {
@@ -305,6 +320,17 @@ fn force_right_to_dominate(
             changed |= ext.force_set_in(right, value);
         }
     }
+    let Some(dom) = ext.set_domain(right) else {
+        return changed;
+    };
+    for &value in &dom.undecided() {
+        let with = with_value(&dom, value);
+        let feasible_with =
+            max_lex_set(&with).is_some_and(|max_right| relation_holds(left, &max_right, op));
+        if !feasible_with {
+            changed |= ext.force_set_out(right, value);
+        }
+    }
     changed
 }
 
@@ -430,5 +456,120 @@ mod tests {
         assert!(engine.domain(left).as_set().unwrap().lub().contains(&1));
         assert!(!engine.domain(left).as_set().unwrap().lub().contains(&2));
         assert!(!engine.domain(left).as_set().unwrap().lub().contains(&3));
+    }
+
+    #[test]
+    fn reif_true_enforces_lex_le() {
+        use propaga_domains::IntervalDomain;
+
+        let mut engine = Engine::new();
+        let left = engine.new_variable(AnyDomain::Set(
+            SetIntervalDomain::universe(1..=2)
+                .with_cardinality(1, 1)
+                .force_in(2)
+                .unwrap(),
+        ));
+        let right = engine.new_variable(AnyDomain::Set(
+            SetIntervalDomain::universe(1..=2)
+                .with_cardinality(2, 2)
+                .force_in(1)
+                .unwrap()
+                .force_in(2)
+                .unwrap(),
+        ));
+        let reif = engine.new_variable(IntervalDomain::fix(1));
+        engine.add_propagator(Box::new(SetLexReifPropagator::new(
+            left,
+            right,
+            reif,
+            SetLexOp::Le,
+        )));
+        assert!(engine.propagate_all().unwrap().is_failure());
+    }
+
+    #[test]
+    fn reif_false_enforces_negated_lex_le() {
+        use propaga_domains::IntervalDomain;
+
+        let mut engine = Engine::new();
+        // {1} ≤ {1,2} is inevitable, so reif=false must fail.
+        let left = engine.new_variable(AnyDomain::Set(
+            SetIntervalDomain::universe(1..=2)
+                .with_cardinality(1, 1)
+                .force_in(1)
+                .unwrap(),
+        ));
+        let right = engine.new_variable(AnyDomain::Set(
+            SetIntervalDomain::universe(1..=2)
+                .with_cardinality(2, 2)
+                .force_in(1)
+                .unwrap()
+                .force_in(2)
+                .unwrap(),
+        ));
+        let reif = engine.new_variable(IntervalDomain::fix(0));
+        engine.add_propagator(Box::new(SetLexReifPropagator::new(
+            left,
+            right,
+            reif,
+            SetLexOp::Le,
+        )));
+        assert!(engine.propagate_all().unwrap().is_failure());
+    }
+
+    #[test]
+    fn reif_false_prunes_when_negation_requires_it() {
+        use propaga_domains::IntervalDomain;
+
+        let mut engine = Engine::new();
+        let left = engine.new_variable(AnyDomain::Set(
+            SetIntervalDomain::universe(1..=3).with_cardinality(1, 1),
+        ));
+        let right = engine.new_variable(AnyDomain::Set(
+            SetIntervalDomain::universe(1..=2)
+                .with_cardinality(1, 1)
+                .force_in(1)
+                .unwrap(),
+        ));
+        let reif = engine.new_variable(IntervalDomain::fix(0));
+        engine.add_propagator(Box::new(SetLexReifPropagator::new(
+            left,
+            right,
+            reif,
+            SetLexOp::Le,
+        )));
+        engine.propagate_all().unwrap();
+        // Need A > {1}, so A cannot be {1}; must be {2} or {3}.
+        assert!(!engine.domain(left).as_set().unwrap().lub().contains(&1));
+    }
+
+    #[test]
+    fn unfixed_reif_assigned_when_lex_decided() {
+        use propaga_domains::IntervalDomain;
+
+        let mut engine = Engine::new();
+        let left = engine.new_variable(AnyDomain::Set(
+            SetIntervalDomain::universe(1..=2)
+                .with_cardinality(1, 1)
+                .force_in(2)
+                .unwrap(),
+        ));
+        let right = engine.new_variable(AnyDomain::Set(
+            SetIntervalDomain::universe(1..=2)
+                .with_cardinality(2, 2)
+                .force_in(1)
+                .unwrap()
+                .force_in(2)
+                .unwrap(),
+        ));
+        let reif = engine.new_variable(IntervalDomain::new(0, 1));
+        engine.add_propagator(Box::new(SetLexReifPropagator::new(
+            left,
+            right,
+            reif,
+            SetLexOp::Le,
+        )));
+        engine.propagate_all().unwrap();
+        assert_eq!(engine.domain(reif).as_int().unwrap().fixed_value(), Some(0));
     }
 }

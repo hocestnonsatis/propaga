@@ -1,0 +1,10 @@
+% set_le_reif(false) when left >lex right.
+var set of 1..2: a;
+var set of 1..2: b;
+var 0..0: r;
+var 2..2: two;
+constraint set_card(a, 1);
+constraint set_in(two, a);
+constraint set_card(b, 2);
+constraint set_le_reif(a, b, r);
+solve satisfy;

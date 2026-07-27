@@ -89,6 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FlatZinc / CLI variable selectors: true `smallest` / `largest` / `max_regret`, `anti_first_fail` as largest-domain, `dom_w_deg` (plus `occurrence`/`degree` ≈ W-DEG); corpus fixture `max_regret_ann`.
 - `set_search` value selectors choose which undecided element to branch on and whether to try membership in/out first; `float_search` reverse-split tries the upper half first; corpus fixture `set_search_max_ann`.
 - FlatZinc `set_le` / `set_lt` (+ reifs) use sorted-list lexicographic order via `SetLexPropagator` (Rust `Model::set_lt` remains proper-subset); fixtures `set_le.fzn` / `set_lt.fzn` + CI smoke.
+- `SetLexReifPropagator` posts the negated lex relation when reif is false (`¬(A≤B)≡B<A`, `¬(A<B)≡B≤A`); fixture `set_le_reif.fzn` + CI smoke.
 
 ### Fixed
 

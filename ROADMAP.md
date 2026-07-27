@@ -99,6 +99,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Correct `smallest`/`largest`/`max_regret`/`anti_first_fail`/`dom_w_deg` var selectors
 - `set_search` respects value selectors for element + in/out order; float reverse-split side order
 - FlatZinc `set_le`/`set_lt` sorted-list lex (not ⊆); `Model::set_lt` stays proper-subset API
+- `SetLexReif` posts negated lex when reif=false; CI `set_le_reif.fzn`
 
 ## Shipped in v1.0.0
 
