@@ -41,6 +41,9 @@ The root `benchmarks/` folder contains curated `.fzn` files (no MiniZinc toolcha
 | `float_floor.fzn` / `float_ceil.fzn` | Fixed-image reverse projection |
 | `seq_search_minimize.fzn` | Multi-phase `seq_search` under BnB minimize |
 | `float_abs.fzn` | Float absolute value |
+| `float_exp.fzn` | Fixed `float_exp` reverse projection |
+| `lexicographic_multi.fzn` / `pareto_biobjective.fzn` | Multi-objective search |
+| `float_times.fzn` | Float multiplication |
 
 When adding MiniZinc sources here, prefer small models that use supported constraints only. See [COMPATIBILITY.md](COMPATIBILITY.md) for the full list.
 

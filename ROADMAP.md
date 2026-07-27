@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish outside fixed exp/ln/sqrt reverse projection
+- Small polish outside multi-objective / float_exp CI smoke fixtures
 
 ## Shipped after v1.0.0
 
@@ -46,6 +46,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - `force_in` / `force_out` keep card bounds aligned with GLB/LUB
 - Handwritten `seq_search_minimize.fzn` + CI smoke (BnB phases / `float_abs`)
 - `FloatUnaryPropagator` reverse-projects fixed `exp` / `ln` / `sqrt` images
+- CI smoke: `float_exp`, `float_times`, lex multi, Pareto biobjective
 
 ## Shipped in v1.0.0
 

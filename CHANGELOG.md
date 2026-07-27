@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI smoke solves for `set_subset.fzn` and `set_eq.fzn`.
 - Handwritten FlatZinc fixture `seq_search_minimize.fzn`; CI smoke for BnB + `seq_search` and `float_abs.fzn`.
 - `FloatUnaryPropagator` reverse-projects fixed images of `exp` / `ln` / `sqrt` onto the input.
+- Handwritten FlatZinc fixture `float_exp.fzn`; CI smoke for `float_exp`, `float_times`, `lexicographic_multi`, and `pareto_biobjective`.
 
 ### Fixed
 
