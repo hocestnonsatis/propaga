@@ -69,6 +69,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - `SetUnionPropagator` raises `|R|` card_min by `|glb(R) \ lub(A)|` when `R = A ∪ B`
 - Native `SetDiffPropagator` for FlatZinc `set_diff` (symdiff still decomposes)
 - Native `SetSymDiffPropagator` for FlatZinc `set_symdiff`
+- `SetEqReifPropagator` sound `definitely_ne` + reif assignment + card sync
 
 ## Shipped in v1.0.0
 

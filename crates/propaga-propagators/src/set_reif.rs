@@ -33,33 +33,21 @@ impl Propagator for SetEqReifPropagator {
             (left.clone(), right.clone())
         };
 
-        let reif_domain = ctx.domain(reif_id);
         let mut changed = false;
 
         let definitely_equal = left.glb == right.glb
             && left.lub == right.lub
             && left.glb.len() == left.lub.len()
             && left.glb.len() == right.lub.len();
-        let definitely_ne = left.glb != right.glb
-            || left.lub != right.lub
-            || left.glb.iter().any(|v| !right.lub.contains(v))
+        // Conflict only when a forced member is impossible in the other set.
+        let definitely_ne = left.glb.iter().any(|v| !right.lub.contains(v))
             || right.glb.iter().any(|v| !left.lub.contains(v));
 
         if definitely_equal {
-            if reif_domain.is_fixed() && ctx.fixed_value(reif_id) != Some(1) {
-                return PropagationStatus::Failure;
-            }
-            if !reif_domain.contains(1) {
-                return PropagationStatus::Failure;
-            }
+            changed |= tighten_reif(ctx, reif_id, 1);
         }
         if definitely_ne {
-            if reif_domain.is_fixed() && ctx.fixed_value(reif_id) == Some(1) {
-                return PropagationStatus::Failure;
-            }
-            if reif_domain.is_fixed() && !reif_domain.contains(0) {
-                return PropagationStatus::Failure;
-            }
+            changed |= tighten_reif(ctx, reif_id, 0);
         }
 
         if ctx.fixed_value(reif_id) == Some(1)
@@ -81,6 +69,29 @@ impl Propagator for SetEqReifPropagator {
                     changed |= ext.force_set_out(right_id, value);
                 }
             }
+
+            let (Some(left), Some(right)) = (ext.set_domain(left_id), ext.set_domain(right_id))
+            else {
+                return PropagationStatus::Failure;
+            };
+            if left.is_empty() || right.is_empty() {
+                return PropagationStatus::Failure;
+            }
+            let card_min = left.card_min.max(right.card_min).max(left.glb.len());
+            let card_max = left
+                .card_max
+                .min(right.card_max)
+                .min(left.lub.len())
+                .min(right.lub.len());
+            if card_min > card_max {
+                return PropagationStatus::Failure;
+            }
+            if card_min != left.card_min || card_max != left.card_max {
+                changed |= ext.tighten_set_cardinality(left_id, card_min, card_max);
+            }
+            if card_min != right.card_min || card_max != right.card_max {
+                changed |= ext.tighten_set_cardinality(right_id, card_min, card_max);
+            }
         }
 
         if changed {
@@ -89,6 +100,17 @@ impl Propagator for SetEqReifPropagator {
             PropagationStatus::OkNoChange
         }
     }
+}
+
+fn tighten_reif(ctx: &mut dyn PropagationContext, reif: VariableId, value: i32) -> bool {
+    let mut changed = false;
+    if ctx.remove_below(reif, value) {
+        changed = true;
+    }
+    if ctx.remove_above(reif, value) {
+        changed = true;
+    }
+    changed
 }
 
 /// Propagates `reif <=> subset ⊆ superset`.
@@ -231,5 +253,81 @@ impl Propagator for SetInReifPropagator {
         } else {
             PropagationStatus::OkNoChange
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use propaga_domains::{AnyDomain, IntervalDomain, SetIntervalDomain};
+    use propaga_engine::Engine;
+
+    #[test]
+    fn differing_lub_alone_is_not_definitely_unequal() {
+        let mut engine = Engine::new();
+        let left = SetIntervalDomain::universe(1..=2).with_cardinality(0, 2);
+        let right = SetIntervalDomain::universe(1..=3).with_cardinality(0, 3);
+        let a = engine.new_variable(AnyDomain::Set(left));
+        let b = engine.new_variable(AnyDomain::Set(right));
+        let reif = engine.new_variable(IntervalDomain::new(0, 1));
+        engine.add_propagator(Box::new(SetEqReifPropagator::new(a, b, reif)));
+        engine.propagate_all().unwrap();
+        // Domains can still become equal (e.g. both {1,2}); reif stays unfixed.
+        assert_eq!(engine.hybrid_domain(reif).fixed_value(), None);
+    }
+
+    #[test]
+    fn conflicting_glb_forces_reif_false() {
+        let mut engine = Engine::new();
+        let left = SetIntervalDomain::universe(1..=3)
+            .with_cardinality(1, 2)
+            .force_in(1)
+            .unwrap();
+        let right = SetIntervalDomain::universe(2..=3).with_cardinality(0, 2);
+        let a = engine.new_variable(AnyDomain::Set(left));
+        let b = engine.new_variable(AnyDomain::Set(right));
+        let reif = engine.new_variable(IntervalDomain::new(0, 1));
+        engine.add_propagator(Box::new(SetEqReifPropagator::new(a, b, reif)));
+        engine.propagate_all().unwrap();
+        assert_eq!(engine.hybrid_domain(reif).fixed_value(), Some(0));
+    }
+
+    #[test]
+    fn fixed_equal_sets_force_reif_true() {
+        let mut engine = Engine::new();
+        let left = SetIntervalDomain::universe(1..=2)
+            .with_cardinality(2, 2)
+            .force_in(1)
+            .unwrap()
+            .force_in(2)
+            .unwrap();
+        let right = SetIntervalDomain::universe(1..=2)
+            .with_cardinality(2, 2)
+            .force_in(1)
+            .unwrap()
+            .force_in(2)
+            .unwrap();
+        let a = engine.new_variable(AnyDomain::Set(left));
+        let b = engine.new_variable(AnyDomain::Set(right));
+        let reif = engine.new_variable(IntervalDomain::new(0, 1));
+        engine.add_propagator(Box::new(SetEqReifPropagator::new(a, b, reif)));
+        engine.propagate_all().unwrap();
+        assert_eq!(engine.hybrid_domain(reif).fixed_value(), Some(1));
+    }
+
+    #[test]
+    fn reif_true_syncs_cardinality_bounds() {
+        let mut engine = Engine::new();
+        let left = SetIntervalDomain::universe(1..=4).with_cardinality(2, 3);
+        let right = SetIntervalDomain::universe(1..=4).with_cardinality(1, 2);
+        let a = engine.new_variable(AnyDomain::Set(left));
+        let b = engine.new_variable(AnyDomain::Set(right));
+        let reif = engine.new_variable(IntervalDomain::fix(1));
+        engine.add_propagator(Box::new(SetEqReifPropagator::new(a, b, reif)));
+        engine.propagate_all().unwrap();
+        assert_eq!(engine.domain(a).as_set().unwrap().card_min(), 2);
+        assert_eq!(engine.domain(a).as_set().unwrap().card_max(), 2);
+        assert_eq!(engine.domain(b).as_set().unwrap().card_min(), 2);
+        assert_eq!(engine.domain(b).as_set().unwrap().card_max(), 2);
     }
 }

@@ -66,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `SetEqReifPropagator` only treats sets as definitely unequal on GLB/LUB conflicts (not mere domain asymmetry), assigns the reif literal when equality is decided, and syncs cardinality when reif is true.
 - Lexicographic search restores the engine after each objective's branch-and-bound so interior optima are pinned correctly before optimizing the next priority.
 - `FloatLeReifPropagator` with reif=false now tightens the correct float bounds (strict greater-than encoding).
 - DFS `solve_each` set branching no longer applies in/out forces eagerly before trail marks (both membership branches are explored).
