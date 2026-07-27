@@ -344,3 +344,16 @@ fn generic_min_instance_solves() {
     let (solution, _) = instance.model.solve_subset_with_stats(instance.solve_vars);
     assert_eq!(solution.and_then(|s| assignment_int(&s, c)), Some(4));
 }
+
+#[test]
+fn set_diff_auxiliaries_are_not_decision_variables() {
+    let source = include_str!("../../../benchmarks/set_diff.fzn");
+    let program = parse(source).expect("parse set_diff");
+    let mut instance = compile(program).expect("compile set_diff");
+    assert_eq!(
+        instance.model.decision_variables().len(),
+        3,
+        "only a, b, d should be decision vars"
+    );
+    assert!(instance.model.solve().is_some());
+}

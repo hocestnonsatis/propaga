@@ -1,0 +1,5 @@
+% Fixed sqrt image reverse-projects onto the input.
+var 0.0..20.0: a;
+var 3.0..3.0: b;
+constraint float_sqrt(a, b);
+solve satisfy;

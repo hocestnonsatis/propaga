@@ -20,9 +20,9 @@ fn aux_set_from(
         }
     }
     if !any {
-        return model.set_var(0, 0, 0, 0);
+        return model.set_var_aux(0, 0, 0, 0);
     }
-    model.set_var(low, high, card_min, card_max)
+    model.set_var_aux(low, high, card_min, card_max)
 }
 
 /// Posts `left == right` for set variables.

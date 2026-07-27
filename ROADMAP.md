@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish outside set-diff / set-cardinality soundness fixes
+- Small polish outside set-aux decision vars / float_ln·sqrt CI
 
 ## Shipped after v1.0.0
 
@@ -51,6 +51,8 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - `set_diff` encoding: `left ⊆ result ∪ right` (not `cover ⊆ left`); combined aux universes
 - Failed set forces use wipeout domains; DFS skips int nogood learning on set/float conflicts
 - Handwritten `set_diff.fzn` / `set_symdiff.fzn` + CI smoke
+- `Model::set_var_aux` keeps FlatZinc set decomposition auxiliaries out of decision variables
+- CI smoke: `float_ln.fzn` / `float_sqrt.fzn` fixed-image reverse projection
 
 ## Shipped in v1.0.0
 

@@ -49,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Handwritten FlatZinc fixture `float_exp.fzn`; CI smoke for `float_exp`, `float_times`, `lexicographic_multi`, and `pareto_biobjective`.
 - Handwritten FlatZinc fixtures `set_diff.fzn` and `set_symdiff.fzn`; CI smoke solves for both.
 - `SetIntervalDomain::wipeout` for failed membership forces; `with_cardinality(…, 0)` collapses to the fixed empty set.
+- `Model::set_var_aux` for non-decision set auxiliaries; FlatZinc `set_diff` / `set_symdiff` decompositions use it.
+- Handwritten FlatZinc fixtures `float_ln.fzn` and `float_sqrt.fzn`; CI smoke solves for both.
 
 ### Fixed
 

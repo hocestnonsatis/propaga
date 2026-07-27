@@ -111,9 +111,36 @@ impl Model {
 
     /// Declares a set variable over `[low, high]` with cardinality bounds.
     pub fn set_var(&mut self, low: i32, high: i32, card_min: usize, card_max: usize) -> VariableId {
+        self.declare_set_var(low, high, card_min, card_max, true)
+    }
+
+    /// Declares an auxiliary set variable that is not a search decision variable.
+    ///
+    /// Used by FlatZinc decompositions (`set_diff`, `set_symdiff`, …) so cover/empty
+    /// auxiliaries are fixed by propagation rather than branched on.
+    pub fn set_var_aux(
+        &mut self,
+        low: i32,
+        high: i32,
+        card_min: usize,
+        card_max: usize,
+    ) -> VariableId {
+        self.declare_set_var(low, high, card_min, card_max, false)
+    }
+
+    fn declare_set_var(
+        &mut self,
+        low: i32,
+        high: i32,
+        card_min: usize,
+        card_max: usize,
+        decision: bool,
+    ) -> VariableId {
         let domain = SetIntervalDomain::universe(low..=high).with_cardinality(card_min, card_max);
         let var = self.engine.new_variable(AnyDomain::Set(domain));
-        self.variables.push(var);
+        if decision {
+            self.variables.push(var);
+        }
         var
     }
 

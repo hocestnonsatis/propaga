@@ -40,6 +40,8 @@ jobs:
       - run: cargo run -p propaga-cli -- solve --file benchmarks/seq_search_minimize.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/float_abs.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/float_exp.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/float_ln.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/float_sqrt.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/float_times.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/lexicographic_multi.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/pareto_biobjective.fzn --quiet
