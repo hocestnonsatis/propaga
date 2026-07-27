@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish / docs outside search annotations (float hole limits already documented), or portfolio wiring of `search_phases`
+- Small polish / CI / corpus hygiene, or docs outside float-hole limits already documented
 
 ## Shipped after v1.0.0
 
@@ -29,6 +29,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - `seq_search` (concatenated InputOrder approx.) and `indomain_interval` value ordering
 - Stdlib CI corpus fixtures for `seq_search`, `search_selectors`, `float_search_ann` (compile + SAT)
 - True multi-phase `seq_search` via DFS `SearchPhase` groups (per-group var/value selectors)
+- Portfolio search (`solve_portfolio` / `--workers`) propagates `search_phases` to every worker
 
 ## Shipped in v1.0.0
 

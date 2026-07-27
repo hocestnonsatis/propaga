@@ -48,7 +48,7 @@ Equality, disequality, linear constraints, ordering (`<=`, `<`), reified compari
 
 ### Search
 
-MRV, DOM, DOM/W-DEG, activity-based, and input-order variable ordering; ascending, descending, LCV, split, and median value ordering; first-UIP nogood learning; optional lazy clause pruning; Luby, constant, geometric, linear, and on-solution restarts; phase saving; parallel portfolio search (`--workers`); lexicographic multi-objective optimization; branch-and-bound for single-objective optimization.
+MRV, DOM, DOM/W-DEG, activity-based, and input-order variable ordering; ascending, descending, LCV, split, and median value ordering; first-UIP nogood learning; optional lazy clause pruning; Luby, constant, geometric, linear, and on-solution restarts; phase saving; parallel portfolio search (`--workers`, including FlatZinc `seq_search` phases); lexicographic multi-objective optimization; branch-and-bound for single-objective optimization.
 
 ### FlatZinc
 

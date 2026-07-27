@@ -1,6 +1,6 @@
 //! Portfolio search over multiple search configurations.
 
-use crate::config::{RestartPolicy, SearchConfig, ValueOrdering, VariableOrdering};
+use crate::config::{RestartPolicy, SearchConfig, SearchPhase, ValueOrdering, VariableOrdering};
 use crate::dfs::DepthFirstSearch;
 use crate::stats::SearchStats;
 use crate::value::Solution;
@@ -33,6 +33,7 @@ pub struct PortfolioSearch {
     variables: Vec<VariableId>,
     base_config: SearchConfig,
     portfolio: PortfolioConfig,
+    search_phases: Vec<SearchPhase>,
 }
 
 impl PortfolioSearch {
@@ -47,7 +48,18 @@ impl PortfolioSearch {
             variables: variables.into(),
             base_config,
             portfolio,
+            search_phases: Vec::new(),
         }
+    }
+
+    /// Attaches sequenced search phases shared by every portfolio worker.
+    ///
+    /// When phases are non-empty, each worker's DFS follows them (active-group
+    /// orderings override diversified portfolio heuristics for those variables).
+    #[must_use]
+    pub fn with_search_phases(mut self, search_phases: impl Into<Vec<SearchPhase>>) -> Self {
+        self.search_phases = search_phases.into();
+        self
     }
 
     /// Searches for the first solution using the configured portfolio.
@@ -71,6 +83,11 @@ impl PortfolioSearch {
         self.solve_parallel(engine, &checkpoint, &configs)
     }
 
+    fn dfs_for_config(&self, config: SearchConfig) -> DepthFirstSearch {
+        DepthFirstSearch::with_config(self.variables.clone(), config)
+            .with_search_phases(self.search_phases.clone())
+    }
+
     fn propagate_root(&self, engine: &mut Engine) -> bool {
         match engine.commit_initial_propagation() {
             Ok(status) => !status.is_failure(),
@@ -87,7 +104,7 @@ impl PortfolioSearch {
         let mut total_stats = SearchStats::default();
         for config in configs {
             engine.restore_checkpoint(checkpoint);
-            let mut search = DepthFirstSearch::with_config(self.variables.clone(), *config);
+            let mut search = self.dfs_for_config(*config);
             if let Some(solution) = search.solve_without_root_propagation(engine) {
                 merge_stats(&mut total_stats, search.stats());
                 return (Some(solution), total_stats);
@@ -123,7 +140,7 @@ impl PortfolioSearch {
                     return;
                 }
 
-                let mut search = DepthFirstSearch::with_config(self.variables.clone(), *config);
+                let mut search = self.dfs_for_config(*config);
                 if let Some(worker_solution) =
                     search.solve_without_root_propagation(&mut worker_engine)
                     && !found.swap(true, Ordering::Relaxed)
@@ -235,6 +252,33 @@ mod tests {
                 deterministic: false,
             },
         );
+        let (solution, _) = search.solve(&mut engine);
+        assert!(solution.is_some());
+    }
+
+    #[test]
+    fn portfolio_respects_search_phases() {
+        let (mut engine, vars) = all_different_engine();
+        let search = PortfolioSearch::new(
+            vars.clone(),
+            SearchConfig::default(),
+            PortfolioConfig {
+                workers: 2,
+                deterministic: true,
+            },
+        )
+        .with_search_phases(vec![
+            SearchPhase::new(
+                vec![vars[0]],
+                VariableOrdering::InputOrder,
+                ValueOrdering::Ascending,
+            ),
+            SearchPhase::new(
+                vars[1..].to_vec(),
+                VariableOrdering::Mrv,
+                ValueOrdering::Descending,
+            ),
+        ]);
         let (solution, _) = search.solve(&mut engine);
         assert!(solution.is_some());
     }

@@ -742,7 +742,8 @@ impl Model {
         variables: impl Into<Vec<VariableId>>,
         portfolio: PortfolioConfig,
     ) -> (Option<Solution>, SearchStats) {
-        let search = PortfolioSearch::new(variables, self.search_config, portfolio);
+        let search = PortfolioSearch::new(variables, self.search_config, portfolio)
+            .with_search_phases(self.search_phases.clone());
         search.solve(&mut self.engine)
     }
 
