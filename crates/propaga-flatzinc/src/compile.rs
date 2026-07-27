@@ -125,6 +125,20 @@ pub fn compile(program: FlatZincProgram) -> Result<CompiledInstance, FlatZincErr
             ParamDecl::Set { name, values } => {
                 env.insert(name, Binding::SetParam(values));
             }
+            ParamDecl::SetArray {
+                name,
+                index_low,
+                values,
+            } => {
+                let mut elements = HashMap::new();
+                for (offset, set_values) in values.into_iter().enumerate() {
+                    let index = index_low + offset as i32;
+                    let var = model.set_var_fixed_values(&set_values);
+                    names.insert(var, format!("{name}[{index}]"));
+                    elements.insert(index, var);
+                }
+                env.insert(name, Binding::Array(elements));
+            }
         }
     }
 
@@ -863,6 +877,14 @@ fn post_constraint(
             crate::decompose_set::set_lt_reif(model, left, right, reif);
         }
         Constraint::ArrayVarSetElement {
+            array,
+            index,
+            value,
+            one_based,
+        } => {
+            post_array_var_set_element(model, env, array, index, value, one_based)?;
+        }
+        Constraint::ArraySetElement {
             array,
             index,
             value,
@@ -1618,6 +1640,17 @@ fn substitute_constraint(
             value,
             one_based,
         } => Constraint::ArrayVarSetElement {
+            array: map(array),
+            index: map(index),
+            value: map(value),
+            one_based: *one_based,
+        },
+        Constraint::ArraySetElement {
+            array,
+            index,
+            value,
+            one_based,
+        } => Constraint::ArraySetElement {
             array: map(array),
             index: map(index),
             value: map(value),

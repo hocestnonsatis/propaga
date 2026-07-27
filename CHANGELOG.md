@@ -70,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FlatZinc `array_int_element` / `array_var_int_element` / `array_bool_element` / `array_float_element` / `array_var_float_element` use 1-based indices (with `_nonshifted` 0-based variants); shared index-shift helper; CI smoke for int/float element.
 - FlatZinc `array [L..U] of var set of A..B` declarations; handwritten `array_set_vars.fzn` + CI smoke.
 - FlatZinc `array [L..U] of var float` / float-bounded array declarations; handwritten `array_float_vars.fzn` + CI smoke.
+- FlatZinc `array [L..U] of set of int` parameter arrays and `array_set_element` (1-based / `_nonshifted`); handwritten `array_set_element.fzn` + CI smoke.
 
 ### Fixed
 

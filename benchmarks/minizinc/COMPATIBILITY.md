@@ -40,6 +40,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `bool: flag = true;` | Supported | |
 | `float: pi = 3.14;` | Supported | |
 | `set of L..U: s = { ... };` | Supported | Used in `set_in` and related constraints |
+| `array [L..U] of set of int: xs = [{…}, …];` | Supported | Compiled to fixed set variables |
 
 ## Integer & bool constraints
 
@@ -75,6 +76,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `set_union`, `set_intersect` | Supported | Set union / intersection; both tighten cardinality bounds |
 | `set_*_reif` | Supported | Reified set propagators |
 | `array_var_set_element` | Supported | 1-based index; `_nonshifted` is 0-based |
+| `array_set_element` | Supported | Constant set arrays; 1-based / `_nonshifted` 0-based |
 
 ## Float constraints
 

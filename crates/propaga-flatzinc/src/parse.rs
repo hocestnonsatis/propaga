@@ -55,6 +55,15 @@ pub enum ParamDecl {
         /// Contained values.
         values: Vec<i32>,
     },
+    /// Fixed array of set parameters.
+    SetArray {
+        /// Array name.
+        name: String,
+        /// Inclusive lower index for the values slice.
+        index_low: i32,
+        /// Sets in index order.
+        values: Vec<Vec<i32>>,
+    },
 }
 
 /// A FlatZinc variable declaration.
@@ -423,6 +432,13 @@ pub enum Constraint {
     /// `array_var_set_element` / `array_var_set_element_nonshifted`
     /// (`one_based` is true for the shifted/standard form).
     ArrayVarSetElement {
+        array: Expr,
+        index: Expr,
+        value: Expr,
+        one_based: bool,
+    },
+    /// `array_set_element` / `array_set_element_nonshifted` (constant set array).
+    ArraySetElement {
         array: Expr,
         index: Expr,
         value: Expr,
@@ -903,6 +919,8 @@ impl Parser {
             } else if self.peek_is_ident("array") {
                 if self.peek_is_int_array_param() {
                     params.push(self.parse_int_array_param()?);
+                } else if self.peek_is_set_array_param() {
+                    params.push(self.parse_set_array_param()?);
                 } else {
                     variables.push(self.parse_array_decl()?);
                 }
@@ -985,6 +1003,26 @@ impl Parser {
         false
     }
 
+    fn peek_is_set_array_param(&self) -> bool {
+        if !self.peek_is_ident("array") {
+            return false;
+        }
+        let mut pos = self.pos + 1;
+        while pos < self.tokens.len() {
+            match &self.tokens[pos] {
+                Token::Ident(name) if name == "of" => {
+                    return matches!(
+                        self.tokens.get(pos + 1),
+                        Some(Token::Ident(name)) if name == "set"
+                    );
+                }
+                Token::Symbol(symbol) if symbol == ";" => return false,
+                _ => pos += 1,
+            }
+        }
+        false
+    }
+
     fn parse_int_array_param(&mut self) -> Result<ParamDecl, FlatZincError> {
         self.expect_ident("array")?;
         self.expect_symbol("[")?;
@@ -1001,6 +1039,46 @@ impl Parser {
         let values = self.parse_int_list()?;
         self.expect_symbol("]")?;
         Ok(ParamDecl::IntArray { name, values })
+    }
+
+    fn parse_set_array_param(&mut self) -> Result<ParamDecl, FlatZincError> {
+        self.expect_ident("array")?;
+        self.expect_symbol("[")?;
+        let index_low = self.expect_int()?;
+        self.expect_symbol("..")?;
+        let index_high = self.expect_int()?;
+        self.expect_symbol("]")?;
+        self.expect_ident("of")?;
+        self.expect_ident("set")?;
+        self.expect_ident("of")?;
+        let _ = self.parse_domain()?;
+        self.expect_symbol(":")?;
+        let name = self.expect_ident_token()?;
+        self.expect_symbol("=")?;
+        self.expect_symbol("[")?;
+        let mut values = Vec::new();
+        if !self.peek_is_symbol("]") {
+            loop {
+                values.push(self.parse_tuple_set()?);
+                if self.peek_is_symbol("]") {
+                    break;
+                }
+                self.expect_symbol(",")?;
+            }
+        }
+        self.expect_symbol("]")?;
+        let expected = (index_high - index_low + 1).max(0) as usize;
+        if values.len() != expected {
+            return Err(FlatZincError::Unsupported(format!(
+                "set array `{name}` length {} does not match index range [{index_low}..{index_high}]",
+                values.len()
+            )));
+        }
+        Ok(ParamDecl::SetArray {
+            name,
+            index_low,
+            values,
+        })
     }
 
     fn parse_bool_param(&mut self) -> Result<ParamDecl, FlatZincError> {
@@ -1861,6 +1939,32 @@ impl Parser {
                 self.expect_symbol(",")?;
                 let value = self.parse_expr()?;
                 Constraint::ArrayVarSetElement {
+                    array,
+                    index,
+                    value,
+                    one_based: false,
+                }
+            }
+            "array_set_element" => {
+                let array = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let index = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let value = self.parse_expr()?;
+                Constraint::ArraySetElement {
+                    array,
+                    index,
+                    value,
+                    one_based: true,
+                }
+            }
+            "array_set_element_nonshifted" => {
+                let array = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let index = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let value = self.parse_expr()?;
+                Constraint::ArraySetElement {
                     array,
                     index,
                     value,
