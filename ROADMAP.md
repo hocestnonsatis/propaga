@@ -65,6 +65,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - `SetUnionPropagator` raises `|A∪B|` card_min from `|glb(A) ∪ glb(B)|`
 - CI smoke: remaining handwritten scheduling / search / weighted / reified-linear fixtures
 - `SetSubsetPropagator` raises `|B|` card_min by `|glb(B) \ lub(A)|` when `A ⊆ B`
+- `SetIntersectPropagator` raises operand card_min by `|glb(A) \ lub(R)|` when `R = A ∩ B`
 
 ## Shipped in v1.0.0
 

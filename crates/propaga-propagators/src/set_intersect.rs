@@ -132,7 +132,16 @@ impl Propagator for SetIntersectPropagator {
             changed |= ext.tighten_set_cardinality(result_id, result_card_min, result_card_max);
         }
 
-        let left_card_min = left.card_min.max(result_card_min).max(left.glb.len());
+        // R ⊆ A ⇒ |A| ≥ |R| + |glb(A) \ lub(R)| (disjoint forced members outside R).
+        let left_forced_outside = left
+            .glb
+            .iter()
+            .filter(|value| !result.lub.contains(value))
+            .count();
+        let left_card_min = left
+            .card_min
+            .max(result_card_min.saturating_add(left_forced_outside))
+            .max(left.glb.len());
         let left_card_max = left
             .card_max
             .min(result_card_max.saturating_add(left_minus_right_max))
@@ -144,7 +153,15 @@ impl Propagator for SetIntersectPropagator {
             changed |= ext.tighten_set_cardinality(left_id, left_card_min, left_card_max);
         }
 
-        let right_card_min = right.card_min.max(result_card_min).max(right.glb.len());
+        let right_forced_outside = right
+            .glb
+            .iter()
+            .filter(|value| !result.lub.contains(value))
+            .count();
+        let right_card_min = right
+            .card_min
+            .max(result_card_min.saturating_add(right_forced_outside))
+            .max(right.glb.len());
         let right_card_max = right
             .card_max
             .min(result_card_max.saturating_add(right_minus_left_max))
@@ -238,6 +255,24 @@ mod tests {
         engine.add_propagator(Box::new(SetIntersectPropagator::new(x, y, r)));
         engine.propagate_all().unwrap();
         assert!(engine.domain(r).as_set().unwrap().card_min() >= 2);
+    }
+
+    #[test]
+    fn raises_operand_card_min_from_disjoint_forced_members() {
+        let mut engine = Engine::new();
+        let left = SetIntervalDomain::universe(1..=3)
+            .with_cardinality(0, 3)
+            .force_in(3)
+            .unwrap();
+        let right = SetIntervalDomain::universe(1..=3).with_cardinality(0, 3);
+        // R cannot contain 3, and |R| ≥ 2 ⇒ |A| ≥ 2 + 1.
+        let result = SetIntervalDomain::universe(1..=2).with_cardinality(2, 2);
+        let x = engine.new_variable(AnyDomain::Set(left));
+        let y = engine.new_variable(AnyDomain::Set(right));
+        let r = engine.new_variable(AnyDomain::Set(result));
+        engine.add_propagator(Box::new(SetIntersectPropagator::new(x, y, r)));
+        engine.propagate_all().unwrap();
+        assert!(engine.domain(x).as_set().unwrap().card_min() >= 3);
     }
 
     #[test]
