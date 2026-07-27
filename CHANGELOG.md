@@ -65,9 +65,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Native `SetSymDiffPropagator` for FlatZinc `set_symdiff`; `Model::set_symdiff`.
 - `SetCardEqPropagator` / `Model::set_card_eq` for FlatZinc `set_card(S, k)` with a variable cardinality; handwritten `set_card_var.fzn` + CI smoke.
 - Native `SetEqPropagator` for FlatZinc `set_eq` (membership + cardinality sync; replaces dual-subset encoding).
+- FlatZinc `array_var_set_element` uses 1-based indices; `array_var_set_element_nonshifted` stays 0-based; handwritten fixtures + CI smoke.
 
 ### Fixed
 
+- `array_var_set_element` indexes from 1 (was incorrectly 0-based like `_nonshifted`).
 - `SetEqReifPropagator` only treats sets as definitely unequal on GLB/LUB conflicts (not mere domain asymmetry), assigns the reif literal when equality is decided, and syncs cardinality when reif is true.
 - `SetSubsetReifPropagator` assigns the reif on definite subset/violation, syncs cardinality when reif is true, and fails when reif is false but subsethood is inevitable.
 - `SetInReifPropagator` assigns the reif from membership facts (value outside LUB ⇒ false, in GLB ⇒ true) instead of failing, and forces set out when reif is false.

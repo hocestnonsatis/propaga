@@ -384,8 +384,14 @@ pub enum Constraint {
     SetLeReif(Expr, Expr, Expr),
     /// `set_lt_reif(left, right, reif)`
     SetLtReif(Expr, Expr, Expr),
-    /// `array_var_set_element(array, index, value)`
-    ArrayVarSetElement(Expr, Expr, Expr),
+    /// `array_var_set_element` / `array_var_set_element_nonshifted`
+    /// (`one_based` is true for the shifted/standard form).
+    ArrayVarSetElement {
+        array: Expr,
+        index: Expr,
+        value: Expr,
+        one_based: bool,
+    },
     /// `float_le(left, right)`
     FloatLe(Expr, Expr),
     /// `float_eq(left, right)`
@@ -1704,13 +1710,31 @@ impl Parser {
                 let reif = self.parse_expr()?;
                 Constraint::SetLtReif(left, right, reif)
             }
-            "array_var_set_element" | "array_var_set_element_nonshifted" => {
+            "array_var_set_element" => {
                 let array = self.parse_expr()?;
                 self.expect_symbol(",")?;
                 let index = self.parse_expr()?;
                 self.expect_symbol(",")?;
                 let value = self.parse_expr()?;
-                Constraint::ArrayVarSetElement(array, index, value)
+                Constraint::ArrayVarSetElement {
+                    array,
+                    index,
+                    value,
+                    one_based: true,
+                }
+            }
+            "array_var_set_element_nonshifted" => {
+                let array = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let index = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let value = self.parse_expr()?;
+                Constraint::ArrayVarSetElement {
+                    array,
+                    index,
+                    value,
+                    one_based: false,
+                }
             }
             "float_le" => {
                 let left = self.parse_expr()?;

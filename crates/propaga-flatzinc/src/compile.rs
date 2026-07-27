@@ -821,8 +821,13 @@ fn post_constraint(
             let reif = resolve_var(env, reif)?;
             crate::decompose_set::set_lt_reif(model, left, right, reif);
         }
-        Constraint::ArrayVarSetElement(array, index, value) => {
-            post_array_var_set_element(model, env, array, index, value)?;
+        Constraint::ArrayVarSetElement {
+            array,
+            index,
+            value,
+            one_based,
+        } => {
+            post_array_var_set_element(model, env, array, index, value, one_based)?;
         }
         Constraint::FloatLe(left, right) => {
             let left = resolve_var(env, left)?;
@@ -1536,9 +1541,17 @@ fn substitute_constraint(
         Constraint::SetLtReif(left, right, reif) => {
             Constraint::SetLtReif(map(left), map(right), map(reif))
         }
-        Constraint::ArrayVarSetElement(array, index, value) => {
-            Constraint::ArrayVarSetElement(map(array), map(index), map(value))
-        }
+        Constraint::ArrayVarSetElement {
+            array,
+            index,
+            value,
+            one_based,
+        } => Constraint::ArrayVarSetElement {
+            array: map(array),
+            index: map(index),
+            value: map(value),
+            one_based: *one_based,
+        },
         Constraint::FloatLe(left, right) => Constraint::FloatLe(map(left), map(right)),
         Constraint::FloatEq(left, right) => Constraint::FloatEq(map(left), map(right)),
         Constraint::SetUnion(left, right, result) => {
@@ -2116,14 +2129,16 @@ fn post_array_var_set_element(
     array: Expr,
     index: Expr,
     value: Expr,
+    one_based: bool,
 ) -> Result<(), FlatZincError> {
     let sets = resolve_var_list(env, array)?;
     let index_var = resolve_var(env, index)?;
     let value_var = resolve_var(env, value)?;
+    let index_base = if one_based { 1 } else { 0 };
     for (offset, &set_var) in sets.iter().enumerate() {
         let idx = i32::try_from(offset).map_err(|_| {
             FlatZincError::Unsupported("array_var_set_element index offset too large".into())
-        })?;
+        })? + index_base;
         let idx_var = model.int_var_fixed(idx);
         let reif = model.int_var_aux(0, 1);
         model.reified_equal(index_var, idx_var, reif);
