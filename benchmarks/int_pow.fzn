@@ -1,0 +1,8 @@
+% Variable-exponent int_pow via case-split + element.
+var 1..20: base;
+var 1..4: exp;
+var 1..160000: result;
+constraint int_pow(base, exp, result);
+constraint int_eq(base, 5);
+constraint int_eq(exp, 3);
+solve satisfy;

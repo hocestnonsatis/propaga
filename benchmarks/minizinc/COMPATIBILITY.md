@@ -53,7 +53,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `int_lin_eq`, `int_lin_le`, `int_lin_ge`, `int_lin_ne` | Supported | Linear scalar propagators |
 | `int_lin_*_reif` | Supported | Reified linear scalar |
 | `int_plus`, `int_abs`, `int_times`, `int_div`, `int_mod` | Supported | Bound-consistent arithmetic (`int_plus` via linear; `bool_not` via `a+b=1`) |
-| `int_min`, `int_max`, `int_pow`, `int_pow_fixed` | Supported | Bound-consistent min/max; `int_pow_fixed` multiply chain; `int_pow` table |
+| `int_min`, `int_max`, `int_pow`, `int_pow_fixed` | Supported | Bound-consistent min/max; `int_pow_fixed` multiply chain; `int_pow` exponent case-split + element (table fallback) |
 | `int2float` | Supported | Channeling propagator |
 | `min` / `max` (generic) | Supported | Dispatches to `int_*` or `float_*` by domain |
 | `element`, `array_int_element`, `array_var_int_element` | Supported | Element; standard forms are 1-based, `_nonshifted` is 0-based |
@@ -66,7 +66,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `array_bool_and`, `array_bool_xor` | Supported | Decomposition |
 | `array_bool_element`, `array_var_bool_element` | Supported | Element; `array_var_bool_element` is 1-based, `_nonshifted` is 0-based |
 
-**Decomposition note:** `int_pow` (variable exponent) uses domain tables capped at **10 000 tuples**. Larger Cartesian products return an unsupported error at compile time. `int_pow_fixed` uses an `int_times` multiply chain. `int_times` / `int_div` / `int_mod` use bound-consistent propagation (no table size cap).
+**Decomposition note:** `int_pow` uses an exponent case-split (up to 32 values) plus `element` over multiply chains; larger exponent spans fall back to a domain table capped at **10 000 tuples**. `int_pow_fixed` always uses an `int_times` multiply chain. `int_times` / `int_div` / `int_mod` use bound-consistent propagation (no table size cap).
 
 ## Set constraints
 

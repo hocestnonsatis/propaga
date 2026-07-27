@@ -82,6 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Native `IntModPropagator` for FlatZinc `int_mod`; `bool_not` posts `a + b = 1`; handwritten `int_mod.fzn` + CI smoke.
 - FlatZinc `bool_and` / `bool_or` / `bool_xor` via linear and reified encodings (no truth tables); handwritten `bool_and_or_xor.fzn` + CI smoke.
 - FlatZinc `int_pow_fixed` via `int_times` multiply chain (no domain table); handwritten `int_pow_fixed.fzn` / `bool_le_lt.fzn` + CI smoke.
+- FlatZinc `int_pow` via exponent case-split + `element` (table fallback for huge exponent spans); fix `ElementPropagator` incorrectly intersecting value with every array cell when the index is unfixed; handwritten `int_pow.fzn` + CI smoke.
 
 ### Fixed
 

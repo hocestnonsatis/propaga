@@ -46,20 +46,50 @@ pub fn int_max(model: &mut Model, a: VariableId, b: VariableId, c: VariableId) {
     model.int_max(a, b, c);
 }
 
-/// Posts `result = base ** exp` using a domain table.
+/// Posts `result = base ** exp`.
+///
+/// Uses an exponent case-split plus `element` (multiply chains per exponent) when the
+/// exponent domain is modest; otherwise falls back to a capped domain table.
 pub fn int_pow(
     model: &mut Model,
     base: VariableId,
     exp: VariableId,
     result: VariableId,
 ) -> Result<(), String> {
-    let (bmin, bmax) = domain_range(model, base);
     let (emin, emax) = domain_range(model, exp);
+    if emin < 0 {
+        return Err("int_pow does not support negative exponents".to_string());
+    }
+    if emin > emax {
+        return Err("int_pow has an empty exponent domain".to_string());
+    }
+
+    const MAX_EXP_CASES: i32 = 32;
+    let exp_span = emax - emin + 1;
+    if exp_span <= MAX_EXP_CASES {
+        let mut powers = Vec::with_capacity(exp_span as usize);
+        for e in emin..=emax {
+            let power = model.int_var_aux(i32::MIN / 4, i32::MAX / 4);
+            int_pow_fixed(model, base, e, power)?;
+            powers.push(power);
+        }
+        let index = if emin == 0 {
+            exp
+        } else {
+            let shifted = model.int_var_aux(0, exp_span - 1);
+            // exp = shifted + emin
+            model.scalar_eq(vec![1, -1], vec![exp, shifted], emin);
+            shifted
+        };
+        model.element(index, powers, result);
+        return Ok(());
+    }
+
+    let (bmin, bmax) = domain_range(model, base);
     let mut tuples = Vec::new();
     for b in bmin..=bmax {
         for e in emin..=emax {
-            let value = b.pow(e.max(0) as u32);
-            tuples.push(vec![b, e, value]);
+            tuples.push(vec![b, e, b.pow(e as u32)]);
         }
     }
     if table_too_large(tuples.len()) {

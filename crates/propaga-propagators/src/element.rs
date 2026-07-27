@@ -142,14 +142,14 @@ fn propagate_value_bounds(
         }
     }
 
-    for idx in domain_values(ctx, index) {
-        let element = array[idx as usize];
-        changed |= propagate_element_to_value(ctx, element, value);
-    }
+    // When the index is unfixed, do not push `value`'s bounds onto every array
+    // cell (or intersect `value` with each cell). That would force `value` into
+    // the intersection of all cells and is incorrect for element.
 
     changed
 }
 
+#[cfg(test)]
 fn propagate_element_to_value(
     ctx: &mut dyn PropagationContext,
     element: VariableId,
@@ -536,8 +536,12 @@ mod tests {
             .with_domain(index, vec![0, 1])
             .with_domain(a, vec![10, 20])
             .with_domain(b, vec![30, 40])
-            .with_domain(value, vec![12, 18]);
+            .with_domain(value, (0..=100).collect());
+        // Unfixed index: value is tightened to the hull of reachable cells only.
         assert!(propagate_value_bounds(&mut ctx, index, &[a, b], value));
+        let values = ctx.domains[&value].values.borrow().clone();
+        assert_eq!(*values.first().unwrap(), 10);
+        assert_eq!(*values.last().unwrap(), 40);
     }
 
     #[test]
