@@ -1,4 +1,6 @@
-use propaga_core::{PropagationContext, PropagationStatus, Propagator, VariableId};
+use propaga_core::{
+    ExtendedPropagationContext, PropagationContext, PropagationStatus, Propagator, VariableId,
+};
 use propaga_domains::{FloatDomain, unique_cos_preimage, unique_sin_preimage};
 
 use super::float_eq::FloatEqPropagator;
@@ -186,8 +188,30 @@ fn fixed_integer_image(snap: &propaga_core::FloatDomainSnapshot) -> Option<f64> 
     if !snap.is_fixed() {
         return None;
     }
-    let n = snap.min.round();
-    ((snap.min - n).abs() <= 1e-9).then_some(n)
+    near_integer(snap.min)
+}
+
+fn near_integer(value: f64) -> Option<f64> {
+    let n = value.round();
+    ((value - n).abs() <= 1e-9).then_some(n)
+}
+
+fn exclude_singleton_preimage(
+    ext: &mut dyn ExtendedPropagationContext,
+    var: VariableId,
+    input: &FloatDomain,
+    pre_lo: f64,
+    pre_hi: f64,
+) -> bool {
+    let a = pre_lo.max(input.lower_bound());
+    let b = pre_hi.min(input.upper_bound());
+    if a > b {
+        return false;
+    }
+    if (b - a).abs() <= f64::EPSILON && input.contains(a) {
+        return ext.exclude_float_point(var, a);
+    }
+    false
 }
 
 fn fixed_float_image(snap: &propaga_core::FloatDomainSnapshot) -> Option<f64> {
@@ -392,22 +416,33 @@ impl Propagator for FloatUnaryPropagator {
         }
 
         // Reverse-project output holes through locally invertible maps.
+        // Prefer holes recorded before bound sync: tightening can move a hole to an
+        // endpoint and drop it from the snapshot while it remains semantically forbidden.
         let output_snap = ext
             .float_domain(self.watched[1])
             .unwrap_or_else(|| output.clone());
+        let mut reverse_holes = output.holes.clone();
+        for hole in &output_snap.holes {
+            if !reverse_holes
+                .iter()
+                .any(|existing| (*existing - hole).abs() <= f64::EPSILON)
+            {
+                reverse_holes.push(*hole);
+            }
+        }
         match self.op {
             FloatUnaryOp::Abs if input_dom.lower_bound() >= 0.0 => {
-                for hole in &output_snap.holes {
+                for hole in &reverse_holes {
                     changed |= ext.exclude_float_point(self.watched[0], *hole);
                 }
             }
             FloatUnaryOp::Abs if input_dom.upper_bound() <= 0.0 => {
-                for hole in &output_snap.holes {
+                for hole in &reverse_holes {
                     changed |= ext.exclude_float_point(self.watched[0], -hole);
                 }
             }
             FloatUnaryOp::Sqrt => {
-                for hole in &output_snap.holes {
+                for hole in &reverse_holes {
                     if *hole >= 0.0 {
                         changed |= ext.exclude_float_point(self.watched[0], hole * hole);
                     }
@@ -421,7 +456,7 @@ impl Propagator for FloatUnaryPropagator {
                 }
             }
             FloatUnaryOp::Exp => {
-                for hole in &output_snap.holes {
+                for hole in &reverse_holes {
                     if *hole > 0.0 {
                         changed |= ext.exclude_float_point(self.watched[0], hole.ln());
                     }
@@ -435,7 +470,7 @@ impl Propagator for FloatUnaryPropagator {
                 }
             }
             FloatUnaryOp::Ln => {
-                for hole in &output_snap.holes {
+                for hole in &reverse_holes {
                     changed |= ext.exclude_float_point(self.watched[0], hole.exp());
                 }
                 if let Some(y) = fixed_float_image(&output_snap) {
@@ -445,7 +480,7 @@ impl Propagator for FloatUnaryPropagator {
                 }
             }
             FloatUnaryOp::Sin => {
-                for hole in &output_snap.holes {
+                for hole in &reverse_holes {
                     if let Some(preimage) =
                         unique_sin_preimage(*hole, input_dom.lower_bound(), input_dom.upper_bound())
                     {
@@ -454,7 +489,7 @@ impl Propagator for FloatUnaryPropagator {
                 }
             }
             FloatUnaryOp::Cos => {
-                for hole in &output_snap.holes {
+                for hole in &reverse_holes {
                     if let Some(preimage) =
                         unique_cos_preimage(*hole, input_dom.lower_bound(), input_dom.upper_bound())
                     {
@@ -468,12 +503,34 @@ impl Propagator for FloatUnaryPropagator {
                     changed |= ext.tighten_float_below(self.watched[0], n);
                     changed |= ext.tighten_float_above(self.watched[0], next_down(n + 1.0));
                 }
+                for hole in &reverse_holes {
+                    if let Some(n) = near_integer(*hole) {
+                        changed |= exclude_singleton_preimage(
+                            ext,
+                            self.watched[0],
+                            &input_dom,
+                            n,
+                            next_down(n + 1.0),
+                        );
+                    }
+                }
             }
             FloatUnaryOp::Ceil => {
                 if let Some(n) = fixed_integer_image(&output_snap) {
                     // ceil⁻¹(n) = (n-1, n]
                     changed |= ext.tighten_float_below(self.watched[0], next_up(n - 1.0));
                     changed |= ext.tighten_float_above(self.watched[0], n);
+                }
+                for hole in &reverse_holes {
+                    if let Some(n) = near_integer(*hole) {
+                        changed |= exclude_singleton_preimage(
+                            ext,
+                            self.watched[0],
+                            &input_dom,
+                            next_up(n - 1.0),
+                            n,
+                        );
+                    }
                 }
             }
             FloatUnaryOp::Round => {
@@ -482,6 +539,13 @@ impl Propagator for FloatUnaryPropagator {
                     let (lo, hi) = round_preimage_bounds(n);
                     changed |= ext.tighten_float_below(self.watched[0], lo);
                     changed |= ext.tighten_float_above(self.watched[0], hi);
+                }
+                for hole in &reverse_holes {
+                    if let Some(n) = near_integer(*hole) {
+                        let (lo, hi) = round_preimage_bounds(n);
+                        changed |=
+                            exclude_singleton_preimage(ext, self.watched[0], &input_dom, lo, hi);
+                    }
                 }
             }
             _ => {}
@@ -592,6 +656,26 @@ mod tests {
         let domain = engine.domain(x).as_float().unwrap();
         assert!(domain.lower_bound() > 1.0);
         assert!((domain.upper_bound() - 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn float_ceil_reverse_projects_singleton_preimage_hole() {
+        let mut engine = Engine::new();
+        // Interior hole at 2 on a wide output; ceil⁻¹(2) ∩ [2, 2.5] = {2}.
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(2.0, 2.5)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::new(1.0, 4.0).exclude(2.0)));
+        engine.add_propagator(Box::new(FloatUnaryPropagator::new(
+            x,
+            y,
+            FloatUnaryOp::Ceil,
+        )));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let domain = engine.domain(x).as_float().unwrap();
+        assert!(
+            !domain.contains(2.0),
+            "singleton ceil preimage of forbidden image 2 should be excluded"
+        );
+        assert!(domain.lower_bound() > 2.0);
     }
 
     #[test]
