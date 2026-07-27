@@ -84,6 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FlatZinc `int_pow_fixed` via `int_times` multiply chain (no domain table); handwritten `int_pow_fixed.fzn` / `bool_le_lt.fzn` + CI smoke.
 - FlatZinc `int_pow` via exponent case-split + `element` (table fallback for huge exponent spans); fix `ElementPropagator` incorrectly intersecting value with every array cell when the index is unfixed; handwritten `int_pow.fzn` + CI smoke.
 - `ElementPropagator` prunes indices whose cells are bound/fixed-disjoint from the value (not only when the value is fixed); handwritten `array_element_prune.fzn` + CI smoke.
+- `FloatDomain::ceil` / `floor` / `round` drop integer images whose preimages are emptied by holes (endpoint-only cases); wide spans still use a hole-free bound fallback.
 
 ### Fixed
 

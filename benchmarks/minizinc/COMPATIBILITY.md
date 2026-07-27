@@ -109,7 +109,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `float_lin_eq` | Affine hole sharing when exactly two variables remain free |
 | `float_abs` / `sqrt` / `ln` / `exp` | Preserve or safely project; reverse-project when locally invertible |
 | `float_sin` / `float_cos` | Project (and reverse-project) only on locally monotonic intervals |
-| `float_ceil` / `float_floor` / `float_round` | Sparse holes dropped when the map is non-constant (preimages are intervals); constant domains collapse to fixed; fixed integer images reverse-project onto the input |
+| `float_ceil` / `float_floor` / `float_round` | Drop integer images whose preimages are emptied by holes (typically endpoint-only); constant domains collapse to fixed; fixed integer images reverse-project onto the input; spans above 10 000 integers keep hole-free bounds |
 | `array_*_float_element` | Share holes when index is fixed; project holes absent from every remaining candidate |
 
 Holes are **sound over-approximations**: dropping a hole never removes a feasible real, but keeping every hole through non-injective maps is not always possible.

@@ -94,6 +94,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - `int_pow_fixed` via multiply chain; CI fixtures for pow_fixed and bool_le/lt
 - `int_pow` via exponent case-split + element; fix element unfixed-index over-pruning
 - Int `ElementPropagator` prunes indices disjoint from the value domain (bound/fixed)
+- `FloatDomain` ceil/floor/round drop hole-emptied integer images (endpoint cases)
 
 ## Shipped in v1.0.0
 

@@ -1,8 +1,8 @@
 /// Interval domain over floating-point values with inclusive bounds.
 ///
 /// Optional interior `holes` record excluded IEEE points that cannot be dropped
-/// by bound tightening alone. Arithmetic helpers return hole-free intervals
-/// (sound over-approximation).
+/// by bound tightening alone. Most arithmetic helpers preserve or project holes
+/// when safe; wide non-injective maps may still over-approximate.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FloatDomain {
     min: f64,
@@ -387,8 +387,9 @@ impl FloatDomain {
 
     /// Returns a conservative ceiling interval.
     ///
-    /// Sparse interior holes rarely empty a ceil preimage `(n-1, n]`, so holes are
-    /// dropped unless the map is constant on the domain.
+    /// Integer images whose ceil preimage `(n-1, n]` has no admissible point in this
+    /// domain (typically an endpoint emptied by a hole) are dropped. Wide spans skip
+    /// per-integer scanning and keep a hole-free bound interval.
     #[must_use]
     pub fn ceil(&self) -> Self {
         if self.is_empty() {
@@ -396,16 +397,13 @@ impl FloatDomain {
         }
         let lo = self.min.ceil();
         let hi = self.max.ceil();
-        if (lo - hi).abs() <= f64::EPSILON {
-            return Self::fix(lo);
-        }
-        Self::new(lo, hi)
+        self.project_integer_images(lo, hi, |n| self.intersects_closed(next_up(n - 1.0), n))
     }
 
     /// Returns a conservative floor interval.
     ///
-    /// Sparse interior holes rarely empty a floor preimage `[n, n+1)`, so holes are
-    /// dropped unless the map is constant on the domain.
+    /// Integer images whose floor preimage `[n, n+1)` has no admissible point in this
+    /// domain are dropped. Wide spans skip per-integer scanning.
     #[must_use]
     pub fn floor(&self) -> Self {
         if self.is_empty() {
@@ -413,16 +411,13 @@ impl FloatDomain {
         }
         let lo = self.min.floor();
         let hi = self.max.floor();
-        if (lo - hi).abs() <= f64::EPSILON {
-            return Self::fix(lo);
-        }
-        Self::new(lo, hi)
+        self.project_integer_images(lo, hi, |n| self.intersects_closed(n, next_down(n + 1.0)))
     }
 
-    /// Returns a conservative round interval.
+    /// Returns a conservative round interval (`f64::round`, half away from zero).
     ///
-    /// Sparse interior holes rarely empty a round preimage, so holes are dropped
-    /// unless the map is constant on the domain.
+    /// Integer images whose round preimage has no admissible point in this domain are
+    /// dropped. Wide spans skip per-integer scanning.
     #[must_use]
     pub fn round(&self) -> Self {
         if self.is_empty() {
@@ -430,10 +425,89 @@ impl FloatDomain {
         }
         let lo = self.min.round();
         let hi = self.max.round();
-        if (lo - hi).abs() <= f64::EPSILON {
-            return Self::fix(lo);
+        self.project_integer_images(lo, hi, |n| {
+            let (pre_lo, pre_hi) = round_preimage_bounds(n);
+            self.intersects_closed(pre_lo, pre_hi)
+        })
+    }
+
+    /// True when `[lo, hi] ∩ domain` contains at least one admissible point.
+    ///
+    /// Positive-length intersections stay feasible under sparse holes; singletons
+    /// require `contains`.
+    fn intersects_closed(&self, lo: f64, hi: f64) -> bool {
+        let a = lo.max(self.min);
+        let b = hi.min(self.max);
+        if a > b {
+            return false;
         }
-        Self::new(lo, hi)
+        if (b - a).abs() <= f64::EPSILON {
+            return self.contains(a);
+        }
+        true
+    }
+
+    fn project_integer_images(
+        &self,
+        lo: f64,
+        hi: f64,
+        mut feasible: impl FnMut(f64) -> bool,
+    ) -> Self {
+        if lo > hi {
+            return Self::new(1.0, 0.0);
+        }
+        if (hi - lo).abs() <= f64::EPSILON {
+            return if feasible(lo) {
+                Self::fix(lo)
+            } else {
+                Self::new(1.0, 0.0)
+            };
+        }
+        if !lo.is_finite() || !hi.is_finite() || (hi - lo) > MAX_INTEGER_IMAGE_SCAN as f64 {
+            return Self::new(lo, hi);
+        }
+        let start = lo as i64;
+        let end = hi as i64;
+        let mut achievable = Vec::new();
+        for k in start..=end {
+            let n = k as f64;
+            if feasible(n) {
+                achievable.push(n);
+            }
+        }
+        match achievable.as_slice() {
+            [] => Self::new(1.0, 0.0),
+            [only] => Self::fix(*only),
+            values => {
+                let min = values[0];
+                let max = values[values.len() - 1];
+                let mut holes = Vec::new();
+                let mut next = min as i64 + 1;
+                for &value in &values[1..] {
+                    let k = value as i64;
+                    while next < k {
+                        holes.push(next as f64);
+                        next += 1;
+                    }
+                    next = k + 1;
+                }
+                Self::from_parts(min, max, holes)
+            }
+        }
+    }
+}
+
+/// Cap for scanning integer images of ceil/floor/round (sound hole-free fallback beyond).
+const MAX_INTEGER_IMAGE_SCAN: i64 = 10_000;
+
+/// Inclusive bounds for the preimage of `n` under `f64::round` (half away from zero).
+fn round_preimage_bounds(n: f64) -> (f64, f64) {
+    if n > 0.0 {
+        (n - 0.5, next_down(n + 0.5))
+    } else if n < 0.0 {
+        (next_up(n - 0.5), n + 0.5)
+    } else {
+        (next_up(-0.5), next_down(0.5))
     }
 }
 
@@ -650,6 +724,24 @@ mod tests {
     fn ceil_collapses_to_fixed_when_constant() {
         let domain = FloatDomain::new(1.1, 1.9).exclude(1.5);
         let image = domain.ceil();
+        assert!(image.is_fixed());
+        assert!((image.lower_bound() - 2.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn ceil_drops_endpoint_only_image_emptied_by_hole() {
+        // ceil⁻¹(2) ∩ [2, 3] = {2}; excluding 2 removes image 2.
+        let domain = FloatDomain::new(2.0, 3.0).exclude(2.0);
+        let image = domain.ceil();
+        assert!(image.is_fixed());
+        assert!((image.lower_bound() - 3.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn floor_drops_endpoint_only_image_emptied_by_hole() {
+        // floor⁻¹(3) ∩ [2, 3] = {3}; excluding 3 removes image 3.
+        let domain = FloatDomain::new(2.0, 3.0).exclude(3.0);
+        let image = domain.floor();
         assert!(image.is_fixed());
         assert!((image.lower_bound() - 2.0).abs() < f64::EPSILON);
     }
