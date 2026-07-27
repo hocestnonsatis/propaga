@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish / corpus outside CLI↔FlatZinc search-selector alias parity
+- Small polish / corpus outside bool_search / restart_geometric fixture
 
 ## Shipped after v1.0.0
 
@@ -27,7 +27,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - COMPATIBILITY.md float hole semantics section; README FlatZinc gap blurb refreshed
 - Search annotations: `float_search` / `set_search`, `indomain_random` / `indomain_reverse_split`, selector aliases
 - Multi-phase `seq_search` and `indomain_interval` value ordering
-- Stdlib CI corpus fixtures for `seq_search`, `search_selectors`, `float_search_ann`, `set_search_ann` (compile + SAT; portfolio SAT for `seq_search`)
+- Stdlib CI corpus fixtures for `seq_search`, `search_selectors`, `float_search_ann`, `set_search_ann`, `bool_search_ann` (compile + SAT; portfolio SAT for `seq_search`)
 - Portfolio search (`solve_portfolio` / `--workers`) propagates `search_phases` to every worker
 - `SetUnionPropagator` cardinality bound tightening via `tighten_set_cardinality`
 - `SetIntersectPropagator` cardinality bound tightening via `tighten_set_cardinality`
@@ -37,6 +37,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - FlatZinc fixtures `float_floor.fzn` / `float_ceil.fzn` + CI smoke for floor
 - CLI/README document full `--var-ordering` / `--value-ordering` aliases (split, interval, activity, …)
 - CLI `--var-ordering` accepts FlatZinc aliases (`smallest`, `occurrence`, `degree`); CI smoke for `float_ceil.fzn`
+- Stdlib corpus fixture `bool_search_ann` (`bool_search` + `restart_geometric`, compile + SAT)
 
 ## Shipped in v1.0.0
 

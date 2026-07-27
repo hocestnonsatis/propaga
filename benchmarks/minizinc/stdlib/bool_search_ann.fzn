@@ -1,0 +1,7 @@
+% Exercise bool_search with restart_geometric.
+var 0..1: a;
+var 0..1: b;
+var 0..1: c;
+constraint bool_eq(c, 1);
+constraint bool_xor(a, b, c);
+solve :: restart_geometric(1.5, 32) :: bool_search([a, b], input_order, indomain_min, complete) satisfy;

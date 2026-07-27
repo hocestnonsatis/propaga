@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Locally monotonic `sin`/`cos` preserve and reverse-project holes; `ceil`/`floor`/`round` collapse to a fixed point when constant on the domain.
 - FlatZinc `float_search` / `set_search` parsing; `indomain_random` (deterministic) and `indomain_reverse_split` value orderings; `most_constrained` / `least_constrained` aliases.
 - FlatZinc `indomain_interval` value ordering and multi-phase `seq_search` (per nested group selectors until that group's variables are fixed).
-- Stdlib corpus fixtures `seq_search`, `search_selectors`, `float_search_ann`, and `set_search_ann` with compile + SAT regression in `builtin_corpus` (including portfolio SAT for `seq_search`).
+- Stdlib corpus fixtures `seq_search`, `search_selectors`, `float_search_ann`, `set_search_ann`, and `bool_search_ann` with compile + SAT regression in `builtin_corpus` (including portfolio SAT for `seq_search`).
 - Portfolio search attaches model `search_phases` to every worker so FlatZinc `seq_search` is respected with `--workers > 1`.
 - `ExtendedPropagationContext::tighten_set_cardinality` for set-cardinality bound updates during propagation.
 - `SetUnionPropagator` tightens set-cardinality bounds (`|A∪B| ≥ max(|A|,|B|)`, `|A∪B| ≤ |A|+|B|`, subset relations).

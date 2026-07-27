@@ -72,6 +72,7 @@ fn stdlib_corpus_lists_expected_models() {
     let expected = [
         "array_bool_xor",
         "bool_lin_le",
+        "bool_search_ann",
         "count_test",
         "distribute",
         "float_eq_reif",
@@ -103,6 +104,7 @@ fn search_annotation_fixtures_are_satisfiable() {
         "search_selectors",
         "float_search_ann",
         "set_search_ann",
+        "bool_search_ann",
     ] {
         let source = fs::read_to_string(bundled_fzn_path(name)).expect("read fzn");
         let mut instance = compile(parse(&source).expect("parse")).expect("compile");
