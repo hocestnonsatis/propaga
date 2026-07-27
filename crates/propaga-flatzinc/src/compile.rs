@@ -3233,7 +3233,7 @@ mod tests {
 
         let source = r#"
             var 0.0..1.0: y;
-            solve :: float_search([y], 1.0e-3, input_order, indomain_reverse_split, complete) satisfy;
+            solve :: float_search([y], 0.001, input_order, indomain_reverse_split, complete) satisfy;
         "#;
         let program = parse(source).unwrap();
         let instance = compile(program).unwrap();
