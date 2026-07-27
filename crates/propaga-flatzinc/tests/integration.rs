@@ -370,3 +370,22 @@ fn float_log2_auxiliaries_are_not_decision_variables() {
     );
     assert!(instance.model.solve().is_some());
 }
+
+#[test]
+fn float_max_auxiliaries_are_not_decision_variables() {
+    let source = r#"
+var 0.0..5.0: a;
+var 0.0..5.0: b;
+var 0.0..5.0: c;
+constraint float_max(a, b, c);
+solve satisfy;
+"#;
+    let program = parse(source).expect("parse float_max");
+    let mut instance = compile(program).expect("compile float_max");
+    assert_eq!(
+        instance.model.decision_variables().len(),
+        3,
+        "only a, b, c should be decision vars"
+    );
+    assert!(instance.model.solve().is_some());
+}

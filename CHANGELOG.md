@@ -53,6 +53,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Handwritten FlatZinc fixtures `float_ln.fzn` and `float_sqrt.fzn`; CI smoke solves for both.
 - `Model::int_var_aux` and `Model::float_var_aux` for non-decision decomposition variables.
 - Handwritten FlatZinc fixture `float_log2.fzn`; CI smoke for `float_log2` and `set_cardinality`.
+- Float / int FlatZinc decompositions (`float_max`/`min`, `float_in`/`dom`, array float extrema, `array_int_maximum`/`minimum`, `int_plus` overflow path, `array_bool_xor`) create auxiliaries with `*_aux`.
+- `Model::int_var_fixed` is no longer a search decision variable.
+- CI smoke solves for `float_minimize.fzn` and `set_optimize.fzn`.
 
 ### Fixed
 

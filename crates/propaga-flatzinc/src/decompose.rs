@@ -113,7 +113,7 @@ pub fn array_int_maximum(model: &mut Model, xs: &[VariableId], m: VariableId) {
     let mut eq_reifs = Vec::with_capacity(xs.len());
     for &x in xs {
         model.less_equal(x, m);
-        let reif = model.int_var(0, 1);
+        let reif = model.int_var_aux(0, 1);
         model.reified_equal(x, m, reif);
         eq_reifs.push(reif);
     }
@@ -127,7 +127,7 @@ pub fn array_int_minimum(model: &mut Model, xs: &[VariableId], m: VariableId) {
     let mut eq_reifs = Vec::with_capacity(xs.len());
     for &x in xs {
         model.less_equal(m, x);
-        let reif = model.int_var(0, 1);
+        let reif = model.int_var_aux(0, 1);
         model.reified_equal(x, m, reif);
         eq_reifs.push(reif);
     }
@@ -235,7 +235,7 @@ pub fn int_plus(model: &mut Model, a: VariableId, b: VariableId, c: VariableId) 
     let a_len = (amax - amin + 1) as usize;
     let b_len = (bmax - bmin + 1) as usize;
     if table_too_large(a_len.saturating_mul(b_len)) {
-        let sum = model.int_var(amin.saturating_add(bmin), amax.saturating_add(bmax));
+        let sum = model.int_var_aux(amin.saturating_add(bmin), amax.saturating_add(bmax));
         model.linear_eq(a, b, sum);
         model.equal(sum, c);
         return;
@@ -303,7 +303,7 @@ pub fn array_bool_xor(model: &mut Model, xs: &[VariableId], c: VariableId) {
     }
     let mut acc = xs[0];
     for &x in xs.iter().skip(1) {
-        let next = model.int_var(0, 1);
+        let next = model.int_var_aux(0, 1);
         bool_xor(model, acc, x, next);
         acc = next;
     }

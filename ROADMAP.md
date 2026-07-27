@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish outside decomposition aux vars / float_log2 CI
+- Small polish outside float/int decompose aux and fixed-int non-decision
 
 ## Shipped after v1.0.0
 
@@ -55,6 +55,8 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - CI smoke: `float_ln.fzn` / `float_sqrt.fzn` fixed-image reverse projection
 - `Model::int_var_aux` / `float_var_aux`; set reif and `float_log2` decompositions use them
 - CI smoke: `set_cardinality.fzn` and `float_log2.fzn`
+- Float / int FlatZinc decompositions use `*_aux` for reifs and intermediates; `int_var_fixed` is non-decision
+- CI smoke: `float_minimize.fzn` / `set_optimize.fzn`
 
 ## Shipped in v1.0.0
 

@@ -63,12 +63,12 @@ pub fn float_ne(model: &mut Model, a: VariableId, b: VariableId) {
 pub fn float_max(model: &mut Model, a: VariableId, b: VariableId, c: VariableId) {
     model.float_le(a, c);
     model.float_le(b, c);
-    let ra = model.int_var(0, 1);
+    let ra = model.int_var_aux(0, 1);
     model.float_eq_reif(a, c, ra);
-    let rb = model.int_var(0, 1);
+    let rb = model.int_var_aux(0, 1);
     model.float_eq_reif(b, c, rb);
     let one = model.int_var_fixed(1);
-    let or_aux = model.int_var(0, 1);
+    let or_aux = model.int_var_aux(0, 1);
     crate::decompose::bool_or(model, ra, rb, or_aux);
     model.equal(or_aux, one);
 }
@@ -76,12 +76,12 @@ pub fn float_max(model: &mut Model, a: VariableId, b: VariableId, c: VariableId)
 pub fn float_min(model: &mut Model, a: VariableId, b: VariableId, c: VariableId) {
     model.float_le(c, a);
     model.float_le(c, b);
-    let ra = model.int_var(0, 1);
+    let ra = model.int_var_aux(0, 1);
     model.float_eq_reif(a, c, ra);
-    let rb = model.int_var(0, 1);
+    let rb = model.int_var_aux(0, 1);
     model.float_eq_reif(b, c, rb);
     let one = model.int_var_fixed(1);
-    let or_aux = model.int_var(0, 1);
+    let or_aux = model.int_var_aux(0, 1);
     crate::decompose::bool_or(model, ra, rb, or_aux);
     model.equal(or_aux, one);
 }
@@ -145,17 +145,17 @@ pub fn float_le_reif(model: &mut Model, a: VariableId, b: VariableId, reif: Vari
 }
 
 pub fn float_lt_reif(model: &mut Model, a: VariableId, b: VariableId, reif: VariableId) {
-    let le_reif = model.int_var(0, 1);
+    let le_reif = model.int_var_aux(0, 1);
     model.float_le_reif(a, b, le_reif);
-    let eq_reif = model.int_var(0, 1);
+    let eq_reif = model.int_var_aux(0, 1);
     model.float_eq_reif(a, b, eq_reif);
-    let not_eq = model.int_var(0, 1);
+    let not_eq = model.int_var_aux(0, 1);
     crate::decompose::bool_not(model, eq_reif, not_eq);
     crate::decompose::bool_and(model, le_reif, not_eq, reif);
 }
 
 pub fn float_ne_reif(model: &mut Model, a: VariableId, b: VariableId, reif: VariableId) {
-    let eq_reif = model.int_var(0, 1);
+    let eq_reif = model.int_var_aux(0, 1);
     model.float_eq_reif(a, b, eq_reif);
     crate::decompose::bool_not(model, eq_reif, reif);
 }
@@ -168,25 +168,25 @@ pub fn float_lin_ne_reif(
     rhs: f64,
     reif: VariableId,
 ) {
-    let eq_reif = model.int_var(0, 1);
+    let eq_reif = model.int_var_aux(0, 1);
     model.reified_float_scalar_eq(coeffs.to_vec(), vars.to_vec(), rhs, eq_reif);
     crate::decompose::bool_not(model, eq_reif, reif);
 }
 
 /// Posts `lo <= x <= hi`.
 pub fn float_in(model: &mut Model, x: VariableId, lo: f64, hi: f64) {
-    let lo_var = model.float_var(lo, lo);
-    let hi_var = model.float_var(hi, hi);
+    let lo_var = model.float_var_aux(lo, lo);
+    let hi_var = model.float_var_aux(hi, hi);
     model.float_le(lo_var, x);
     model.float_le(x, hi_var);
 }
 
 /// Posts `reif <=> lo <= x <= hi`.
 pub fn float_in_reif(model: &mut Model, x: VariableId, lo: f64, hi: f64, reif: VariableId) {
-    let lo_var = model.float_var(lo, lo);
-    let hi_var = model.float_var(hi, hi);
-    let lower = model.int_var(0, 1);
-    let upper = model.int_var(0, 1);
+    let lo_var = model.float_var_aux(lo, lo);
+    let hi_var = model.float_var_aux(hi, hi);
+    let lower = model.int_var_aux(0, 1);
+    let upper = model.int_var_aux(0, 1);
     model.float_le_reif(lo_var, x, lower);
     model.float_le_reif(x, hi_var, upper);
     crate::decompose::bool_and(model, lower, upper, reif);
@@ -195,7 +195,7 @@ pub fn float_in_reif(model: &mut Model, x: VariableId, lo: f64, hi: f64, reif: V
 /// Posts `x` belonging to interval ranges or discrete values in `as`.
 pub fn float_dom(model: &mut Model, x: VariableId, values: &[f64]) {
     if values.is_empty() {
-        let empty = model.float_var(1.0, 0.0);
+        let empty = model.float_var_aux(1.0, 0.0);
         model.float_eq(x, empty);
         return;
     }
@@ -203,7 +203,7 @@ pub fn float_dom(model: &mut Model, x: VariableId, values: &[f64]) {
     if values.len() >= 2 && values.len().is_multiple_of(2) {
         let mut reifs = Vec::with_capacity(values.len() / 2);
         for chunk in values.chunks(2) {
-            let reif = model.int_var(0, 1);
+            let reif = model.int_var_aux(0, 1);
             float_in_reif(model, x, chunk[0], chunk[1], reif);
             reifs.push(reif);
         }
@@ -213,8 +213,8 @@ pub fn float_dom(model: &mut Model, x: VariableId, values: &[f64]) {
 
     let mut reifs = Vec::with_capacity(values.len());
     for &value in values {
-        let fixed = model.float_var(value, value);
-        let reif = model.int_var(0, 1);
+        let fixed = model.float_var_aux(value, value);
+        let reif = model.int_var_aux(0, 1);
         model.float_eq_reif(x, fixed, reif);
         reifs.push(reif);
     }
@@ -236,7 +236,7 @@ pub fn array_float_maximum(model: &mut Model, xs: &[VariableId], m: VariableId) 
     let mut eq_reifs = Vec::with_capacity(xs.len());
     for &x in xs {
         model.float_le(x, m);
-        let reif = model.int_var(0, 1);
+        let reif = model.int_var_aux(0, 1);
         model.float_eq_reif(x, m, reif);
         eq_reifs.push(reif);
     }
@@ -250,7 +250,7 @@ pub fn array_float_minimum(model: &mut Model, xs: &[VariableId], m: VariableId) 
     let mut eq_reifs = Vec::with_capacity(xs.len());
     for &x in xs {
         model.float_le(m, x);
-        let reif = model.int_var(0, 1);
+        let reif = model.int_var_aux(0, 1);
         model.float_eq_reif(x, m, reif);
         eq_reifs.push(reif);
     }

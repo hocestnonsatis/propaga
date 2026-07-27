@@ -107,10 +107,10 @@ impl Model {
     }
 
     /// Declares a fixed integer variable.
+    ///
+    /// Fixed values participate in the engine but are not search decisions.
     pub fn int_var_fixed(&mut self, value: i32) -> VariableId {
-        let var = self.engine.new_variable(HybridDomain::fix(value));
-        self.variables.push(var);
-        var
+        self.engine.new_variable(HybridDomain::fix(value))
     }
 
     /// Declares a variable from an explicit interval domain.
