@@ -55,6 +55,21 @@ jobs:
       - run: cargo run -p propaga-cli -- solve --file benchmarks/lex_less.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/all_different_only.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/generic_min.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/int_plus.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/int_times.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/int_abs.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/int_min.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/int_lin_ne.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/bool_clause.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/bool_xor.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/bool_logic.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/reified_eq.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/reified_ne.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/maximize_x.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/minimize_cost.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/regular_chain.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/automaton_chain.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/nested_predicate.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/lexicographic_multi.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/pareto_biobjective.fzn --quiet
       - run: cargo run -p propaga-cli -- schedule --file benchmarks/schedule_three_tasks.json --quiet

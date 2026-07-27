@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish outside float_cos / lex CI smoke coverage
+- Small polish outside expanded int/bool/globals CI smoke
 
 ## Shipped after v1.0.0
 
@@ -61,6 +61,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - CI smoke: `float_sin`, `set_param`, `float_bounds`, `float_lin_le`; COMPATIBILITY `set_diff` note
 - Handwritten `float_cos.fzn`; CI smoke `float_cos` / `lex_less` / `all_different_only` / `generic_min`
 - README notes FlatZinc decomposition auxiliaries are non-decision
+- CI smoke: int (`plus`/`times`/`abs`/`min`/`lin_ne`), bool (`clause`/`xor`/`logic`), reified eq/ne, BnB (`maximize_x`/`minimize_cost`), `regular`/`automaton` chains, `nested_predicate`
 
 ## Shipped in v1.0.0
 
