@@ -181,6 +181,22 @@ pub fn compile(program: FlatZincProgram) -> Result<CompiledInstance, FlatZincErr
                 names.insert(var, name.clone());
                 env.insert(name, Binding::Var(var));
             }
+            VarDecl::SetArray {
+                name,
+                index_low,
+                index_high,
+                low,
+                high,
+            } => {
+                let universe = (high - low + 1).max(0) as usize;
+                let mut elements = HashMap::new();
+                for index in index_low..=index_high {
+                    let var = model.set_var(low, high, 0, universe);
+                    names.insert(var, format!("{name}[{index}]"));
+                    elements.insert(index, var);
+                }
+                env.insert(name, Binding::Array(elements));
+            }
             VarDecl::FloatVar { name, low, high } => {
                 let var = model.float_var(low, high);
                 names.insert(var, name.clone());

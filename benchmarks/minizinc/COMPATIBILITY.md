@@ -27,6 +27,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `var bool: b;` | Supported | Modeled as `0..1` integer |
 | `array [L..U] of var bool: bs;` | Supported | Modeled as `0..1` integers |
 | `var set of L..U: x;` | Supported | `SetIntervalDomain` with cardinality |
+| `array [L..U] of var set of A..B: xs;` | Supported | Indexed set variables |
 | `var low..high: x;` (float bounds) | Supported | Inclusive interval; may gain interior IEEE holes during search |
 
 ## Parameters

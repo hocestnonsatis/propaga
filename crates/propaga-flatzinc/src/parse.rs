@@ -107,6 +107,19 @@ pub enum VarDecl {
         /// Universe upper bound.
         high: i32,
     },
+    /// Array of set variables over an integer universe.
+    SetArray {
+        /// Array name.
+        name: String,
+        /// Inclusive lower index.
+        index_low: i32,
+        /// Inclusive upper index.
+        index_high: i32,
+        /// Universe lower bound.
+        low: i32,
+        /// Universe upper bound.
+        high: i32,
+    },
     /// Scalar float variable with inclusive bounds.
     FloatVar {
         /// Variable name.
@@ -1105,6 +1118,20 @@ impl Parser {
                 name,
                 index_low,
                 index_high,
+            });
+        }
+        if self.peek_is_ident("set") {
+            self.expect_ident("set")?;
+            self.expect_ident("of")?;
+            let (low, high) = self.parse_domain()?;
+            self.expect_symbol(":")?;
+            let name = self.expect_ident_token()?;
+            return Ok(VarDecl::SetArray {
+                name,
+                index_low,
+                index_high,
+                low,
+                high,
             });
         }
         let (low, high) = self.parse_domain()?;
