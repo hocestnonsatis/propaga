@@ -20,6 +20,7 @@ mod float_element;
 mod float_eq;
 mod float_le;
 mod float_lin_scalar;
+mod float_minmax;
 mod float_ne;
 mod float_ops;
 mod float_times;
@@ -69,6 +70,7 @@ pub use float_lin_scalar::{
     FloatLinearNePropagator, ReifiedFloatLinearEqPropagator, ReifiedFloatLinearGePropagator,
     ReifiedFloatLinearLePropagator,
 };
+pub use float_minmax::{FloatMinMaxOp, FloatMinMaxPropagator};
 pub use float_ne::FloatNePropagator;
 pub use float_ops::{
     FloatBinaryOp, FloatBinaryPropagator, FloatEqReifPropagator, FloatLeReifPropagator,

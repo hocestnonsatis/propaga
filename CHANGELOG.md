@@ -74,6 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FlatZinc `array [L..U] of float` / `of bool` parameter arrays; handwritten `array_float_element.fzn` / `array_bool_element.fzn` + CI smoke.
 - Native `SetNePropagator` for FlatZinc `set_ne` (replaces reified `set_eq`); handwritten `set_ne.fzn` + CI smoke.
 - `SetLtPropagator` for FlatZinc `set_lt` (`A ⊂ B` via subset + `|B| ≥ |A| + 1` cards); handwritten `set_lt.fzn` + CI smoke.
+- Native `FloatMinMaxPropagator` for FlatZinc `float_min` / `float_max` (replaces reified OR encoding); handwritten `float_min_max.fzn` + CI smoke.
 
 ### Fixed
 

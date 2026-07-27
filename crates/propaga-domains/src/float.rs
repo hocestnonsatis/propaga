@@ -351,6 +351,40 @@ impl FloatDomain {
         Self::from_parts(self.min.exp(), self.max.exp(), holes)
     }
 
+    /// Returns a conservative image of `min(self, other)`.
+    #[must_use]
+    pub fn min_with(&self, other: &Self) -> Self {
+        if self.is_empty() || other.is_empty() {
+            return Self::new(1.0, 0.0);
+        }
+        let min = self.min.min(other.min);
+        let max = self.max.min(other.max);
+        let mut holes = Vec::new();
+        for &hole in self.holes.iter().chain(other.holes.iter()) {
+            if hole > min && hole < max && !self.contains(hole) && !other.contains(hole) {
+                holes.push(hole);
+            }
+        }
+        Self::from_parts(min, max, holes)
+    }
+
+    /// Returns a conservative image of `max(self, other)`.
+    #[must_use]
+    pub fn max_with(&self, other: &Self) -> Self {
+        if self.is_empty() || other.is_empty() {
+            return Self::new(1.0, 0.0);
+        }
+        let min = self.min.max(other.min);
+        let max = self.max.max(other.max);
+        let mut holes = Vec::new();
+        for &hole in self.holes.iter().chain(other.holes.iter()) {
+            if hole > min && hole < max && !self.contains(hole) && !other.contains(hole) {
+                holes.push(hole);
+            }
+        }
+        Self::from_parts(min, max, holes)
+    }
+
     /// Returns a conservative ceiling interval.
     ///
     /// Sparse interior holes rarely empty a ceil preimage `(n-1, n]`, so holes are

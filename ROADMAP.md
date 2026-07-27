@@ -84,6 +84,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - FlatZinc float/bool parameter arrays + `array_float_element` / `array_bool_element` fixtures
 - Native `SetNePropagator` for FlatZinc `set_ne`
 - `SetLtPropagator` proper-subset cardinality tightening for FlatZinc `set_lt`
+- Native `FloatMinMaxPropagator` for FlatZinc `float_min` / `float_max`
 
 ## Shipped in v1.0.0
 

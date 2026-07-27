@@ -61,29 +61,11 @@ pub fn float_ne(model: &mut Model, a: VariableId, b: VariableId) {
 }
 
 pub fn float_max(model: &mut Model, a: VariableId, b: VariableId, c: VariableId) {
-    model.float_le(a, c);
-    model.float_le(b, c);
-    let ra = model.int_var_aux(0, 1);
-    model.float_eq_reif(a, c, ra);
-    let rb = model.int_var_aux(0, 1);
-    model.float_eq_reif(b, c, rb);
-    let one = model.int_var_fixed(1);
-    let or_aux = model.int_var_aux(0, 1);
-    crate::decompose::bool_or(model, ra, rb, or_aux);
-    model.equal(or_aux, one);
+    model.float_max(a, b, c);
 }
 
 pub fn float_min(model: &mut Model, a: VariableId, b: VariableId, c: VariableId) {
-    model.float_le(c, a);
-    model.float_le(c, b);
-    let ra = model.int_var_aux(0, 1);
-    model.float_eq_reif(a, c, ra);
-    let rb = model.int_var_aux(0, 1);
-    model.float_eq_reif(b, c, rb);
-    let one = model.int_var_fixed(1);
-    let or_aux = model.int_var_aux(0, 1);
-    crate::decompose::bool_or(model, ra, rb, or_aux);
-    model.equal(or_aux, one);
+    model.float_min(a, b, c);
 }
 
 pub fn int2float(model: &mut Model, int_var: VariableId, float_var: VariableId) {

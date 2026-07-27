@@ -1,0 +1,12 @@
+% Native float_min / float_max.
+var 0.0..5.0: a;
+var 1.0..3.0: b;
+var -10.0..10.0: m;
+var -10.0..10.0: M;
+var 1.0..1.0: one;
+var 2.5..2.5: two_half;
+constraint float_min(a, b, m);
+constraint float_max(a, b, M);
+constraint float_le(m, one);
+constraint float_le(two_half, M);
+solve satisfy;
