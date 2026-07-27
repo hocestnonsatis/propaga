@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FloatLinearEqPropagator` for `float_lin_eq` with affine hole sharing when two variables remain free; `float_lin_ne` excludes interior equality-forcing points when other terms are fixed.
 - Unary float maps (`abs`, `sqrt`, `ln`, `exp`) preserve or safely project holes; `FloatUnaryPropagator` reverse-projects through locally invertible cases.
 - `FloatElementPropagator` for float `array_element`: shares holes when the index is fixed and projects holes absent from every remaining candidate.
+- Locally monotonic `sin`/`cos` preserve and reverse-project holes; `ceil`/`floor` collapse to a fixed point when constant on the domain.
 - `ExtendedPropagationContext::tighten_set_cardinality` for set-cardinality bound updates during propagation.
 
 ### Fixed
@@ -32,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Known limitations
 
-- Non-injective unary maps (`sin`, `cos`, `ceil`, `floor`, `round`) still drop holes on derived intervals.
+- `ceil`/`floor`/`round` still drop sparse holes when the map is non-constant (preimages are intervals).
 - Float propagation remains interval-based (sound, not exact real arithmetic).
 
 ## [1.0.0] - 2026-07-13

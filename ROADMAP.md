@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Stronger non-injective unary float hole handling (`sin`/`cos`/`ceil`/`floor`) where local injectivity allows, or other ROADMAP polish
+- Docs / polish pass on float hole semantics in COMPATIBILITY, or other small post-v1.0 gaps from CI/corpus
 
 ## Shipped after v1.0.0
 
@@ -23,6 +23,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Hole-aware float linear: `FloatLinearEqPropagator`, interior `float_lin_ne` exclusion, affine hole sharing when two vars remain free
 - Hole-aware unary float maps: `abs`/`sqrt`/`ln`/`exp` preserve or safely project holes; unary propagator reverse-projects invertible cases
 - Native `FloatElementPropagator` for `array_*_float_element` with hole sharing and common-absent hole projection
+- Locally monotonic `sin`/`cos` hole projection (+ reverse preimages); constant-domain `ceil`/`floor` collapse to fixed
 
 ## Shipped in v1.0.0
 

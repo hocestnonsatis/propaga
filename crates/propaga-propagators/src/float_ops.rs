@@ -1,5 +1,5 @@
 use propaga_core::{PropagationContext, PropagationStatus, Propagator, VariableId};
-use propaga_domains::FloatDomain;
+use propaga_domains::{FloatDomain, unique_cos_preimage, unique_sin_preimage};
 
 use super::float_eq::FloatEqPropagator;
 use super::float_le::FloatLePropagator;
@@ -402,6 +402,24 @@ impl Propagator for FloatUnaryPropagator {
                     changed |= ext.exclude_float_point(self.watched[0], hole.exp());
                 }
             }
+            FloatUnaryOp::Sin => {
+                for hole in &output_snap.holes {
+                    if let Some(preimage) =
+                        unique_sin_preimage(*hole, input_dom.lower_bound(), input_dom.upper_bound())
+                    {
+                        changed |= ext.exclude_float_point(self.watched[0], preimage);
+                    }
+                }
+            }
+            FloatUnaryOp::Cos => {
+                for hole in &output_snap.holes {
+                    if let Some(preimage) =
+                        unique_cos_preimage(*hole, input_dom.lower_bound(), input_dom.upper_bound())
+                    {
+                        changed |= ext.exclude_float_point(self.watched[0], preimage);
+                    }
+                }
+            }
             _ => {}
         }
 
@@ -519,6 +537,16 @@ mod tests {
         )));
         assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
         assert!(!engine.domain(x).as_float().unwrap().contains(4.0));
+    }
+
+    #[test]
+    fn float_sin_projects_holes_on_monotonic_domain() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 1.0).exclude(0.5)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::new(-1.0, 1.0)));
+        engine.add_propagator(Box::new(FloatUnaryPropagator::new(x, y, FloatUnaryOp::Sin)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(!engine.domain(y).as_float().unwrap().contains(0.5_f64.sin()));
     }
 
     #[test]

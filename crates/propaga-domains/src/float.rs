@@ -279,7 +279,7 @@ impl FloatDomain {
         Self::from_parts(min, max, holes)
     }
 
-    /// Returns a conservative sine interval.
+    /// Returns a conservative sine interval, mapping holes when locally monotonic.
     #[must_use]
     pub fn sin(&self) -> Self {
         if self.is_empty() {
@@ -288,6 +288,12 @@ impl FloatDomain {
         if self.max - self.min >= std::f64::consts::TAU {
             return Self::new(-1.0, 1.0);
         }
+        if sin_monotonic_on(self.min, self.max) {
+            let lo = self.min.sin();
+            let hi = self.max.sin();
+            let holes = self.holes.iter().copied().map(f64::sin).collect::<Vec<_>>();
+            return Self::from_parts(lo.min(hi), lo.max(hi), holes);
+        }
         let corners = [self.min.sin(), self.max.sin()];
         Self::new(
             corners.iter().copied().fold(f64::INFINITY, f64::min),
@@ -295,7 +301,7 @@ impl FloatDomain {
         )
     }
 
-    /// Returns a conservative cosine interval.
+    /// Returns a conservative cosine interval, mapping holes when locally monotonic.
     #[must_use]
     pub fn cos(&self) -> Self {
         if self.is_empty() {
@@ -303,6 +309,12 @@ impl FloatDomain {
         }
         if self.max - self.min >= std::f64::consts::TAU {
             return Self::new(-1.0, 1.0);
+        }
+        if cos_monotonic_on(self.min, self.max) {
+            let lo = self.min.cos();
+            let hi = self.max.cos();
+            let holes = self.holes.iter().copied().map(f64::cos).collect::<Vec<_>>();
+            return Self::from_parts(lo.min(hi), lo.max(hi), holes);
         }
         let corners = [self.min.cos(), self.max.cos()];
         Self::new(
@@ -340,21 +352,37 @@ impl FloatDomain {
     }
 
     /// Returns a conservative ceiling interval.
+    ///
+    /// Sparse interior holes rarely empty a ceil preimage `(n-1, n]`, so holes are
+    /// dropped unless the map is constant on the domain.
     #[must_use]
     pub fn ceil(&self) -> Self {
         if self.is_empty() {
             return Self::new(1.0, 0.0);
         }
-        Self::new(self.min.ceil(), self.max.ceil())
+        let lo = self.min.ceil();
+        let hi = self.max.ceil();
+        if (lo - hi).abs() <= f64::EPSILON {
+            return Self::fix(lo);
+        }
+        Self::new(lo, hi)
     }
 
     /// Returns a conservative floor interval.
+    ///
+    /// Sparse interior holes rarely empty a floor preimage `[n, n+1)`, so holes are
+    /// dropped unless the map is constant on the domain.
     #[must_use]
     pub fn floor(&self) -> Self {
         if self.is_empty() {
             return Self::new(1.0, 0.0);
         }
-        Self::new(self.min.floor(), self.max.floor())
+        let lo = self.min.floor();
+        let hi = self.max.floor();
+        if (lo - hi).abs() <= f64::EPSILON {
+            return Self::fix(lo);
+        }
+        Self::new(lo, hi)
     }
 
     /// Returns a conservative round interval.
@@ -362,6 +390,94 @@ impl FloatDomain {
     pub fn round(&self) -> Self {
         self.floor().plus(&Self::new(0.0, 1.0))
     }
+}
+
+/// `sin` is monotonic on `[min, max]` when no odd multiple of `π/2` lies inside.
+#[must_use]
+pub fn sin_monotonic_on(min: f64, max: f64) -> bool {
+    !contains_odd_half_pi(min, max)
+}
+
+/// `cos` is monotonic on `[min, max]` when no integer multiple of `π` lies inside.
+#[must_use]
+pub fn cos_monotonic_on(min: f64, max: f64) -> bool {
+    !contains_integer_pi(min, max)
+}
+
+fn contains_odd_half_pi(min: f64, max: f64) -> bool {
+    if max <= min {
+        return false;
+    }
+    let start = ((min / std::f64::consts::FRAC_PI_2).floor() as i64) - 1;
+    let end = ((max / std::f64::consts::FRAC_PI_2).ceil() as i64) + 1;
+    for k in start..=end {
+        if k.rem_euclid(2) == 1 {
+            let point = k as f64 * std::f64::consts::FRAC_PI_2;
+            if point > min && point < max {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn contains_integer_pi(min: f64, max: f64) -> bool {
+    if max <= min {
+        return false;
+    }
+    let start = ((min / std::f64::consts::PI).floor() as i64) - 1;
+    let end = ((max / std::f64::consts::PI).ceil() as i64) + 1;
+    for k in start..=end {
+        let point = k as f64 * std::f64::consts::PI;
+        if point > min && point < max {
+            return true;
+        }
+    }
+    false
+}
+
+/// Unique `x ∈ [min, max]` with `sin(x) = y`, if any.
+#[must_use]
+pub fn unique_sin_preimage(y: f64, min: f64, max: f64) -> Option<f64> {
+    if !(-1.0..=1.0).contains(&y) || !sin_monotonic_on(min, max) {
+        return None;
+    }
+    let base = y.asin();
+    let mut found = None;
+    for k in -3..=3 {
+        let shift = 2.0 * std::f64::consts::PI * f64::from(k);
+        for candidate in [base + shift, std::f64::consts::PI - base + shift] {
+            if candidate >= min && candidate <= max {
+                if found.is_some_and(|existing: f64| (existing - candidate).abs() > f64::EPSILON) {
+                    return None;
+                }
+                found = Some(candidate);
+            }
+        }
+    }
+    found
+}
+
+/// Unique `x ∈ [min, max]` with `cos(x) = y`, if any.
+#[must_use]
+pub fn unique_cos_preimage(y: f64, min: f64, max: f64) -> Option<f64> {
+    if !(-1.0..=1.0).contains(&y) || !cos_monotonic_on(min, max) {
+        return None;
+    }
+    let base = y.acos();
+    let mut found = None;
+    for k in -3..=3 {
+        let shift = 2.0 * std::f64::consts::PI * f64::from(k);
+        for candidate in [base + shift, -base + shift] {
+            if candidate >= min && candidate <= max {
+                if found.is_some_and(|existing: f64| (existing - candidate).abs() > f64::EPSILON) {
+                    return None;
+                }
+                found = Some(candidate);
+            }
+        }
+    }
+    found
 }
 
 fn next_up(value: f64) -> f64 {
@@ -465,6 +581,32 @@ mod tests {
         assert!(!sqrt.contains(2.0));
         let exp = FloatDomain::new(0.0, 2.0).exclude(1.0).exp();
         assert!(!exp.contains(1.0_f64.exp()));
+    }
+
+    #[test]
+    fn sin_maps_holes_on_monotonic_interval() {
+        let domain = FloatDomain::new(0.0, 1.0).exclude(0.5);
+        let image = domain.sin();
+        assert!(!image.contains(0.5_f64.sin()));
+        assert!(sin_monotonic_on(0.0, 1.0));
+        assert!(!sin_monotonic_on(0.0, 2.0));
+    }
+
+    #[test]
+    fn cos_maps_holes_on_monotonic_interval() {
+        let domain = FloatDomain::new(0.1, 1.0).exclude(0.5);
+        let image = domain.cos();
+        assert!(!image.contains(0.5_f64.cos()));
+        assert!(cos_monotonic_on(0.1, 1.0));
+        assert!(!cos_monotonic_on(-0.1, 0.1));
+    }
+
+    #[test]
+    fn ceil_collapses_to_fixed_when_constant() {
+        let domain = FloatDomain::new(1.1, 1.9).exclude(1.5);
+        let image = domain.ceil();
+        assert!(image.is_fixed());
+        assert!((image.lower_bound() - 2.0).abs() < f64::EPSILON);
     }
 
     #[test]
