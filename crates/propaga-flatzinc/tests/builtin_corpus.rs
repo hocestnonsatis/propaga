@@ -1,4 +1,5 @@
 use propaga_flatzinc::{compile, parse};
+use propaga_search::SearchConfig;
 use std::fs;
 use std::path::PathBuf;
 
@@ -75,12 +76,15 @@ fn stdlib_corpus_lists_expected_models() {
         "distribute",
         "float_eq_reif",
         "float_log2",
+        "float_search_ann",
         "float_sin",
         "int_lin_ne_reif",
         "int_min",
         "int_plus",
         "lex_less",
         "nvalue",
+        "search_selectors",
+        "seq_search",
         "set_eq_reif",
     ];
     for name in expected {
@@ -88,5 +92,30 @@ fn stdlib_corpus_lists_expected_models() {
         assert!(mzn.is_file(), "missing stdlib model `{}`", mzn.display());
         let fzn = bundled_fzn_path(name);
         assert!(fzn.is_file(), "missing bundled fzn `{}`", fzn.display());
+    }
+}
+
+#[test]
+fn search_annotation_fixtures_are_satisfiable() {
+    for name in ["seq_search", "search_selectors", "float_search_ann"] {
+        let source = fs::read_to_string(bundled_fzn_path(name)).expect("read fzn");
+        let mut instance = compile(parse(&source).expect("parse")).expect("compile");
+        if let Some(annotation) = instance.annotation_search {
+            instance.model.set_search_config(SearchConfig {
+                variable_ordering: annotation.variable_ordering,
+                value_ordering: annotation.value_ordering,
+                restart_policy: annotation.restart_policy,
+                time_limit: Some(std::time::Duration::from_secs(2)),
+                ..SearchConfig::default()
+            });
+        }
+        let prop = instance.model.propagate();
+        assert!(prop.is_ok(), "{name}: propagate failed: {prop:?}");
+        let (solution, stats) = instance.model.solve_subset_with_stats(instance.solve_vars);
+        assert!(
+            solution.is_some(),
+            "{name}: expected SAT (timed_out={})",
+            stats.timed_out
+        );
     }
 }

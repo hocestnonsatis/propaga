@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- True multi-phase `seq_search` (finish group before next) or CI corpus fixtures for search annotations
+- True multi-phase `seq_search` (finish each nested group before the next) if needed beyond the InputOrder approximation
 
 ## Shipped after v1.0.0
 
@@ -27,6 +27,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - COMPATIBILITY.md float hole semantics section; README FlatZinc gap blurb refreshed
 - Search annotations: `float_search` / `set_search`, `indomain_random` / `indomain_reverse_split`, selector aliases
 - `seq_search` (concatenated InputOrder approx.) and `indomain_interval` value ordering
+- Stdlib CI corpus fixtures for `seq_search`, `search_selectors`, `float_search_ann` (compile + SAT)
 
 ## Shipped in v1.0.0
 

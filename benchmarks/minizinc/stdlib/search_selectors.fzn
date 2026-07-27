@@ -1,0 +1,4 @@
+% Exercise modern FlatZinc search selectors.
+var 1..5: x;
+constraint int_le(x, 4);
+solve :: restart_none :: int_search([x], most_constrained, indomain_interval, complete) satisfy;
