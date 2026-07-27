@@ -70,6 +70,27 @@ jobs:
       - run: cargo run -p propaga-cli -- solve --file benchmarks/regular_chain.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/automaton_chain.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/nested_predicate.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/bool_reify.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/reified_lt.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/reified_lin_eq.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/reified_lin_le.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/reified_lin_ne.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/bounded_sum.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/bounded_sum_ge.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/weighted_sum.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/weighted_sum_ge.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/count_global.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/cumulative_demand.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/disjunctive_two.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/disjunctive_three.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/disjunctive_edge.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/ordered_chain.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/strict_chain.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/permutation_sum.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/predicate_multi.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/table_puzzle.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/int_search_order.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/int_search_restart.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/lexicographic_multi.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/pareto_biobjective.fzn --quiet
       - run: cargo run -p propaga-cli -- schedule --file benchmarks/schedule_three_tasks.json --quiet
