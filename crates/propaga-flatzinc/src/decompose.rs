@@ -12,23 +12,6 @@ fn table_too_large(count: usize) -> bool {
     count > MAX_TABLE_TUPLES
 }
 
-fn build_binary_op_tuples(
-    model: &Model,
-    a: VariableId,
-    b: VariableId,
-    op: impl Fn(i32, i32) -> i32,
-) -> Vec<Vec<i32>> {
-    let (amin, amax) = domain_range(model, a);
-    let (bmin, bmax) = domain_range(model, b);
-    let mut tuples = Vec::new();
-    for av in amin..=amax {
-        for bv in bmin..=bmax {
-            tuples.push(vec![av, bv, op(av, bv)]);
-        }
-    }
-    tuples
-}
-
 /// Returns whether any of the variables has a float domain.
 pub fn uses_float_domain(model: &Model, vars: &[VariableId]) -> bool {
     vars.iter()
@@ -53,20 +36,14 @@ pub fn generic_max(model: &mut Model, a: VariableId, b: VariableId, c: VariableI
     }
 }
 
-/// Posts `c = min(a, b)` using a domain table.
+/// Posts `c = min(a, b)` with bound-consistent propagation.
 pub fn int_min(model: &mut Model, a: VariableId, b: VariableId, c: VariableId) {
-    model.table(
-        vec![a, b, c],
-        build_binary_op_tuples(model, a, b, |x, y| x.min(y)),
-    );
+    model.int_min(a, b, c);
 }
 
-/// Posts `c = max(a, b)` using a domain table.
+/// Posts `c = max(a, b)` with bound-consistent propagation.
 pub fn int_max(model: &mut Model, a: VariableId, b: VariableId, c: VariableId) {
-    model.table(
-        vec![a, b, c],
-        build_binary_op_tuples(model, a, b, |x, y| x.max(y)),
-    );
+    model.int_max(a, b, c);
 }
 
 /// Posts `result = base ** exp` using a domain table.

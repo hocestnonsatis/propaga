@@ -1,0 +1,9 @@
+% Array float min/max via native binary fold.
+var 0.0..5.0: a;
+var 1.0..3.0: b;
+var 2.0..4.0: c;
+var -10.0..10.0: mn;
+var -10.0..10.0: mx;
+constraint array_float_minimum([a, b, c], mn);
+constraint array_float_maximum([a, b, c], mx);
+solve satisfy;

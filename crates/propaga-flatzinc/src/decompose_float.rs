@@ -215,29 +215,41 @@ pub fn array_var_float_element(
 
 /// Posts `m = max(xs)` for float variables.
 pub fn array_float_maximum(model: &mut Model, xs: &[VariableId], m: VariableId) {
-    let mut eq_reifs = Vec::with_capacity(xs.len());
-    for &x in xs {
-        model.float_le(x, m);
-        let reif = model.int_var_aux(0, 1);
-        model.float_eq_reif(x, m, reif);
-        eq_reifs.push(reif);
-    }
-    if !eq_reifs.is_empty() {
-        model.scalar_ge(vec![1; eq_reifs.len()], eq_reifs, 1);
+    match xs {
+        [] => {}
+        [only] => model.float_eq(*only, m),
+        [first, rest @ ..] => {
+            let mut running = *first;
+            for (i, &x) in rest.iter().enumerate() {
+                let next = if i + 1 == rest.len() {
+                    m
+                } else {
+                    model.float_var_aux(f64::NEG_INFINITY, f64::INFINITY)
+                };
+                model.float_max(running, x, next);
+                running = next;
+            }
+        }
     }
 }
 
 /// Posts `m = min(xs)` for float variables.
 pub fn array_float_minimum(model: &mut Model, xs: &[VariableId], m: VariableId) {
-    let mut eq_reifs = Vec::with_capacity(xs.len());
-    for &x in xs {
-        model.float_le(m, x);
-        let reif = model.int_var_aux(0, 1);
-        model.float_eq_reif(x, m, reif);
-        eq_reifs.push(reif);
-    }
-    if !eq_reifs.is_empty() {
-        model.scalar_ge(vec![1; eq_reifs.len()], eq_reifs, 1);
+    match xs {
+        [] => {}
+        [only] => model.float_eq(*only, m),
+        [first, rest @ ..] => {
+            let mut running = *first;
+            for (i, &x) in rest.iter().enumerate() {
+                let next = if i + 1 == rest.len() {
+                    m
+                } else {
+                    model.float_var_aux(f64::NEG_INFINITY, f64::INFINITY)
+                };
+                model.float_min(running, x, next);
+                running = next;
+            }
+        }
     }
 }
 

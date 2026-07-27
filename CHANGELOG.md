@@ -75,6 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Native `SetNePropagator` for FlatZinc `set_ne` (replaces reified `set_eq`); handwritten `set_ne.fzn` + CI smoke.
 - `SetLtPropagator` for FlatZinc `set_lt` (`A ⊂ B` via subset + `|B| ≥ |A| + 1` cards); handwritten `set_lt.fzn` + CI smoke.
 - Native `FloatMinMaxPropagator` for FlatZinc `float_min` / `float_max` (replaces reified OR encoding); handwritten `float_min_max.fzn` + CI smoke.
+- Native `IntMinMaxPropagator` for FlatZinc `int_min` / `int_max` (replaces domain tables); `array_float_minimum` / `maximum` fold via binary min/max; fixtures `int_min_max.fzn` / `array_float_min_max.fzn` + CI smoke.
 
 ### Fixed
 

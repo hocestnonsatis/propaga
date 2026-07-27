@@ -85,6 +85,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Native `SetNePropagator` for FlatZinc `set_ne`
 - `SetLtPropagator` proper-subset cardinality tightening for FlatZinc `set_lt`
 - Native `FloatMinMaxPropagator` for FlatZinc `float_min` / `float_max`
+- Native `IntMinMaxPropagator` for FlatZinc `int_min` / `int_max`; array float min/max fold
 
 ## Shipped in v1.0.0
 

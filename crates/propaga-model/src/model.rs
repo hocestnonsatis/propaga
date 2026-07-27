@@ -8,16 +8,17 @@ use propaga_propagators::{
     FloatEqReifPropagator, FloatLePropagator, FloatLeReifPropagator, FloatLinearEqPropagator,
     FloatLinearGePropagator, FloatLinearLePropagator, FloatLinearNePropagator, FloatMinMaxOp,
     FloatMinMaxPropagator, FloatNePropagator, FloatTimesPropagator, FloatUnaryOp,
-    FloatUnaryPropagator, GlobalCardinalityPropagator, Int2FloatPropagator, InversePropagator,
-    LessEqualPropagator, LessThanPropagator, LinearEqPropagator, LinearScalarGePropagator,
-    LinearScalarLePropagator, NotEqualOffsetPropagator, RectangleSpec, RegularPropagator,
-    ReifiedEqualityPropagator, ReifiedFloatLinearEqPropagator, ReifiedFloatLinearGePropagator,
-    ReifiedFloatLinearLePropagator, ReifiedLessEqualPropagator, ReifiedLessThanPropagator,
-    ReifiedNotEqualPropagator, ReifiedScalarEqPropagator, ReifiedScalarGePropagator,
-    ReifiedScalarLePropagator, SetCardEqPropagator, SetCardPropagator, SetDiffPropagator,
-    SetEqPropagator, SetEqReifPropagator, SetInPropagator, SetInReifPropagator,
-    SetIntersectPropagator, SetLtPropagator, SetNePropagator, SetSubsetPropagator,
-    SetSubsetReifPropagator, SetSymDiffPropagator, SetUnionPropagator, TablePropagator, TaskSpec,
+    FloatUnaryPropagator, GlobalCardinalityPropagator, Int2FloatPropagator, IntMinMaxOp,
+    IntMinMaxPropagator, InversePropagator, LessEqualPropagator, LessThanPropagator,
+    LinearEqPropagator, LinearScalarGePropagator, LinearScalarLePropagator,
+    NotEqualOffsetPropagator, RectangleSpec, RegularPropagator, ReifiedEqualityPropagator,
+    ReifiedFloatLinearEqPropagator, ReifiedFloatLinearGePropagator, ReifiedFloatLinearLePropagator,
+    ReifiedLessEqualPropagator, ReifiedLessThanPropagator, ReifiedNotEqualPropagator,
+    ReifiedScalarEqPropagator, ReifiedScalarGePropagator, ReifiedScalarLePropagator,
+    SetCardEqPropagator, SetCardPropagator, SetDiffPropagator, SetEqPropagator,
+    SetEqReifPropagator, SetInPropagator, SetInReifPropagator, SetIntersectPropagator,
+    SetLtPropagator, SetNePropagator, SetSubsetPropagator, SetSubsetReifPropagator,
+    SetSymDiffPropagator, SetUnionPropagator, TablePropagator, TaskSpec,
 };
 use propaga_search::{
     DepthFirstSearch, LexicographicOptimization, LexicographicResult, Objective,
@@ -487,6 +488,28 @@ impl Model {
     pub fn less_equal(&mut self, left: VariableId, right: VariableId) {
         self.engine
             .add_propagator(Box::new(LessEqualPropagator::new(left, right)));
+    }
+
+    /// Posts `c = min(a, b)` for integer variables.
+    pub fn int_min(&mut self, a: VariableId, b: VariableId, c: VariableId) {
+        self.engine
+            .add_propagator(Box::new(IntMinMaxPropagator::new(
+                a,
+                b,
+                c,
+                IntMinMaxOp::Min,
+            )));
+    }
+
+    /// Posts `c = max(a, b)` for integer variables.
+    pub fn int_max(&mut self, a: VariableId, b: VariableId, c: VariableId) {
+        self.engine
+            .add_propagator(Box::new(IntMinMaxPropagator::new(
+                a,
+                b,
+                c,
+                IntMinMaxOp::Max,
+            )));
     }
 
     /// Posts `left < right`.
