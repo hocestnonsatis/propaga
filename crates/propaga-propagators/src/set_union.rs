@@ -82,7 +82,8 @@ impl Propagator for SetUnionPropagator {
         }
 
         // |A ∪ B| ≥ max(|A|, |B|, |glb(A) ∪ glb(B)|) and |A ∪ B| ≤ |A| + |B|;
-        // operands are subsets of the result.
+        // operands are subsets of the result, so also
+        // |R| ≥ |A| + |glb(R) \ lub(A)| (and symmetrically for B).
         let glb_union = {
             let mut count = left.glb.len();
             for value in &right.glb {
@@ -92,10 +93,22 @@ impl Propagator for SetUnionPropagator {
             }
             count
         };
+        let forced_outside_left = result
+            .glb
+            .iter()
+            .filter(|value| !left.lub.contains(value))
+            .count();
+        let forced_outside_right = result
+            .glb
+            .iter()
+            .filter(|value| !right.lub.contains(value))
+            .count();
         let result_card_min = result
             .card_min
             .max(left.card_min)
             .max(right.card_min)
+            .max(left.card_min.saturating_add(forced_outside_left))
+            .max(right.card_min.saturating_add(forced_outside_right))
             .max(result.glb.len())
             .max(glb_union);
         let result_card_max = result
@@ -211,6 +224,27 @@ mod tests {
         engine.add_propagator(Box::new(SetUnionPropagator::new(x, y, r)));
         engine.propagate_all().unwrap();
         assert!(engine.domain(r).as_set().unwrap().card_min() >= 2);
+    }
+
+    #[test]
+    fn raises_result_card_min_from_forced_outsiders() {
+        let mut engine = Engine::new();
+        let left = SetIntervalDomain::universe(1..=3)
+            .with_cardinality(2, 2)
+            .force_out(3)
+            .unwrap();
+        let right = SetIntervalDomain::universe(1..=3).with_cardinality(0, 3);
+        let result = SetIntervalDomain::universe(1..=3)
+            .with_cardinality(0, 3)
+            .force_in(3)
+            .unwrap();
+        let x = engine.new_variable(AnyDomain::Set(left));
+        let y = engine.new_variable(AnyDomain::Set(right));
+        let r = engine.new_variable(AnyDomain::Set(result));
+        engine.add_propagator(Box::new(SetUnionPropagator::new(x, y, r)));
+        engine.propagate_all().unwrap();
+        // |R| ≥ |A| + |glb(R)\lub(A)| = 2 + 1
+        assert!(engine.domain(r).as_set().unwrap().card_min() >= 3);
     }
 
     #[test]
