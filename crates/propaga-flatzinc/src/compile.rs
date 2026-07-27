@@ -139,6 +139,34 @@ pub fn compile(program: FlatZincProgram) -> Result<CompiledInstance, FlatZincErr
                 }
                 env.insert(name, Binding::Array(elements));
             }
+            ParamDecl::FloatArray {
+                name,
+                index_low,
+                values,
+            } => {
+                let mut elements = HashMap::new();
+                for (offset, value) in values.into_iter().enumerate() {
+                    let index = index_low + offset as i32;
+                    let var = model.float_var_aux(value, value);
+                    names.insert(var, format!("{name}[{index}]"));
+                    elements.insert(index, var);
+                }
+                env.insert(name, Binding::Array(elements));
+            }
+            ParamDecl::BoolArray {
+                name,
+                index_low,
+                values,
+            } => {
+                let mut elements = HashMap::new();
+                for (offset, value) in values.into_iter().enumerate() {
+                    let index = index_low + offset as i32;
+                    let var = model.int_var_fixed(value);
+                    names.insert(var, format!("{name}[{index}]"));
+                    elements.insert(index, var);
+                }
+                env.insert(name, Binding::Array(elements));
+            }
         }
     }
 

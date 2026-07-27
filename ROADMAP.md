@@ -81,6 +81,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - FlatZinc `array […] of var set of …` declarations + CI fixture
 - FlatZinc `array […] of var float` / float-bounded arrays + CI fixture
 - FlatZinc set-parameter arrays + `array_set_element` + CI fixture
+- FlatZinc float/bool parameter arrays + `array_float_element` / `array_bool_element` fixtures
 
 ## Shipped in v1.0.0
 

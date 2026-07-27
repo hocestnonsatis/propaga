@@ -64,6 +64,24 @@ pub enum ParamDecl {
         /// Sets in index order.
         values: Vec<Vec<i32>>,
     },
+    /// Fixed array of float parameters.
+    FloatArray {
+        /// Array name.
+        name: String,
+        /// Inclusive lower index for the values slice.
+        index_low: i32,
+        /// Values in index order.
+        values: Vec<f64>,
+    },
+    /// Fixed array of boolean parameters (0 or 1).
+    BoolArray {
+        /// Array name.
+        name: String,
+        /// Inclusive lower index for the values slice.
+        index_low: i32,
+        /// Values in index order (`0`/`1`).
+        values: Vec<i32>,
+    },
 }
 
 /// A FlatZinc variable declaration.
@@ -921,6 +939,10 @@ impl Parser {
                     params.push(self.parse_int_array_param()?);
                 } else if self.peek_is_set_array_param() {
                     params.push(self.parse_set_array_param()?);
+                } else if self.peek_is_float_array_param() {
+                    params.push(self.parse_float_array_param()?);
+                } else if self.peek_is_bool_array_param() {
+                    params.push(self.parse_bool_array_param()?);
                 } else {
                     variables.push(self.parse_array_decl()?);
                 }
@@ -1023,6 +1045,46 @@ impl Parser {
         false
     }
 
+    fn peek_is_float_array_param(&self) -> bool {
+        if !self.peek_is_ident("array") {
+            return false;
+        }
+        let mut pos = self.pos + 1;
+        while pos < self.tokens.len() {
+            match &self.tokens[pos] {
+                Token::Ident(name) if name == "of" => {
+                    return matches!(
+                        self.tokens.get(pos + 1),
+                        Some(Token::Ident(name)) if name == "float"
+                    );
+                }
+                Token::Symbol(symbol) if symbol == ";" => return false,
+                _ => pos += 1,
+            }
+        }
+        false
+    }
+
+    fn peek_is_bool_array_param(&self) -> bool {
+        if !self.peek_is_ident("array") {
+            return false;
+        }
+        let mut pos = self.pos + 1;
+        while pos < self.tokens.len() {
+            match &self.tokens[pos] {
+                Token::Ident(name) if name == "of" => {
+                    return matches!(
+                        self.tokens.get(pos + 1),
+                        Some(Token::Ident(name)) if name == "bool"
+                    );
+                }
+                Token::Symbol(symbol) if symbol == ";" => return false,
+                _ => pos += 1,
+            }
+        }
+        false
+    }
+
     fn parse_int_array_param(&mut self) -> Result<ParamDecl, FlatZincError> {
         self.expect_ident("array")?;
         self.expect_symbol("[")?;
@@ -1075,6 +1137,80 @@ impl Parser {
             )));
         }
         Ok(ParamDecl::SetArray {
+            name,
+            index_low,
+            values,
+        })
+    }
+
+    fn parse_float_array_param(&mut self) -> Result<ParamDecl, FlatZincError> {
+        self.expect_ident("array")?;
+        self.expect_symbol("[")?;
+        let index_low = self.expect_int()?;
+        self.expect_symbol("..")?;
+        let index_high = self.expect_int()?;
+        self.expect_symbol("]")?;
+        self.expect_ident("of")?;
+        self.expect_ident("float")?;
+        self.expect_symbol(":")?;
+        let name = self.expect_ident_token()?;
+        self.expect_symbol("=")?;
+        self.expect_symbol("[")?;
+        let values = self.parse_float_list()?;
+        self.expect_symbol("]")?;
+        let expected = (index_high - index_low + 1).max(0) as usize;
+        if values.len() != expected {
+            return Err(FlatZincError::Unsupported(format!(
+                "float array `{name}` length {} does not match index range [{index_low}..{index_high}]",
+                values.len()
+            )));
+        }
+        Ok(ParamDecl::FloatArray {
+            name,
+            index_low,
+            values,
+        })
+    }
+
+    fn parse_bool_array_param(&mut self) -> Result<ParamDecl, FlatZincError> {
+        self.expect_ident("array")?;
+        self.expect_symbol("[")?;
+        let index_low = self.expect_int()?;
+        self.expect_symbol("..")?;
+        let index_high = self.expect_int()?;
+        self.expect_symbol("]")?;
+        self.expect_ident("of")?;
+        self.expect_ident("bool")?;
+        self.expect_symbol(":")?;
+        let name = self.expect_ident_token()?;
+        self.expect_symbol("=")?;
+        self.expect_symbol("[")?;
+        let mut values = Vec::new();
+        if !self.peek_is_symbol("]") {
+            loop {
+                let value = if self.peek_is_ident("true") {
+                    self.expect_ident("true")?;
+                    1
+                } else {
+                    self.expect_ident("false")?;
+                    0
+                };
+                values.push(value);
+                if self.peek_is_symbol("]") {
+                    break;
+                }
+                self.expect_symbol(",")?;
+            }
+        }
+        self.expect_symbol("]")?;
+        let expected = (index_high - index_low + 1).max(0) as usize;
+        if values.len() != expected {
+            return Err(FlatZincError::Unsupported(format!(
+                "bool array `{name}` length {} does not match index range [{index_low}..{index_high}]",
+                values.len()
+            )));
+        }
+        Ok(ParamDecl::BoolArray {
             name,
             index_low,
             values,

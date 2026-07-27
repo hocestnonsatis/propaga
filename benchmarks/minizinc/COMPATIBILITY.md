@@ -39,6 +39,8 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `array [L..U] of int: xs = [...];` | Supported | |
 | `bool: flag = true;` | Supported | |
 | `float: pi = 3.14;` | Supported | |
+| `array [L..U] of float: xs = [...];` | Supported | Compiled to fixed float auxiliaries |
+| `array [L..U] of bool: bs = [...];` | Supported | Compiled to fixed `0..1` integers |
 | `set of L..U: s = { ... };` | Supported | Used in `set_in` and related constraints |
 | `array [L..U] of set of int: xs = [{…}, …];` | Supported | Compiled to fixed set variables |
 

@@ -71,6 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FlatZinc `array [L..U] of var set of A..B` declarations; handwritten `array_set_vars.fzn` + CI smoke.
 - FlatZinc `array [L..U] of var float` / float-bounded array declarations; handwritten `array_float_vars.fzn` + CI smoke.
 - FlatZinc `array [L..U] of set of int` parameter arrays and `array_set_element` (1-based / `_nonshifted`); handwritten `array_set_element.fzn` + CI smoke.
+- FlatZinc `array [L..U] of float` / `of bool` parameter arrays; handwritten `array_float_element.fzn` / `array_bool_element.fzn` + CI smoke.
 
 ### Fixed
 

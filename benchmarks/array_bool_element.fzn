@@ -1,0 +1,8 @@
+% Constant bool-array element (1-based).
+array [1..2] of bool: bs = [false, true];
+var 1..2: i;
+var bool: b;
+constraint array_bool_element(bs, i, b);
+constraint int_eq(i, 2);
+constraint bool_eq(b, 1);
+solve satisfy;
