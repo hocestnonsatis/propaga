@@ -32,6 +32,8 @@ jobs:
       - run: cargo run -p propaga-cli -- solve --file benchmarks/set_intersect.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/set_subset.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/set_eq.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/set_diff.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/set_symdiff.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/float_round.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/float_floor.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/float_ceil.fzn --quiet

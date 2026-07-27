@@ -41,12 +41,12 @@ impl Propagator for SetIntersectPropagator {
         let result_id = self.watched[2];
 
         for value in left.glb.iter().copied() {
-            if right.lub.contains(&value) {
+            if right.glb.contains(&value) {
                 changed |= ext.force_set_in(result_id, value);
             }
         }
         for value in right.glb.iter().copied() {
-            if left.lub.contains(&value) {
+            if left.glb.contains(&value) {
                 changed |= ext.force_set_in(result_id, value);
             }
         }
@@ -73,21 +73,52 @@ impl Propagator for SetIntersectPropagator {
             return PropagationStatus::Failure;
         }
 
-        // result ⊆ left ∩ right: |R| ≤ min(|A|, |B|, |lub(A) ∩ lub(B)|);
-        // |R| ≥ |A| − |lub(A) \ lub(B)| (and symmetrically).
+        // A ∩ B ⊆ R: x ∈ B ∧ x ∉ R ⇒ x ∉ A (and symmetrically).
+        for value in right.glb.clone() {
+            if !result.lub.contains(&value) {
+                changed |= ext.force_set_out(left_id, value);
+            }
+        }
+        for value in left.glb.clone() {
+            if !result.lub.contains(&value) {
+                changed |= ext.force_set_out(right_id, value);
+            }
+        }
+
+        let (Some(left), Some(right), Some(result)) = (
+            ext.set_domain(left_id),
+            ext.set_domain(right_id),
+            ext.set_domain(result_id),
+        ) else {
+            return PropagationStatus::Failure;
+        };
+        if left.is_empty() || right.is_empty() || result.is_empty() {
+            return PropagationStatus::Failure;
+        }
+
+        // |R| ≤ min(|A|, |B|, |lub(A) ∩ lub(B)|);
+        // |A \ B| ≤ |lub(A) \ glb(B)|, so |R| ≥ |A| − that and |A| ≤ |R| + that.
         let overlap = left
             .lub
             .iter()
             .filter(|value| right.lub.contains(value))
             .count();
-        let left_outside = left.lub.len().saturating_sub(overlap);
-        let right_outside = right.lub.len().saturating_sub(overlap);
+        let left_minus_right_max = left
+            .lub
+            .iter()
+            .filter(|value| !right.glb.contains(value))
+            .count();
+        let right_minus_left_max = right
+            .lub
+            .iter()
+            .filter(|value| !left.glb.contains(value))
+            .count();
 
         let result_card_min = result
             .card_min
             .max(result.glb.len())
-            .max(left.card_min.saturating_sub(left_outside))
-            .max(right.card_min.saturating_sub(right_outside));
+            .max(left.card_min.saturating_sub(left_minus_right_max))
+            .max(right.card_min.saturating_sub(right_minus_left_max));
         let result_card_max = result
             .card_max
             .min(left.card_max)
@@ -104,7 +135,7 @@ impl Propagator for SetIntersectPropagator {
         let left_card_min = left.card_min.max(result_card_min).max(left.glb.len());
         let left_card_max = left
             .card_max
-            .min(result_card_max.saturating_add(left_outside))
+            .min(result_card_max.saturating_add(left_minus_right_max))
             .min(left.lub.len());
         if left_card_min > left_card_max {
             return PropagationStatus::Failure;
@@ -116,7 +147,7 @@ impl Propagator for SetIntersectPropagator {
         let right_card_min = right.card_min.max(result_card_min).max(right.glb.len());
         let right_card_max = right
             .card_max
-            .min(result_card_max.saturating_add(right_outside))
+            .min(result_card_max.saturating_add(right_minus_left_max))
             .min(right.lub.len());
         if right_card_min > right_card_max {
             return PropagationStatus::Failure;
@@ -190,11 +221,16 @@ mod tests {
     }
 
     #[test]
-    fn raises_result_card_min_from_operand_outside_overlap() {
+    fn raises_result_card_min_when_operand_outside_b_is_impossible() {
         let mut engine = Engine::new();
-        // lub(A)={1,2}, lub(B)={1,2}; card_min(A)=2 ⇒ |A∩B| ≥ 2.
+        // A must be {1,2} and B is fixed {1,2} ⇒ |A∩B| ≥ 2.
         let left = SetIntervalDomain::universe(1..=2).with_cardinality(2, 2);
-        let right = SetIntervalDomain::universe(1..=2).with_cardinality(0, 2);
+        let right = SetIntervalDomain::universe(1..=2)
+            .with_cardinality(2, 2)
+            .force_in(1)
+            .unwrap()
+            .force_in(2)
+            .unwrap();
         let result = SetIntervalDomain::universe(1..=2).with_cardinality(0, 2);
         let x = engine.new_variable(AnyDomain::Set(left));
         let y = engine.new_variable(AnyDomain::Set(right));
@@ -205,15 +241,35 @@ mod tests {
     }
 
     #[test]
+    fn empty_intersection_allows_disjoint_nonempty_operands() {
+        let mut engine = Engine::new();
+        let left = SetIntervalDomain::universe(1..=3).with_cardinality(0, 3);
+        let right = SetIntervalDomain::universe(1..=3).with_cardinality(0, 3);
+        let result = SetIntervalDomain::universe(1..=3).with_cardinality(0, 0);
+        let x = engine.new_variable(AnyDomain::Set(left));
+        let y = engine.new_variable(AnyDomain::Set(right));
+        let r = engine.new_variable(AnyDomain::Set(result));
+        engine.add_propagator(Box::new(SetIntersectPropagator::new(x, y, r)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(engine.domain(x).as_set().unwrap().card_max() >= 1);
+        assert!(engine.domain(y).as_set().unwrap().card_max() >= 1);
+    }
+
+    #[test]
     fn already_satisfied_membership_still_tightens_operand_card() {
         let mut engine = Engine::new();
+        // B fixed to the full LUB ⇒ |A| ≤ |R| (no room outside B).
         let left = SetIntervalDomain::universe(1..=3)
             .with_cardinality(1, 2)
             .force_in(1)
             .unwrap();
         let right = SetIntervalDomain::universe(1..=3)
-            .with_cardinality(1, 2)
+            .with_cardinality(3, 3)
             .force_in(1)
+            .unwrap()
+            .force_in(2)
+            .unwrap()
+            .force_in(3)
             .unwrap();
         let result = SetIntervalDomain::universe(1..=3)
             .with_cardinality(1, 1)
@@ -228,7 +284,6 @@ mod tests {
             PropagationStatus::OkChanged
         );
         assert!(engine.domain(x).as_set().unwrap().card_max() <= 1);
-        assert!(engine.domain(y).as_set().unwrap().card_max() <= 1);
     }
 
     #[test]
@@ -396,43 +451,21 @@ mod tests {
     }
 
     #[test]
-    fn mock_propagation_empties_operand_domain_fails() {
-        use crate::test_support::MockSetCtx;
-        use propaga_core::SetDomainSnapshot;
-
+    fn shared_glb_with_empty_result_fails() {
         let mut engine = Engine::new();
-        let left = engine.new_variable(IntervalDomain::new(0, 0));
-        let right = engine.new_variable(IntervalDomain::new(0, 0));
-        let result = engine.new_variable(IntervalDomain::new(0, 0));
-        let mut ctx = MockSetCtx::new()
-            .with_set(
-                left,
-                SetDomainSnapshot {
-                    glb: vec![1],
-                    lub: vec![1, 2],
-                    card_min: 1,
-                    card_max: 1,
-                },
-            )
-            .with_set(
-                right,
-                SetDomainSnapshot {
-                    glb: vec![2],
-                    lub: vec![2],
-                    card_min: 1,
-                    card_max: 1,
-                },
-            )
-            .with_set(
-                result,
-                SetDomainSnapshot {
-                    glb: vec![],
-                    lub: vec![1, 2],
-                    card_min: 0,
-                    card_max: 0,
-                },
-            );
-        let mut prop = SetIntersectPropagator::new(left, right, result);
-        assert_eq!(prop.propagate(&mut ctx), PropagationStatus::Failure);
+        let left = SetIntervalDomain::universe(1..=2)
+            .with_cardinality(1, 1)
+            .force_in(1)
+            .unwrap();
+        let right = SetIntervalDomain::universe(1..=2)
+            .with_cardinality(1, 1)
+            .force_in(1)
+            .unwrap();
+        let result = SetIntervalDomain::universe(1..=2).with_cardinality(0, 0);
+        let x = engine.new_variable(AnyDomain::Set(left));
+        let y = engine.new_variable(AnyDomain::Set(right));
+        let r = engine.new_variable(AnyDomain::Set(result));
+        engine.add_propagator(Box::new(SetIntersectPropagator::new(x, y, r)));
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
     }
 }

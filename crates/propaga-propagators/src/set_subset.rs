@@ -49,11 +49,11 @@ impl Propagator for SetSubsetPropagator {
             return PropagationStatus::Failure;
         }
 
-        // A ⊆ B ⇒ |A| ≤ |B|; also |B| ≤ |A| + |lub(B) \ lub(A)|.
-        let sup_outside = sup
+        // A ⊆ B ⇒ |A| ≤ |B|; also |B| = |A| + |B\A| ≤ |A| + |lub(B) \ glb(A)|.
+        let sup_minus_sub_max = sup
             .lub
             .iter()
-            .filter(|value| !sub.lub.contains(value))
+            .filter(|value| !sub.glb.contains(value))
             .count();
 
         let sub_card_min = sub.card_min.max(sub.glb.len());
@@ -68,7 +68,7 @@ impl Propagator for SetSubsetPropagator {
         let sup_card_min = sup.card_min.max(sub_card_min).max(sup.glb.len());
         let sup_card_max = sup
             .card_max
-            .min(sub_card_max.saturating_add(sup_outside))
+            .min(sub_card_max.saturating_add(sup_minus_sub_max))
             .min(sup.lub.len());
         if sup_card_min > sup_card_max {
             return PropagationStatus::Failure;
@@ -135,6 +135,18 @@ mod tests {
         engine.add_propagator(Box::new(SetSubsetPropagator::new(sub, sup)));
         engine.propagate_all().unwrap();
         assert!(engine.domain(sup).as_set().unwrap().card_min() >= 2);
+    }
+
+    #[test]
+    fn allows_strictly_larger_superset_with_shared_lub() {
+        let mut engine = Engine::new();
+        let subset = SetIntervalDomain::universe(1..=4).with_cardinality(1, 1);
+        let superset = SetIntervalDomain::universe(1..=4).with_cardinality(2, 2);
+        let sub = engine.new_variable(AnyDomain::Set(subset));
+        let sup = engine.new_variable(AnyDomain::Set(superset));
+        engine.add_propagator(Box::new(SetSubsetPropagator::new(sub, sup)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert_eq!(engine.domain(sup).as_set().unwrap().card_max(), 2);
     }
 
     #[test]

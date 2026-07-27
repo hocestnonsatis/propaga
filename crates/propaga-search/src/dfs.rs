@@ -673,8 +673,13 @@ impl DepthFirstSearch {
         self.stats.record_backtrack();
         self.stats.record_conflict();
 
+        // Nogood/clause propagators are int-literal based; skip learning on set/float conflicts.
         if self.config.learning
             && let Some(conflict) = engine.last_conflict()
+            && matches!(
+                engine.domain(conflict.variable).kind(),
+                propaga_domains::DomainKind::Int
+            )
         {
             self.bump_weights(&conflict.explanation.unique_branch_literals());
             self.bump_activities(&conflict.explanation.unique_branch_literals());

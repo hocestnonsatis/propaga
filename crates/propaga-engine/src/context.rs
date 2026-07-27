@@ -202,7 +202,7 @@ impl ExtendedPropagationContext for EnginePropagationContext<'_> {
             };
             match set.force_in(value) {
                 Some(next) => AnyDomain::Set(next),
-                None => AnyDomain::Set(SetIntervalDomain::universe([])),
+                None => AnyDomain::Set(SetIntervalDomain::wipeout()),
             }
         })
     }
@@ -215,7 +215,7 @@ impl ExtendedPropagationContext for EnginePropagationContext<'_> {
             };
             match set.force_out(value) {
                 Some(next) => AnyDomain::Set(next),
-                None => AnyDomain::Set(SetIntervalDomain::universe([])),
+                None => AnyDomain::Set(SetIntervalDomain::wipeout()),
             }
         })
     }

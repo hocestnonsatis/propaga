@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish outside multi-objective / float_exp CI smoke fixtures
+- Small polish outside set-diff / set-cardinality soundness fixes
 
 ## Shipped after v1.0.0
 
@@ -47,6 +47,10 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Handwritten `seq_search_minimize.fzn` + CI smoke (BnB phases / `float_abs`)
 - `FloatUnaryPropagator` reverse-projects fixed `exp` / `ln` / `sqrt` images
 - CI smoke: `float_exp`, `float_times`, lex multi, Pareto biobjective
+- Sound set cardinality for intersect/subset (`|A\B| ≤ |lub(A)\glb(B)|`); empty sets collapse when `card_max=0`
+- `set_diff` encoding: `left ⊆ result ∪ right` (not `cover ⊆ left`); combined aux universes
+- Failed set forces use wipeout domains; DFS skips int nogood learning on set/float conflicts
+- Handwritten `set_diff.fzn` / `set_symdiff.fzn` + CI smoke
 
 ## Shipped in v1.0.0
 

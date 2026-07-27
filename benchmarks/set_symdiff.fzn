@@ -1,0 +1,9 @@
+% result = a △ b with fixed cardinalities.
+var set of 1..4: a;
+var set of 1..4: b;
+var set of 1..4: s;
+constraint set_card(a, 2);
+constraint set_card(b, 2);
+constraint set_symdiff(a, b, s);
+constraint set_card(s, 2);
+solve satisfy;

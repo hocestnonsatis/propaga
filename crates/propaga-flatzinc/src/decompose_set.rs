@@ -1,22 +1,28 @@
 use propaga_core::VariableId;
 use propaga_model::Model;
 
-fn aux_set(
+fn aux_set_from(
     model: &mut Model,
-    template: VariableId,
+    templates: &[VariableId],
     card_min: usize,
     card_max: usize,
 ) -> VariableId {
-    if let Some(set) = model.engine().domain(template).as_set() {
-        let lub: Vec<i32> = set.lub().iter().copied().collect();
-        if lub.is_empty() {
-            return model.set_var(0, 0, 0, 0);
+    let mut low = i32::MAX;
+    let mut high = i32::MIN;
+    let mut any = false;
+    for &template in templates {
+        if let Some(set) = model.engine().domain(template).as_set() {
+            for &value in set.lub() {
+                any = true;
+                low = low.min(value);
+                high = high.max(value);
+            }
         }
-        let low = *lub.first().unwrap();
-        let high = *lub.last().unwrap();
-        return model.set_var(low, high, card_min, card_max);
     }
-    model.set_var(0, 0, 0, 0)
+    if !any {
+        return model.set_var(0, 0, 0, 0);
+    }
+    model.set_var(low, high, card_min, card_max)
 }
 
 /// Posts `left == right` for set variables.
@@ -57,17 +63,18 @@ pub fn set_lt(model: &mut Model, left: VariableId, right: VariableId) {
 /// Posts `result = left \\ right`.
 pub fn set_diff(model: &mut Model, left: VariableId, right: VariableId, result: VariableId) {
     model.set_subset(result, left);
-    let empty = aux_set(model, left, 0, 0);
+    let empty = aux_set_from(model, &[left, right], 0, 0);
     model.set_intersect(right, result, empty);
-    let cover = aux_set(model, left, 0, usize::MAX);
+    // left ⊆ result ∪ right (cover may properly contain left when right ⊈ left).
+    let cover = aux_set_from(model, &[left, right], 0, usize::MAX);
     model.set_union(result, right, cover);
-    model.set_subset(cover, left);
+    model.set_subset(left, cover);
 }
 
 /// Posts `result = left △ right`.
 pub fn set_symdiff(model: &mut Model, left: VariableId, right: VariableId, result: VariableId) {
-    let union = aux_set(model, left, 0, usize::MAX);
-    let inter = aux_set(model, left, 0, usize::MAX);
+    let union = aux_set_from(model, &[left, right], 0, usize::MAX);
+    let inter = aux_set_from(model, &[left, right], 0, usize::MAX);
     model.set_union(left, right, union);
     model.set_intersect(left, right, inter);
     set_diff(model, union, inter, result);

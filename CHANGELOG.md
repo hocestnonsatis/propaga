@@ -47,12 +47,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Handwritten FlatZinc fixture `seq_search_minimize.fzn`; CI smoke for BnB + `seq_search` and `float_abs.fzn`.
 - `FloatUnaryPropagator` reverse-projects fixed images of `exp` / `ln` / `sqrt` onto the input.
 - Handwritten FlatZinc fixture `float_exp.fzn`; CI smoke for `float_exp`, `float_times`, `lexicographic_multi`, and `pareto_biobjective`.
+- Handwritten FlatZinc fixtures `set_diff.fzn` and `set_symdiff.fzn`; CI smoke solves for both.
+- `SetIntervalDomain::wipeout` for failed membership forces; `with_cardinality(…, 0)` collapses to the fixed empty set.
 
 ### Fixed
 
 - Lexicographic search restores the engine after each objective's branch-and-bound so interior optima are pinned correctly before optimizing the next priority.
 - `FloatLeReifPropagator` with reif=false now tightens the correct float bounds (strict greater-than encoding).
 - DFS `solve_each` set branching no longer applies in/out forces eagerly before trail marks (both membership branches are explored).
+- `SetIntersectPropagator` / `SetSubsetPropagator` cardinality bounds use `|lub \ glb|` outside estimates (were unsound `|lub \ lub|`); intersect forces result membership only from shared GLB.
+- FlatZinc `set_diff` posts `left ⊆ result ∪ right` instead of incorrectly requiring `result ∪ right ⊆ left`.
+- Failed `force_set_in` / `force_set_out` no longer replace domains with a valid empty set (which wiped cardinality); DFS skips int nogood learning on set/float conflicts.
 - `FloatDomain::round` uses true `round` bounds (with constant collapse) instead of the loose `floor + [0,1]` envelope.
 
 ### Changed
