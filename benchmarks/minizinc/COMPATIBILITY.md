@@ -173,7 +173,7 @@ FlatZinc search annotations are applied when solving with `propaga solve`. CLI f
 | `--restarts` | `restart_*` policy | |
 Supported variable selectors: `input_order`, `first_fail` / `most_constrained`, `smallest`, `largest`, `occurrence`, `degree`, `anti_first_fail` / `least_constrained`, `activity` / `vsids`.
 
-Supported value selectors: `indomain_min`, `indomain_max`, `indomain_split`, `indomain_reverse_split`, `indomain_median`, `indomain_random` (deterministic shuffle), `indomain_interval` (first contiguous component, else split).
+Supported value selectors: `indomain_min`, `indomain_max`, `indomain_middle`, `indomain_split`, `indomain_reverse_split`, `indomain_median`, `indomain_random` (deterministic shuffle), `indomain_interval` (first contiguous component, else split).
 
 ## CLI features (FlatZinc path)
 

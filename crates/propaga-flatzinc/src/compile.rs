@@ -456,6 +456,7 @@ fn map_value_choice(choice: &str) -> Result<ValueOrdering, FlatZincError> {
         "indomain_split" => Ok(ValueOrdering::Split),
         "indomain_reverse_split" => Ok(ValueOrdering::ReverseSplit),
         "indomain_median" => Ok(ValueOrdering::Median),
+        "indomain_middle" => Ok(ValueOrdering::Middle),
         "indomain_random" => Ok(ValueOrdering::Random),
         "indomain_interval" => Ok(ValueOrdering::Interval),
         other => Err(FlatZincError::Unsupported(format!(
@@ -3538,6 +3539,20 @@ mod tests {
         assert_eq!(
             instance.annotation_search.map(|c| c.value_ordering),
             Some(ValueOrdering::ReverseSplit)
+        );
+    }
+
+    #[test]
+    fn compiles_indomain_middle() {
+        let source = r#"
+            var 1..5: x;
+            solve :: int_search([x], input_order, indomain_middle, complete) satisfy;
+        "#;
+        let program = parse(source).unwrap();
+        let instance = compile(program).unwrap();
+        assert_eq!(
+            instance.annotation_search.map(|c| c.value_ordering),
+            Some(ValueOrdering::Middle)
         );
     }
 

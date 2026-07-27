@@ -1,0 +1,4 @@
+% Exercise indomain_middle value ordering (closest to mean of bounds).
+var 1..5: x;
+constraint int_le(x, 4);
+solve :: int_search([x], input_order, indomain_middle, complete) satisfy;

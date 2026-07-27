@@ -116,6 +116,8 @@ pub enum ValueOrdering {
     ReverseSplit,
     /// Try the median domain value first, then ascending.
     Median,
+    /// Prefer the domain value closest to the mean of the current bounds.
+    Middle,
     /// Deterministic pseudo-random order (stable for a given variable/domain).
     Random,
     /// Prefer values in the first contiguous domain interval; otherwise behave like [`Split`].
@@ -135,6 +137,7 @@ impl ValueOrdering {
                 Some(Self::ReverseSplit)
             }
             "median" | "indomain_median" => Some(Self::Median),
+            "middle" | "indomain_middle" => Some(Self::Middle),
             "random" | "indomain_random" => Some(Self::Random),
             "interval" | "indomain_interval" => Some(Self::Interval),
             _ => None,
@@ -328,6 +331,10 @@ mod tests {
         assert_eq!(
             ValueOrdering::parse("indomain_random"),
             Some(ValueOrdering::Random)
+        );
+        assert_eq!(
+            ValueOrdering::parse("indomain_middle"),
+            Some(ValueOrdering::Middle)
         );
         assert_eq!(ValueOrdering::parse("nope"), None);
     }

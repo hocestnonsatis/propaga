@@ -906,6 +906,11 @@ impl DepthFirstSearch {
                     values.insert(0, median);
                 }
             }
+            crate::config::ValueOrdering::Middle => {
+                if let (Some(min), Some(max)) = (domain.min(), domain.max()) {
+                    order_middle(&mut values, min, max);
+                }
+            }
             crate::config::ValueOrdering::Random => {
                 shuffle_values_deterministic(&mut values, var);
             }
@@ -966,6 +971,18 @@ fn weighted_score(engine: &Engine, var: VariableId, weight: Option<u32>) -> u64 
     let size = engine.domain(var).size() as u64;
     let weight = weight.unwrap_or(1).max(1) as u64;
     size.saturating_mul(1_000) / weight
+}
+
+fn order_middle(values: &mut [i32], min: i32, max: i32) {
+    let mean = (f64::from(min) + f64::from(max)) / 2.0;
+    values.sort_by(|left, right| {
+        let left_dist = (f64::from(*left) - mean).abs();
+        let right_dist = (f64::from(*right) - mean).abs();
+        left_dist
+            .partial_cmp(&right_dist)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.cmp(right))
+    });
 }
 
 fn shuffle_values_deterministic(values: &mut [i32], var: VariableId) {
@@ -1285,5 +1302,14 @@ mod tests {
         );
         assert!(search.solve(&mut engine).is_none());
         assert!(search.stats().timed_out);
+    }
+
+    #[test]
+    fn middle_prefers_value_closest_to_bound_mean() {
+        let mut values = vec![1, 2, 4, 5];
+        order_middle(&mut values, 1, 5);
+        // Mean of bounds is 3.0; 2 and 4 are equidistant — prefer the smaller.
+        assert_eq!(values[0], 2);
+        assert_eq!(values[1], 4);
     }
 }

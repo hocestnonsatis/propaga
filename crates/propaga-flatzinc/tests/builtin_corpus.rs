@@ -80,6 +80,7 @@ fn stdlib_corpus_lists_expected_models() {
         "float_search_ann",
         "float_sin",
         "indomain_random_ann",
+        "indomain_middle_ann",
         "int_lin_ne_reif",
         "int_min",
         "int_plus",
@@ -109,6 +110,7 @@ fn search_annotation_fixtures_are_satisfiable() {
         "set_search_ann",
         "bool_search_ann",
         "indomain_random_ann",
+        "indomain_middle_ann",
         "reverse_split_ann",
         "median_luby_ann",
     ] {

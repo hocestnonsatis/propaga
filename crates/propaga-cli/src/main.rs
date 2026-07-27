@@ -43,7 +43,7 @@ struct Cli {
     #[arg(long, global = true)]
     restarts: Option<String>,
 
-    /// Value ordering during search: asc, desc, lcv, split, reverse-split, median, random, or interval.
+    /// Value ordering during search: asc, desc, lcv, split, reverse-split, median, middle, random, or interval.
     #[arg(long, global = true)]
     value_ordering: Option<String>,
 
