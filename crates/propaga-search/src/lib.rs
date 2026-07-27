@@ -16,7 +16,9 @@ mod portfolio;
 mod stats;
 mod value;
 
-pub use config::{RestartPolicy, SearchConfig, ValueOrdering, VariableOrdering, luby_sequence};
+pub use config::{
+    RestartPolicy, SearchConfig, SearchPhase, ValueOrdering, VariableOrdering, luby_sequence,
+};
 pub use conflict::{ConflictAnalyzer, NogoodStore};
 pub use dfs::DepthFirstSearch;
 pub use lcg::{ClauseStore, LearnedClause};

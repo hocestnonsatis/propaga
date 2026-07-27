@@ -6,7 +6,7 @@ use crate::parse::{
 use propaga_core::VariableId;
 use propaga_model::Model;
 use propaga_propagators::{CardinalityBound, DisjunctiveTask, RectangleSpec, TaskSpec};
-use propaga_search::{RestartPolicy, ValueOrdering, VariableOrdering};
+use propaga_search::{RestartPolicy, SearchPhase, ValueOrdering, VariableOrdering};
 use std::collections::HashMap;
 
 use propaga_search::{ObjectiveDirection, OptimizationTarget};
@@ -98,6 +98,8 @@ pub struct CompiledInstance {
     pub pareto_objectives: Vec<ObjectiveSpec>,
     /// Optional search configuration from FlatZinc annotations.
     pub annotation_search: Option<AnnotationSearchConfig>,
+    /// Sequenced search phases from `seq_search` (empty when absent).
+    pub search_phases: Vec<SearchPhase>,
 }
 
 /// Compiles a parsed FlatZinc program into a Propaga model.
@@ -201,6 +203,7 @@ pub fn compile(program: FlatZincProgram) -> Result<CompiledInstance, FlatZincErr
         program.solve.annotations.seq_search.as_deref(),
         &model,
     )?;
+    let search_phases = compile_search_phases(&env, &program.solve.annotations)?;
 
     let objectives = match program.solve.goal {
         SolveGoal::Satisfy => Vec::new(),
@@ -227,6 +230,7 @@ pub fn compile(program: FlatZincProgram) -> Result<CompiledInstance, FlatZincErr
         pareto: !pareto_objectives.is_empty(),
         pareto_objectives,
         annotation_search,
+        search_phases,
     })
 }
 
@@ -277,13 +281,12 @@ fn compile_search_config(
     }
 
     let (variable_ordering, value_ordering) = if let Some(seq) = annotations.seq_search.as_ref() {
-        // Approximate seq_search by concatenating variables (InputOrder) and
-        // using the first nested annotation's value selection.
+        // Defaults when CLI overrides phases; DFS uses search_phases for true sequencing.
         let first = seq.first().ok_or_else(|| {
             FlatZincError::Unsupported("seq_search requires at least one nested search".to_string())
         })?;
         (
-            VariableOrdering::InputOrder,
+            map_var_choice(&first.var_choice)?,
             map_value_choice(&first.value_choice)?,
         )
     } else if let Some(search) = annotations
@@ -320,6 +323,30 @@ fn compile_search_config(
         value_ordering,
         restart_policy,
     }))
+}
+
+fn compile_search_phases(
+    env: &HashMap<String, Binding>,
+    annotations: &SearchAnnotations,
+) -> Result<Vec<SearchPhase>, FlatZincError> {
+    let Some(seq) = annotations.seq_search.as_ref() else {
+        return Ok(Vec::new());
+    };
+    let mut phases = Vec::with_capacity(seq.len());
+    for search in seq {
+        let vars = resolve_var_list(env, Expr::List(search.vars.clone()))?;
+        if vars.is_empty() {
+            return Err(FlatZincError::Unsupported(
+                "seq_search nested annotation has no variables".to_string(),
+            ));
+        }
+        phases.push(SearchPhase::new(
+            vars,
+            map_var_choice(&search.var_choice)?,
+            map_value_choice(&search.value_choice)?,
+        ));
+    }
+    Ok(phases)
 }
 
 fn parse_geometric_restart_base(base: &str) -> Result<f64, FlatZincError> {
@@ -3281,11 +3308,28 @@ mod tests {
         assert_eq!(instance.solve_vars.len(), 2);
         assert_eq!(
             instance.annotation_search.map(|c| c.variable_ordering),
-            Some(VariableOrdering::InputOrder)
+            Some(VariableOrdering::Mrv)
         );
         assert_eq!(
             instance.annotation_search.map(|c| c.value_ordering),
             Some(ValueOrdering::Interval)
+        );
+        assert_eq!(instance.search_phases.len(), 2);
+        assert_eq!(
+            instance.search_phases[0].variable_ordering,
+            VariableOrdering::Mrv
+        );
+        assert_eq!(
+            instance.search_phases[0].value_ordering,
+            ValueOrdering::Interval
+        );
+        assert_eq!(
+            instance.search_phases[1].variable_ordering,
+            VariableOrdering::InputOrder
+        );
+        assert_eq!(
+            instance.search_phases[1].value_ordering,
+            ValueOrdering::Descending
         );
     }
 

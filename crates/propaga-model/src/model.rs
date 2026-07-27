@@ -21,7 +21,7 @@ use propaga_propagators::{
 use propaga_search::{
     DepthFirstSearch, LexicographicOptimization, LexicographicResult, Objective,
     ObjectiveDirection, ParetoOptimization, ParetoResult, PortfolioConfig, PortfolioSearch,
-    SearchConfig, SearchStats, Solution,
+    SearchConfig, SearchPhase, SearchStats, Solution,
 };
 
 /// High-level modeling facade over the Propaga engine.
@@ -29,6 +29,7 @@ pub struct Model {
     engine: Engine,
     variables: Vec<VariableId>,
     search_config: SearchConfig,
+    search_phases: Vec<SearchPhase>,
 }
 
 impl Model {
@@ -39,6 +40,7 @@ impl Model {
             engine: Engine::new(),
             variables: Vec::new(),
             search_config: SearchConfig::default(),
+            search_phases: Vec::new(),
         }
     }
 
@@ -58,10 +60,26 @@ impl Model {
         self.search_config = config;
     }
 
+    /// Sets sequenced search phases used by DFS (`seq_search` groups).
+    pub fn set_search_phases(&mut self, phases: impl Into<Vec<SearchPhase>>) {
+        self.search_phases = phases.into();
+    }
+
     /// Returns the active search configuration.
     #[must_use]
     pub fn search_config(&self) -> SearchConfig {
         self.search_config
+    }
+
+    /// Returns sequenced search phases, if any.
+    #[must_use]
+    pub fn search_phases(&self) -> &[SearchPhase] {
+        &self.search_phases
+    }
+
+    fn dfs(&self, variables: impl Into<Vec<VariableId>>) -> DepthFirstSearch {
+        DepthFirstSearch::with_config(variables, self.search_config)
+            .with_search_phases(self.search_phases.clone())
     }
 
     /// Returns all decision variables declared through the modeling API.
@@ -596,19 +614,19 @@ impl Model {
 
     /// Solves the model using depth-first search with MRV.
     pub fn solve(&mut self) -> Option<Solution> {
-        let mut search = DepthFirstSearch::with_config(self.variables.clone(), self.search_config);
+        let mut search = self.dfs(self.variables.clone());
         search.solve(&mut self.engine)
     }
 
     /// Solves while tracking only the provided decision variables.
     pub fn solve_subset(&mut self, variables: impl Into<Vec<VariableId>>) -> Option<Solution> {
-        let mut search = DepthFirstSearch::with_config(variables, self.search_config);
+        let mut search = self.dfs(variables);
         search.solve(&mut self.engine)
     }
 
     /// Solves and returns search statistics.
     pub fn solve_with_stats(&mut self) -> (Option<Solution>, SearchStats) {
-        let mut search = DepthFirstSearch::with_config(self.variables.clone(), self.search_config);
+        let mut search = self.dfs(self.variables.clone());
         let solution = search.solve(&mut self.engine);
         (solution, search.stats())
     }
@@ -618,7 +636,7 @@ impl Model {
         &mut self,
         variables: impl Into<Vec<VariableId>>,
     ) -> (Option<Solution>, SearchStats) {
-        let mut search = DepthFirstSearch::with_config(variables, self.search_config);
+        let mut search = self.dfs(variables);
         let solution = search.solve(&mut self.engine);
         (solution, search.stats())
     }
@@ -640,7 +658,8 @@ impl Model {
                 restart_policy: propaga_search::RestartPolicy::None,
                 ..self.search_config
             },
-        );
+        )
+        .with_search_phases(self.search_phases.clone());
         search.solve_all_limited(&mut self.engine, limit)
     }
 
@@ -664,7 +683,8 @@ impl Model {
                 restart_policy: propaga_search::RestartPolicy::None,
                 ..self.search_config
             },
-        );
+        )
+        .with_search_phases(self.search_phases.clone());
         let solutions = search.solve_all_limited(&mut self.engine, limit);
         (solutions, search.stats())
     }

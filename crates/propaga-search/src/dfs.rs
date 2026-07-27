@@ -1,4 +1,4 @@
-use crate::config::SearchConfig;
+use crate::config::{SearchConfig, SearchPhase};
 use crate::conflict::{ConflictAnalyzer, NogoodStore};
 use crate::lcg::ClauseStore;
 use crate::optimize::{next_float_down, next_float_up};
@@ -16,6 +16,7 @@ use std::time::Instant;
 pub struct DepthFirstSearch {
     variables: Vec<VariableId>,
     config: SearchConfig,
+    search_phases: Vec<SearchPhase>,
     nogoods: NogoodStore,
     clauses: ClauseStore,
     stats: SearchStats,
@@ -43,6 +44,7 @@ impl DepthFirstSearch {
         Self {
             variables: variables.into(),
             config,
+            search_phases: Vec::new(),
             nogoods: NogoodStore::new(),
             clauses: ClauseStore::new(),
             stats: SearchStats::default(),
@@ -68,6 +70,16 @@ impl DepthFirstSearch {
                 ..SearchConfig::default()
             },
         )
+    }
+
+    /// Attaches sequenced search phases (`seq_search` groups).
+    ///
+    /// While any variable in an earlier phase is unfixed, later phases are ignored and
+    /// that phase's variable/value orderings are used.
+    #[must_use]
+    pub fn with_search_phases(mut self, search_phases: impl Into<Vec<SearchPhase>>) -> Self {
+        self.search_phases = search_phases.into();
+        self
     }
 
     /// Registers IEEE points that float branching should split around when interior.
@@ -760,14 +772,34 @@ impl DepthFirstSearch {
     }
 
     fn select_variable(&self, engine: &Engine) -> Option<VariableId> {
-        let candidates: Vec<VariableId> = self
-            .variables
+        if let Some(phase) = self.active_search_phase(engine) {
+            return self.select_variable_among(engine, &phase.variables, phase.variable_ordering);
+        }
+        self.select_variable_among(engine, &self.variables, self.config.variable_ordering)
+    }
+
+    fn active_search_phase(&self, engine: &Engine) -> Option<&SearchPhase> {
+        self.search_phases.iter().find(|phase| {
+            phase
+                .variables
+                .iter()
+                .any(|&var| !engine.domain(var).is_fixed())
+        })
+    }
+
+    fn select_variable_among(
+        &self,
+        engine: &Engine,
+        order: &[VariableId],
+        ordering: crate::config::VariableOrdering,
+    ) -> Option<VariableId> {
+        let candidates: Vec<VariableId> = order
             .iter()
             .copied()
             .filter(|&var| !engine.domain(var).is_fixed())
             .collect();
 
-        match self.config.variable_ordering {
+        match ordering {
             crate::config::VariableOrdering::Mrv => candidates
                 .into_iter()
                 .min_by_key(|&var| engine.domain(var).size()),
@@ -776,8 +808,7 @@ impl DepthFirstSearch {
                     let left_size = engine.domain(left).size();
                     let right_size = engine.domain(right).size();
                     left_size.cmp(&right_size).then_with(|| {
-                        variable_index(&self.variables, left)
-                            .cmp(&variable_index(&self.variables, right))
+                        variable_index(order, left).cmp(&variable_index(order, right))
                     })
                 })
             }
@@ -787,13 +818,11 @@ impl DepthFirstSearch {
                     let right_score =
                         weighted_score(engine, right, self.weights.get(&right).copied());
                     left_score.cmp(&right_score).then_with(|| {
-                        variable_index(&self.variables, left)
-                            .cmp(&variable_index(&self.variables, right))
+                        variable_index(order, left).cmp(&variable_index(order, right))
                     })
                 })
             }
-            crate::config::VariableOrdering::InputOrder => self
-                .variables
+            crate::config::VariableOrdering::InputOrder => order
                 .iter()
                 .copied()
                 .find(|&var| !engine.domain(var).is_fixed()),
@@ -805,8 +834,7 @@ impl DepthFirstSearch {
                         .cmp(&right_activity)
                         .then_with(|| engine.domain(left).size().cmp(&engine.domain(right).size()))
                         .then_with(|| {
-                            variable_index(&self.variables, left)
-                                .cmp(&variable_index(&self.variables, right))
+                            variable_index(order, left).cmp(&variable_index(order, right))
                         })
                 })
             }
@@ -825,7 +853,12 @@ impl DepthFirstSearch {
             }
         }
 
-        match self.config.value_ordering {
+        let value_ordering = self
+            .active_search_phase(engine)
+            .map(|phase| phase.value_ordering)
+            .unwrap_or(self.config.value_ordering);
+
+        match value_ordering {
             crate::config::ValueOrdering::Ascending => {}
             crate::config::ValueOrdering::Descending => values.reverse(),
             crate::config::ValueOrdering::Lcv => {
@@ -984,11 +1017,38 @@ fn order_first_interval_or_split(values: &mut Vec<i32>, min: Option<i32>, max: O
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::RestartPolicy;
+    use crate::config::{RestartPolicy, SearchPhase, ValueOrdering, VariableOrdering};
     use crate::value::AssignmentValue;
     use propaga_domains::IntervalDomain;
     use propaga_propagators::{AllDifferentPropagator, DisjunctivePropagator, DisjunctiveTask};
     use std::time::Duration;
+
+    #[test]
+    fn search_phases_finish_earlier_group_before_later() {
+        let mut engine = Engine::new();
+        let early = engine.new_variable(IntervalDomain::new(1, 3));
+        let late = engine.new_variable(IntervalDomain::new(1, 2));
+        let search = DepthFirstSearch::with_config(
+            vec![early, late],
+            SearchConfig {
+                learning: false,
+                restart_policy: RestartPolicy::None,
+                variable_ordering: VariableOrdering::Mrv,
+                ..SearchConfig::default()
+            },
+        )
+        .with_search_phases(vec![
+            SearchPhase::new(
+                vec![early],
+                VariableOrdering::InputOrder,
+                ValueOrdering::Ascending,
+            ),
+            SearchPhase::new(vec![late], VariableOrdering::Mrv, ValueOrdering::Descending),
+        ]);
+        // Without phases, MRV would prefer `late` (smaller domain). Phases keep `early` first.
+        let selected = search.select_variable(&engine);
+        assert_eq!(selected, Some(early));
+    }
 
     #[test]
     fn root_propagation_prunes_domains_before_branching() {

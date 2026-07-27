@@ -115,6 +115,7 @@ fn solve_source(source: &str, options: GlobalOptions) -> Result<SolveOutcome, St
     instance
         .model
         .set_search_config(options.merge_flatzinc_search_config(instance.annotation_search));
+    instance.model.set_search_phases(instance.search_phases);
 
     let started = Instant::now();
     let (

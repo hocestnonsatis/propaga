@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FlatZinc `float_search` / `set_search` parsing; `indomain_random` (deterministic) and `indomain_reverse_split` value orderings; `most_constrained` / `least_constrained` aliases.
 - FlatZinc `seq_search` (concatenated variable order + first nested value selector) and `indomain_interval` value ordering.
 - Stdlib corpus fixtures `seq_search`, `search_selectors`, and `float_search_ann` with compile + SAT regression in `builtin_corpus`.
+- True multi-phase FlatZinc `seq_search`: DFS activates each nested group's variable/value ordering until that group's variables are fixed.
 - `ExtendedPropagationContext::tighten_set_cardinality` for set-cardinality bound updates during propagation.
 
 ### Fixed

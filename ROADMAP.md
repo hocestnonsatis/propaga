@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- True multi-phase `seq_search` (finish each nested group before the next) if needed beyond the InputOrder approximation
+- Small polish / docs outside search annotations (float hole limits already documented), or portfolio wiring of `search_phases`
 
 ## Shipped after v1.0.0
 
@@ -28,6 +28,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Search annotations: `float_search` / `set_search`, `indomain_random` / `indomain_reverse_split`, selector aliases
 - `seq_search` (concatenated InputOrder approx.) and `indomain_interval` value ordering
 - Stdlib CI corpus fixtures for `seq_search`, `search_selectors`, `float_search_ann` (compile + SAT)
+- True multi-phase `seq_search` via DFS `SearchPhase` groups (per-group var/value selectors)
 
 ## Shipped in v1.0.0
 

@@ -1,5 +1,6 @@
 //! Search configuration and restart policies.
 
+use propaga_core::VariableId;
 use std::time::Duration;
 
 /// Restart strategy for the search loop.
@@ -168,6 +169,33 @@ impl VariableOrdering {
             "input" | "input-order" | "input_order" => Some(Self::InputOrder),
             "activity" | "vsids" => Some(Self::Activity),
             _ => None,
+        }
+    }
+}
+
+/// One phase of a sequenced search (`seq_search` group).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SearchPhase {
+    /// Decision variables belonging to this phase.
+    pub variables: Vec<VariableId>,
+    /// Variable ordering used while this phase still has unfixed variables.
+    pub variable_ordering: VariableOrdering,
+    /// Value ordering used while this phase is active.
+    pub value_ordering: ValueOrdering,
+}
+
+impl SearchPhase {
+    /// Creates a search phase.
+    #[must_use]
+    pub fn new(
+        variables: impl Into<Vec<VariableId>>,
+        variable_ordering: VariableOrdering,
+        value_ordering: ValueOrdering,
+    ) -> Self {
+        Self {
+            variables: variables.into(),
+            variable_ordering,
+            value_ordering,
         }
     }
 }

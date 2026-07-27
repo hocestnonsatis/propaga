@@ -109,6 +109,7 @@ fn search_annotation_fixtures_are_satisfiable() {
                 ..SearchConfig::default()
             });
         }
+        instance.model.set_search_phases(instance.search_phases);
         let prop = instance.model.propagate();
         assert!(prop.is_ok(), "{name}: propagate failed: {prop:?}");
         let (solution, stats) = instance.model.solve_subset_with_stats(instance.solve_vars);

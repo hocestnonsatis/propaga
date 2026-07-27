@@ -153,7 +153,7 @@ Holes are **sound over-approximations**: dropping a hole never removes a feasibl
 |---------|--------|-------|
 | `int_search` / `bool_search` | Supported subset | Variable list, common selectors, `complete` / `incomplete` |
 | `float_search` / `set_search` | Supported subset | Same selectors; `float_search` precision is accepted and ignored |
-| `seq_search([...])` | Supported (approx.) | Concatenates nested variable lists with `input_order`; first nested value selector wins |
+| `seq_search([...])` | Supported | Multi-phase: each nested group uses its own selectors until all its vars are fixed |
 | `restart_luby`, `restart_constant`, `restart_geometric`, `restart_none` | Supported | |
 | `incomplete` | Tolerated | Treated like `complete` for exploration completeness |
 
