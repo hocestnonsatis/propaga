@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SetIntervalDomain::with_cardinality` clamps requested bounds to `[|GLB|, |LUB|]`.
 - `SetIntervalDomain::force_in` / `force_out` keep cardinality bounds aligned with GLB/LUB sizes.
 - CI smoke solves for `set_subset.fzn` and `set_eq.fzn`.
+- Handwritten FlatZinc fixture `seq_search_minimize.fzn`; CI smoke for BnB + `seq_search` and `float_abs.fzn`.
 
 ### Fixed
 
