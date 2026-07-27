@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FloatLinearEqPropagator` for `float_lin_eq` with affine hole sharing when two variables remain free; `float_lin_ne` excludes interior equality-forcing points when other terms are fixed.
 - Unary float maps (`abs`, `sqrt`, `ln`, `exp`) preserve or safely project holes; `FloatUnaryPropagator` reverse-projects through locally invertible cases.
 - `FloatElementPropagator` for float `array_element`: shares holes when the index is fixed and projects holes absent from every remaining candidate.
-- Locally monotonic `sin`/`cos` preserve and reverse-project holes; `ceil`/`floor` collapse to a fixed point when constant on the domain.
+- Locally monotonic `sin`/`cos` preserve and reverse-project holes; `ceil`/`floor`/`round` collapse to a fixed point when constant on the domain.
 - FlatZinc `float_search` / `set_search` parsing; `indomain_random` (deterministic) and `indomain_reverse_split` value orderings; `most_constrained` / `least_constrained` aliases.
 - FlatZinc `indomain_interval` value ordering and multi-phase `seq_search` (per nested group selectors until that group's variables are fixed).
 - Stdlib corpus fixtures `seq_search`, `search_selectors`, `float_search_ann`, and `set_search_ann` with compile + SAT regression in `builtin_corpus` (including portfolio SAT for `seq_search`).
@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Lexicographic search restores the engine after each objective's branch-and-bound so interior optima are pinned correctly before optimizing the next priority.
 - `FloatLeReifPropagator` with reif=false now tightens the correct float bounds (strict greater-than encoding).
 - DFS `solve_each` set branching no longer applies in/out forces eagerly before trail marks (both membership branches are explored).
+- `FloatDomain::round` uses true `round` bounds (with constant collapse) instead of the loose `floor + [0,1]` envelope.
 
 ### Changed
 

@@ -386,9 +386,20 @@ impl FloatDomain {
     }
 
     /// Returns a conservative round interval.
+    ///
+    /// Sparse interior holes rarely empty a round preimage, so holes are dropped
+    /// unless the map is constant on the domain.
     #[must_use]
     pub fn round(&self) -> Self {
-        self.floor().plus(&Self::new(0.0, 1.0))
+        if self.is_empty() {
+            return Self::new(1.0, 0.0);
+        }
+        let lo = self.min.round();
+        let hi = self.max.round();
+        if (lo - hi).abs() <= f64::EPSILON {
+            return Self::fix(lo);
+        }
+        Self::new(lo, hi)
     }
 }
 
@@ -607,6 +618,22 @@ mod tests {
         let image = domain.ceil();
         assert!(image.is_fixed());
         assert!((image.lower_bound() - 2.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn round_collapses_to_fixed_when_constant() {
+        let domain = FloatDomain::new(1.1, 1.4).exclude(1.2);
+        let image = domain.round();
+        assert!(image.is_fixed());
+        assert!((image.lower_bound() - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn round_bounds_image_when_non_constant() {
+        let domain = FloatDomain::new(0.4, 1.6);
+        let image = domain.round();
+        assert!((image.lower_bound() - 0.0).abs() < f64::EPSILON);
+        assert!((image.upper_bound() - 2.0).abs() < f64::EPSILON);
     }
 
     #[test]

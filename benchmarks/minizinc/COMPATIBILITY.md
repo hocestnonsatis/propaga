@@ -81,7 +81,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `float_times`, `float_plus`, `float_div`, `float_abs` | Supported | Interval arithmetic; holes projected when a side is fixed / safe |
 | `float_min`, `float_max` | Supported | Reified interval decomposition |
 | `float_sqrt`, `float_sin`, `float_cos`, `float_ln`, `float_log2`, `float_exp` | Supported | Unary interval ops; hole-aware when locally invertible / monotonic; `float_log2` via `ln` / `ln(2)` |
-| `float_ceil`, `float_floor`, `float_round` | Supported | Unary interval ops; constant `ceil`/`floor` collapse to fixed |
+| `float_ceil`, `float_floor`, `float_round` | Supported | Unary interval ops; constant domains collapse to fixed |
 | `float_lin_eq`, `float_lin_le`, `float_lin_ge`, `float_lin_ne` | Supported | `FloatLinear*` (eq projects holes; ne excludes interior forcing points) |
 | `float_lin_*_reif` | Supported | Reified float linear |
 | `float_*_reif` | Supported | Reified float comparisons |
@@ -102,7 +102,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `float_lin_eq` | Affine hole sharing when exactly two variables remain free |
 | `float_abs` / `sqrt` / `ln` / `exp` | Preserve or safely project; reverse-project when locally invertible |
 | `float_sin` / `float_cos` | Project (and reverse-project) only on locally monotonic intervals |
-| `float_ceil` / `float_floor` / `float_round` | Sparse holes dropped when the map is non-constant (preimages are intervals) |
+| `float_ceil` / `float_floor` / `float_round` | Sparse holes dropped when the map is non-constant (preimages are intervals); constant domains collapse to fixed |
 | `array_*_float_element` | Share holes when index is fixed; project holes absent from every remaining candidate |
 
 Holes are **sound over-approximations**: dropping a hole never removes a feasible real, but keeping every hole through non-injective maps is not always possible.
@@ -178,7 +178,7 @@ Supported value selectors: `indomain_min`, `indomain_max`, `indomain_split`, `in
 | `--time-limit SECS` | Supported | Wall-clock cutoff |
 | `--all`, `--solutions N` | Supported | Satisfy instances |
 | `--stats`, `--format json` | Supported | Typed assignments; objective values for float/set |
-| `--workers N` | Supported | Portfolio search (satisfy) |
+| `--workers N` | Supported | Portfolio search (satisfy); inherits FlatZinc `seq_search` phases |
 
 ## MiniZinc workflow
 

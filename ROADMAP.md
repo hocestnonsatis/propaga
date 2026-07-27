@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish outside search annotations (float-hole limits already documented), or broader CI/docs hygiene
+- Small polish / CI hygiene outside float-hole and search-annotation work already shipped
 
 ## Shipped after v1.0.0
 
@@ -23,7 +23,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Hole-aware float linear: `FloatLinearEqPropagator`, interior `float_lin_ne` exclusion, affine hole sharing when two vars remain free
 - Hole-aware unary float maps: `abs`/`sqrt`/`ln`/`exp` preserve or safely project holes; unary propagator reverse-projects invertible cases
 - Native `FloatElementPropagator` for `array_*_float_element` with hole sharing and common-absent hole projection
-- Locally monotonic `sin`/`cos` hole projection (+ reverse preimages); constant-domain `ceil`/`floor` collapse to fixed
+- Locally monotonic `sin`/`cos` hole projection (+ reverse preimages); constant-domain `ceil`/`floor`/`round` collapse to fixed
 - COMPATIBILITY.md float hole semantics section; README FlatZinc gap blurb refreshed
 - Search annotations: `float_search` / `set_search`, `indomain_random` / `indomain_reverse_split`, selector aliases
 - Multi-phase `seq_search` and `indomain_interval` value ordering
