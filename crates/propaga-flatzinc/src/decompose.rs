@@ -69,19 +69,36 @@ pub fn int_pow(
     Ok(())
 }
 
-/// Posts `result = base ** exp_const`.
+/// Posts `result = base ** exp_const` via a multiply chain (no domain table).
 pub fn int_pow_fixed(
     model: &mut Model,
     base: VariableId,
     exp: i32,
     result: VariableId,
 ) -> Result<(), String> {
-    let (bmin, bmax) = domain_range(model, base);
-    let mut tuples = Vec::new();
-    for b in bmin..=bmax {
-        tuples.push(vec![b, b.pow(exp.max(0) as u32)]);
+    if exp < 0 {
+        return Err("int_pow_fixed does not support negative exponents".to_string());
     }
-    model.table(vec![base, result], tuples);
+    if exp == 0 {
+        let one = model.int_var_fixed(1);
+        model.equal(result, one);
+        return Ok(());
+    }
+    if exp == 1 {
+        model.equal(base, result);
+        return Ok(());
+    }
+
+    let mut acc = base;
+    for step in 1..exp {
+        let next = if step + 1 == exp {
+            result
+        } else {
+            model.int_var_aux(i32::MIN / 4, i32::MAX / 4)
+        };
+        model.int_times(acc, base, next);
+        acc = next;
+    }
     Ok(())
 }
 

@@ -1,0 +1,7 @@
+% bool_le / bool_lt on 0..1 vars.
+var bool: a;
+var bool: b;
+constraint bool_eq(a, 0);
+constraint bool_le(a, b);
+constraint bool_lt(a, b);
+solve satisfy;

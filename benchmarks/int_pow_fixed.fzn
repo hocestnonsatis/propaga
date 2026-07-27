@@ -1,0 +1,6 @@
+% int_pow_fixed via multiply chain.
+var 1..20: base;
+var 1..10000: result;
+constraint int_pow_fixed(base, 3, result);
+constraint int_eq(base, 5);
+solve satisfy;

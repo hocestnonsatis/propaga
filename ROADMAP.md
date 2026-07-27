@@ -91,6 +91,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Native `IntDivPropagator` for FlatZinc `int_div`; `int_plus` always via linear_eq
 - Native `IntModPropagator` for FlatZinc `int_mod`; `bool_not` via `a+b=1`
 - Linear/reif `bool_and` / `bool_or` / `bool_xor` (drop truth tables)
+- `int_pow_fixed` via multiply chain; CI fixtures for pow_fixed and bool_le/lt
 
 ## Shipped in v1.0.0
 
