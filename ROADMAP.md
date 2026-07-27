@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish outside expanded int/bool/globals CI smoke
+- Small polish outside remaining handwritten CI smoke gaps (scheduling / search / weighted-sum fixtures still unlisted)
 
 ## Shipped after v1.0.0
 
@@ -62,6 +62,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Handwritten `float_cos.fzn`; CI smoke `float_cos` / `lex_less` / `all_different_only` / `generic_min`
 - README notes FlatZinc decomposition auxiliaries are non-decision
 - CI smoke: int (`plus`/`times`/`abs`/`min`/`lin_ne`), bool (`clause`/`xor`/`logic`), reified eq/ne, BnB (`maximize_x`/`minimize_cost`), `regular`/`automaton` chains, `nested_predicate`
+- `SetUnionPropagator` raises `|A∪B|` card_min from `|glb(A) ∪ glb(B)|`
 
 ## Shipped in v1.0.0
 

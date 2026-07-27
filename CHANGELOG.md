@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stdlib corpus fixtures `seq_search`, `search_selectors`, `float_search_ann`, `set_search_ann`, `bool_search_ann`, `indomain_random_ann`, `reverse_split_ann`, and `median_luby_ann` with compile + SAT regression in `builtin_corpus` (including portfolio SAT for `seq_search`).
 - Portfolio search attaches model `search_phases` to every worker so FlatZinc `seq_search` is respected with `--workers > 1`.
 - `ExtendedPropagationContext::tighten_set_cardinality` for set-cardinality bound updates during propagation.
-- `SetUnionPropagator` tightens set-cardinality bounds (`|A∪B| ≥ max(|A|,|B|)`, `|A∪B| ≤ |A|+|B|`, subset relations).
+- `SetUnionPropagator` tightens set-cardinality bounds (`|A∪B| ≥ max(|A|,|B|,|glb(A)∪glb(B)|)`, `|A∪B| ≤ |A|+|B|`, subset relations).
 - `SetIntersectPropagator` tightens set-cardinality bounds (`|A∩B| ≤ min(|A|,|B|, overlap)`, operand outside-overlap lower bounds).
 - `SetSubsetPropagator` tightens set-cardinality bounds (`|A| ≤ |B|` when `A ⊆ B`).
 - Handwritten FlatZinc fixtures `float_round.fzn` and `set_subset.fzn`; CI smoke solves for `set_union.fzn`, `set_intersect.fzn`, and `float_round.fzn`.

@@ -81,12 +81,23 @@ impl Propagator for SetUnionPropagator {
             return PropagationStatus::Failure;
         }
 
-        // |A ∪ B| ≥ max(|A|, |B|) and |A ∪ B| ≤ |A| + |B|; operands are subsets of the result.
+        // |A ∪ B| ≥ max(|A|, |B|, |glb(A) ∪ glb(B)|) and |A ∪ B| ≤ |A| + |B|;
+        // operands are subsets of the result.
+        let glb_union = {
+            let mut count = left.glb.len();
+            for value in &right.glb {
+                if !left.glb.contains(value) {
+                    count += 1;
+                }
+            }
+            count
+        };
         let result_card_min = result
             .card_min
             .max(left.card_min)
             .max(right.card_min)
-            .max(result.glb.len());
+            .max(result.glb.len())
+            .max(glb_union);
         let result_card_max = result
             .card_max
             .min(left.card_max.saturating_add(right.card_max))
@@ -173,6 +184,27 @@ mod tests {
         let left = SetIntervalDomain::universe(1..=3).with_cardinality(2, 2);
         let right = SetIntervalDomain::universe(1..=3).with_cardinality(2, 2);
         let result = SetIntervalDomain::universe(1..=3).with_cardinality(0, 3);
+        let x = engine.new_variable(AnyDomain::Set(left));
+        let y = engine.new_variable(AnyDomain::Set(right));
+        let r = engine.new_variable(AnyDomain::Set(result));
+        engine.add_propagator(Box::new(SetUnionPropagator::new(x, y, r)));
+        engine.propagate_all().unwrap();
+        assert!(engine.domain(r).as_set().unwrap().card_min() >= 2);
+    }
+
+    #[test]
+    fn raises_result_card_min_from_disjoint_glbs() {
+        let mut engine = Engine::new();
+        let left = SetIntervalDomain::universe(1..=4)
+            .with_cardinality(1, 2)
+            .force_in(1)
+            .unwrap();
+        let right = SetIntervalDomain::universe(1..=4)
+            .with_cardinality(1, 2)
+            .force_in(3)
+            .unwrap();
+        // Operand card_mins are 1, but |glb(A) ∪ glb(B)| = 2.
+        let result = SetIntervalDomain::universe(1..=4).with_cardinality(0, 4);
         let x = engine.new_variable(AnyDomain::Set(left));
         let y = engine.new_variable(AnyDomain::Set(right));
         let r = engine.new_variable(AnyDomain::Set(result));
