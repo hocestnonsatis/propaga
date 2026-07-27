@@ -86,6 +86,7 @@ fn stdlib_corpus_lists_expected_models() {
         "search_selectors",
         "seq_search",
         "set_eq_reif",
+        "set_search_ann",
     ];
     for name in expected {
         let mzn = dir.join(format!("{name}.mzn"));
@@ -97,7 +98,12 @@ fn stdlib_corpus_lists_expected_models() {
 
 #[test]
 fn search_annotation_fixtures_are_satisfiable() {
-    for name in ["seq_search", "search_selectors", "float_search_ann"] {
+    for name in [
+        "seq_search",
+        "search_selectors",
+        "float_search_ann",
+        "set_search_ann",
+    ] {
         let source = fs::read_to_string(bundled_fzn_path(name)).expect("read fzn");
         let mut instance = compile(parse(&source).expect("parse")).expect("compile");
         if let Some(annotation) = instance.annotation_search {
@@ -119,4 +125,34 @@ fn search_annotation_fixtures_are_satisfiable() {
             stats.timed_out
         );
     }
+}
+
+#[test]
+fn seq_search_fixture_is_satisfiable_under_portfolio() {
+    use propaga_search::PortfolioConfig;
+
+    let source = fs::read_to_string(bundled_fzn_path("seq_search")).expect("read fzn");
+    let mut instance = compile(parse(&source).expect("parse")).expect("compile");
+    if let Some(annotation) = instance.annotation_search {
+        instance.model.set_search_config(SearchConfig {
+            variable_ordering: annotation.variable_ordering,
+            value_ordering: annotation.value_ordering,
+            restart_policy: annotation.restart_policy,
+            time_limit: Some(std::time::Duration::from_secs(2)),
+            ..SearchConfig::default()
+        });
+    }
+    instance.model.set_search_phases(instance.search_phases);
+    let (solution, stats) = instance.model.solve_portfolio(
+        instance.solve_vars,
+        PortfolioConfig {
+            workers: 2,
+            deterministic: false,
+        },
+    );
+    assert!(
+        solution.is_some(),
+        "seq_search portfolio: expected SAT (timed_out={})",
+        stats.timed_out
+    );
 }

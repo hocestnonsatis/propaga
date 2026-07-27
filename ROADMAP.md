@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish / CI / corpus hygiene, or docs outside float-hole limits already documented
+- Small polish outside search annotations (float-hole limits already documented), or broader CI/docs hygiene
 
 ## Shipped after v1.0.0
 
@@ -26,9 +26,8 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Locally monotonic `sin`/`cos` hole projection (+ reverse preimages); constant-domain `ceil`/`floor` collapse to fixed
 - COMPATIBILITY.md float hole semantics section; README FlatZinc gap blurb refreshed
 - Search annotations: `float_search` / `set_search`, `indomain_random` / `indomain_reverse_split`, selector aliases
-- `seq_search` (concatenated InputOrder approx.) and `indomain_interval` value ordering
-- Stdlib CI corpus fixtures for `seq_search`, `search_selectors`, `float_search_ann` (compile + SAT)
-- True multi-phase `seq_search` via DFS `SearchPhase` groups (per-group var/value selectors)
+- Multi-phase `seq_search` and `indomain_interval` value ordering
+- Stdlib CI corpus fixtures for `seq_search`, `search_selectors`, `float_search_ann`, `set_search_ann` (compile + SAT; portfolio SAT for `seq_search`)
 - Portfolio search (`solve_portfolio` / `--workers`) propagates `search_phases` to every worker
 
 ## Shipped in v1.0.0

@@ -1,0 +1,4 @@
+% Exercise set_search annotation.
+var set of 1..2: s;
+constraint set_card(s, 1);
+solve :: set_search([s], input_order, indomain_min, complete) satisfy;

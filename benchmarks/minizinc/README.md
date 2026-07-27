@@ -52,8 +52,11 @@ output is solver-specific and is checked locally via the scripts above.
 ## Stdlib test corpus
 
 MiniZinc models under `benchmarks/minizinc/stdlib/` exercise individual FlatZinc
-builtins. Each model has a **hand-written** `.fzn` fixture used for offline/
-CI compile regression (`cargo test -p propaga-flatzinc --test builtin_corpus`).
+builtins and search annotations. Each model has a **hand-written** `.fzn` fixture
+used for offline/CI compile regression
+(`cargo test -p propaga-flatzinc --test builtin_corpus`). Search fixtures include
+`seq_search`, `search_selectors`, `float_search_ann`, and `set_search_ann`
+(compile + SAT; `seq_search` also under portfolio).
 
 Optional local refresh into `target/flatzinc-stdlib/` (note: MiniZinc 2.9+ may
 emit solver-specific FlatZinc that Propaga does not yet accept — prefer the
