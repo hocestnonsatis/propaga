@@ -8,8 +8,8 @@ use propaga_propagators::{
     FloatEqReifPropagator, FloatLePropagator, FloatLeReifPropagator, FloatLinearEqPropagator,
     FloatLinearGePropagator, FloatLinearLePropagator, FloatLinearNePropagator, FloatMinMaxOp,
     FloatMinMaxPropagator, FloatNePropagator, FloatTimesPropagator, FloatUnaryOp,
-    FloatUnaryPropagator, GlobalCardinalityPropagator, Int2FloatPropagator, IntMinMaxOp,
-    IntMinMaxPropagator, InversePropagator, LessEqualPropagator, LessThanPropagator,
+    FloatUnaryPropagator, GlobalCardinalityPropagator, Int2FloatPropagator, IntAbsPropagator,
+    IntMinMaxOp, IntMinMaxPropagator, InversePropagator, LessEqualPropagator, LessThanPropagator,
     LinearEqPropagator, LinearScalarGePropagator, LinearScalarLePropagator,
     NotEqualOffsetPropagator, RectangleSpec, RegularPropagator, ReifiedEqualityPropagator,
     ReifiedFloatLinearEqPropagator, ReifiedFloatLinearGePropagator, ReifiedFloatLinearLePropagator,
@@ -510,6 +510,12 @@ impl Model {
                 c,
                 IntMinMaxOp::Max,
             )));
+    }
+
+    /// Posts `b = |a|` for integer variables.
+    pub fn int_abs(&mut self, a: VariableId, b: VariableId) {
+        self.engine
+            .add_propagator(Box::new(IntAbsPropagator::new(a, b)));
     }
 
     /// Posts `left < right`.

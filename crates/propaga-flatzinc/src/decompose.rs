@@ -87,40 +87,47 @@ pub fn int_pow_fixed(
 
 /// Posts `m = max(xs)`.
 pub fn array_int_maximum(model: &mut Model, xs: &[VariableId], m: VariableId) {
-    let mut eq_reifs = Vec::with_capacity(xs.len());
-    for &x in xs {
-        model.less_equal(x, m);
-        let reif = model.int_var_aux(0, 1);
-        model.reified_equal(x, m, reif);
-        eq_reifs.push(reif);
-    }
-    if !eq_reifs.is_empty() {
-        model.scalar_ge(vec![1; eq_reifs.len()], eq_reifs, 1);
+    match xs {
+        [] => {}
+        [only] => model.equal(*only, m),
+        [first, rest @ ..] => {
+            let mut running = *first;
+            for (i, &x) in rest.iter().enumerate() {
+                let next = if i + 1 == rest.len() {
+                    m
+                } else {
+                    model.int_var_aux(i32::MIN / 4, i32::MAX / 4)
+                };
+                model.int_max(running, x, next);
+                running = next;
+            }
+        }
     }
 }
 
 /// Posts `m = min(xs)`.
 pub fn array_int_minimum(model: &mut Model, xs: &[VariableId], m: VariableId) {
-    let mut eq_reifs = Vec::with_capacity(xs.len());
-    for &x in xs {
-        model.less_equal(m, x);
-        let reif = model.int_var_aux(0, 1);
-        model.reified_equal(x, m, reif);
-        eq_reifs.push(reif);
-    }
-    if !eq_reifs.is_empty() {
-        model.scalar_ge(vec![1; eq_reifs.len()], eq_reifs, 1);
+    match xs {
+        [] => {}
+        [only] => model.equal(*only, m),
+        [first, rest @ ..] => {
+            let mut running = *first;
+            for (i, &x) in rest.iter().enumerate() {
+                let next = if i + 1 == rest.len() {
+                    m
+                } else {
+                    model.int_var_aux(i32::MIN / 4, i32::MAX / 4)
+                };
+                model.int_min(running, x, next);
+                running = next;
+            }
+        }
     }
 }
 
-/// Posts `b = |a|` using a domain table.
+/// Posts `b = |a|` with bound-consistent propagation.
 pub fn int_abs(model: &mut Model, a: VariableId, b: VariableId) {
-    let (min, max) = domain_range(model, a);
-    let mut tuples = Vec::new();
-    for value in min..=max {
-        tuples.push(vec![value, value.abs()]);
-    }
-    model.table(vec![a, b], tuples);
+    model.int_abs(a, b);
 }
 
 /// Posts `c = a * b` using a domain table.

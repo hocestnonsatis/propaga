@@ -26,6 +26,7 @@ mod float_ops;
 mod float_times;
 mod forbidden_assignment;
 mod gcc;
+mod int_abs;
 mod int_minmax;
 mod inverse;
 mod less_equal;
@@ -82,6 +83,7 @@ pub use forbidden_assignment::{
     EncodedForbiddenFloat, ForbiddenAssignmentPropagator, ForbiddenValue, encode_forbidden_float,
 };
 pub use gcc::{CardinalityBound, GlobalCardinalityPropagator};
+pub use int_abs::IntAbsPropagator;
 pub use int_minmax::{IntMinMaxOp, IntMinMaxPropagator};
 pub use inverse::InversePropagator;
 pub use less_equal::LessEqualPropagator;
