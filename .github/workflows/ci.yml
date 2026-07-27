@@ -58,6 +58,7 @@ jobs:
       - run: cargo run -p propaga-cli -- solve --file benchmarks/seq_search_minimize.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/float_abs.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/float_min_max.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/float_min_hole.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/int_min_max.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/array_float_min_max.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/array_int_min_max.fzn --quiet

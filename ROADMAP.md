@@ -101,6 +101,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - FlatZinc `set_le`/`set_lt` sorted-list lex (not ⊆); `Model::set_lt` stays proper-subset API
 - `SetLexReif` posts negated lex when reif=false; CI `set_le_reif.fzn`
 - Ceil/floor/round reverse-project singleton preimages of integer output holes
+- `float_min`/`float_max` reverse-project result holes when the other side dominates
 
 ## Shipped in v1.0.0
 

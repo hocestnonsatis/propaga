@@ -93,6 +93,40 @@ impl Propagator for FloatMinMaxPropagator {
             changed |= ext.exclude_float_point(c_id, *hole);
         }
 
+        // Reverse-project result holes (including pre-tighten ones) onto operands when
+        // the other side cannot realize that value as the min/max.
+        let mut result_holes = c_dom.holes().to_vec();
+        if let Some(c_after) = read_float(ext, c_id) {
+            for hole in c_after.holes() {
+                if !result_holes
+                    .iter()
+                    .any(|existing| (*existing - hole).abs() <= f64::EPSILON)
+                {
+                    result_holes.push(*hole);
+                }
+            }
+        }
+        for hole in &result_holes {
+            match self.op {
+                FloatMinMaxOp::Min => {
+                    if b_dom.lower_bound() >= *hole {
+                        changed |= ext.exclude_float_point(a_id, *hole);
+                    }
+                    if a_dom.lower_bound() >= *hole {
+                        changed |= ext.exclude_float_point(b_id, *hole);
+                    }
+                }
+                FloatMinMaxOp::Max => {
+                    if b_dom.upper_bound() <= *hole {
+                        changed |= ext.exclude_float_point(a_id, *hole);
+                    }
+                    if a_dom.upper_bound() <= *hole {
+                        changed |= ext.exclude_float_point(b_id, *hole);
+                    }
+                }
+            }
+        }
+
         match self.op {
             FloatMinMaxOp::Min => {
                 // c ≤ a and c ≤ b
@@ -187,5 +221,39 @@ mod tests {
         engine.propagate_all().unwrap();
         assert!((engine.domain(c).as_float().unwrap().upper_bound() - 2.0).abs() < 1e-9);
         assert!((engine.domain(c).as_float().unwrap().lower_bound() - 0.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn min_reverse_projects_result_hole_when_other_side_dominates() {
+        let mut engine = Engine::new();
+        // b ≥ 2, so min(a,b)=2 only if a=2; forbidding c=2 excludes 2 from a.
+        let a = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0)));
+        let b = engine.new_variable(AnyDomain::Float(FloatDomain::new(2.0, 4.0)));
+        let c = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0).exclude(2.0)));
+        engine.add_propagator(Box::new(FloatMinMaxPropagator::new(
+            a,
+            b,
+            c,
+            FloatMinMaxOp::Min,
+        )));
+        engine.propagate_all().unwrap();
+        assert!(!engine.domain(a).as_float().unwrap().contains(2.0));
+    }
+
+    #[test]
+    fn max_reverse_projects_result_hole_when_other_side_dominates() {
+        let mut engine = Engine::new();
+        // b ≤ 2, so max(a,b)=2 only if a=2; forbidding c=2 excludes 2 from a.
+        let a = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0)));
+        let b = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 2.0)));
+        let c = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0).exclude(2.0)));
+        engine.add_propagator(Box::new(FloatMinMaxPropagator::new(
+            a,
+            b,
+            c,
+            FloatMinMaxOp::Max,
+        )));
+        engine.propagate_all().unwrap();
+        assert!(!engine.domain(a).as_float().unwrap().contains(2.0));
     }
 }
