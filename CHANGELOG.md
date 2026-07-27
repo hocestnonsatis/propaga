@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ExtendedPropagationContext::tighten_set_cardinality` for set-cardinality bound updates during propagation.
 - `SetUnionPropagator` tightens set-cardinality bounds (`|A∪B| ≥ max(|A|,|B|,|glb(A)∪glb(B)|)`, `|A∪B| ≤ |A|+|B|`, subset relations).
 - `SetIntersectPropagator` tightens set-cardinality bounds (`|A∩B| ≤ min(|A|,|B|, overlap)`, operand outside-overlap lower bounds).
-- `SetSubsetPropagator` tightens set-cardinality bounds (`|A| ≤ |B|` when `A ⊆ B`).
+- `SetSubsetPropagator` tightens set-cardinality bounds (`|A| ≤ |B|`, `|B| ≥ |A| + |glb(B)\lub(A)|` when `A ⊆ B`).
 - Handwritten FlatZinc fixtures `float_round.fzn` and `set_subset.fzn`; CI smoke solves for `set_union.fzn`, `set_intersect.fzn`, and `float_round.fzn`.
 - `FloatUnaryPropagator` reverse-projects fixed integer images of `ceil` / `floor` / `round` onto the input domain.
 - Handwritten FlatZinc fixtures `float_floor.fzn` and `float_ceil.fzn` (fixed-image reverse projection); CI smoke for `float_floor.fzn`.

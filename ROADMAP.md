@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small propagator/search polish (handwritten FlatZinc CI smoke matrix is complete)
+- Small propagator/search polish
 
 ## Shipped after v1.0.0
 
@@ -64,6 +64,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - CI smoke: int (`plus`/`times`/`abs`/`min`/`lin_ne`), bool (`clause`/`xor`/`logic`), reified eq/ne, BnB (`maximize_x`/`minimize_cost`), `regular`/`automaton` chains, `nested_predicate`
 - `SetUnionPropagator` raises `|A∪B|` card_min from `|glb(A) ∪ glb(B)|`
 - CI smoke: remaining handwritten scheduling / search / weighted / reified-linear fixtures
+- `SetSubsetPropagator` raises `|B|` card_min by `|glb(B) \ lub(A)|` when `A ⊆ B`
 
 ## Shipped in v1.0.0
 

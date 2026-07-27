@@ -49,11 +49,17 @@ impl Propagator for SetSubsetPropagator {
             return PropagationStatus::Failure;
         }
 
-        // A ⊆ B ⇒ |A| ≤ |B|; also |B| = |A| + |B\A| ≤ |A| + |lub(B) \ glb(A)|.
+        // A ⊆ B ⇒ |A| ≤ |B|; also |B| = |A| + |B\A| ≤ |A| + |lub(B) \ glb(A)|
+        // and |B| ≥ |A| + |glb(B) \ lub(A)| (disjoint forced members outside A).
         let sup_minus_sub_max = sup
             .lub
             .iter()
             .filter(|value| !sub.glb.contains(value))
+            .count();
+        let forced_outside_sub = sup
+            .glb
+            .iter()
+            .filter(|value| !sub.lub.contains(value))
             .count();
 
         let sub_card_min = sub.card_min.max(sub.glb.len());
@@ -65,7 +71,10 @@ impl Propagator for SetSubsetPropagator {
             changed |= ext.tighten_set_cardinality(sub_id, sub_card_min, sub_card_max);
         }
 
-        let sup_card_min = sup.card_min.max(sub_card_min).max(sup.glb.len());
+        let sup_card_min = sup
+            .card_min
+            .max(sub_card_min.saturating_add(forced_outside_sub))
+            .max(sup.glb.len());
         let sup_card_max = sup
             .card_max
             .min(sub_card_max.saturating_add(sup_minus_sub_max))
@@ -135,6 +144,25 @@ mod tests {
         engine.add_propagator(Box::new(SetSubsetPropagator::new(sub, sup)));
         engine.propagate_all().unwrap();
         assert!(engine.domain(sup).as_set().unwrap().card_min() >= 2);
+    }
+
+    #[test]
+    fn raises_superset_card_min_from_disjoint_forced_members() {
+        let mut engine = Engine::new();
+        let subset = SetIntervalDomain::universe(1..=3)
+            .with_cardinality(2, 2)
+            .force_out(3)
+            .unwrap();
+        let superset = SetIntervalDomain::universe(1..=3)
+            .with_cardinality(0, 3)
+            .force_in(3)
+            .unwrap();
+        let sub = engine.new_variable(AnyDomain::Set(subset));
+        let sup = engine.new_variable(AnyDomain::Set(superset));
+        engine.add_propagator(Box::new(SetSubsetPropagator::new(sub, sup)));
+        engine.propagate_all().unwrap();
+        // |B| ≥ |A| + |glb(B)\lub(A)| = 2 + 1
+        assert!(engine.domain(sup).as_set().unwrap().card_min() >= 3);
     }
 
     #[test]
