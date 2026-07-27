@@ -74,6 +74,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - `SetInReifPropagator` sound reif assignment (outside LUB ⇒ false) + force-out when false
 - `SetCardEqPropagator` for variable `set_card(S, k)`
 - `SetInPropagator` sound membership (keep forced members outside value domain)
+- Native `SetEqPropagator` for FlatZinc `set_eq`
 
 ## Shipped in v1.0.0
 

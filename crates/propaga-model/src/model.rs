@@ -14,9 +14,10 @@ use propaga_propagators::{
     ReifiedFloatLinearEqPropagator, ReifiedFloatLinearGePropagator, ReifiedFloatLinearLePropagator,
     ReifiedLessEqualPropagator, ReifiedLessThanPropagator, ReifiedNotEqualPropagator,
     ReifiedScalarEqPropagator, ReifiedScalarGePropagator, ReifiedScalarLePropagator,
-    SetCardEqPropagator, SetCardPropagator, SetDiffPropagator, SetEqReifPropagator,
-    SetInPropagator, SetInReifPropagator, SetIntersectPropagator, SetSubsetPropagator,
-    SetSubsetReifPropagator, SetSymDiffPropagator, SetUnionPropagator, TablePropagator, TaskSpec,
+    SetCardEqPropagator, SetCardPropagator, SetDiffPropagator, SetEqPropagator,
+    SetEqReifPropagator, SetInPropagator, SetInReifPropagator, SetIntersectPropagator,
+    SetSubsetPropagator, SetSubsetReifPropagator, SetSymDiffPropagator, SetUnionPropagator,
+    TablePropagator, TaskSpec,
 };
 use propaga_search::{
     DepthFirstSearch, LexicographicOptimization, LexicographicResult, Objective,
@@ -200,6 +201,12 @@ impl Model {
     pub fn set_subset(&mut self, subset: VariableId, superset: VariableId) {
         self.engine
             .add_propagator(Box::new(SetSubsetPropagator::new(subset, superset)));
+    }
+
+    /// Posts `left == right` for set variables.
+    pub fn set_eq(&mut self, left: VariableId, right: VariableId) {
+        self.engine
+            .add_propagator(Box::new(SetEqPropagator::new(left, right)));
     }
 
     /// Posts `value ∈ set`.

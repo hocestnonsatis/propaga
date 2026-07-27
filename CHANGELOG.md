@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Native `SetDiffPropagator` for FlatZinc `set_diff` (replaces multi-constraint aux decomposition); `Model::set_diff`.
 - Native `SetSymDiffPropagator` for FlatZinc `set_symdiff`; `Model::set_symdiff`.
 - `SetCardEqPropagator` / `Model::set_card_eq` for FlatZinc `set_card(S, k)` with a variable cardinality; handwritten `set_card_var.fzn` + CI smoke.
+- Native `SetEqPropagator` for FlatZinc `set_eq` (membership + cardinality sync; replaces dual-subset encoding).
 
 ### Fixed
 

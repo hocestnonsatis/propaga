@@ -3,8 +3,7 @@ use propaga_model::Model;
 
 /// Posts `left == right` for set variables.
 pub fn set_eq(model: &mut Model, left: VariableId, right: VariableId) {
-    model.set_subset(left, right);
-    model.set_subset(right, left);
+    model.set_eq(left, right);
 }
 
 /// Posts `left != right`.
