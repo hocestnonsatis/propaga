@@ -13,7 +13,7 @@ pub fn count(model: &mut Model, xs: &[VariableId], value: VariableId, total: Var
 pub fn among(model: &mut Model, n: VariableId, xs: &[VariableId], values: &[i32]) {
     let mut reifs = Vec::with_capacity(xs.len());
     for &x in xs {
-        let reif = model.int_var(0, 1);
+        let reif = model.int_var_aux(0, 1);
         in_set_reif(model, x, values, reif);
         reifs.push(reif);
     }
@@ -25,7 +25,7 @@ pub fn at_least(model: &mut Model, n: i32, xs: &[VariableId], value: i32) {
     let value_var = model.int_var_fixed(value);
     let mut reifs = Vec::with_capacity(xs.len());
     for &x in xs {
-        let reif = model.int_var(0, 1);
+        let reif = model.int_var_aux(0, 1);
         model.reified_equal(x, value_var, reif);
         reifs.push(reif);
     }
@@ -38,7 +38,7 @@ pub fn at_most(model: &mut Model, n: i32, xs: &[VariableId], value: i32) {
     let value_var = model.int_var_fixed(value);
     let mut reifs = Vec::with_capacity(xs.len());
     for &x in xs {
-        let reif = model.int_var(0, 1);
+        let reif = model.int_var_aux(0, 1);
         model.reified_equal(x, value_var, reif);
         reifs.push(reif);
     }
@@ -122,13 +122,13 @@ pub fn nvalue(model: &mut Model, xs: &[VariableId], n: VariableId) {
     let one = model.int_var_fixed(1);
     let mut is_first = Vec::with_capacity(xs.len());
     for i in 0..xs.len() {
-        let flag = model.int_var(0, 1);
+        let flag = model.int_var_aux(0, 1);
         if i == 0 {
             model.equal(flag, one);
         } else {
             let mut ne_prev = Vec::with_capacity(i);
             for j in 0..i {
-                let ne = model.int_var(0, 1);
+                let ne = model.int_var_aux(0, 1);
                 model.reified_not_equal(xs[i], xs[j], ne);
                 ne_prev.push(ne);
             }
@@ -149,23 +149,23 @@ fn lex_compare(model: &mut Model, x: &[VariableId], y: &[VariableId], allow_equa
     let zero = model.int_var_fixed(0);
     let mut witnesses = Vec::with_capacity(n + usize::from(allow_equal));
     for i in 0..n {
-        let prefix = model.int_var(0, 1);
+        let prefix = model.int_var_aux(0, 1);
         prefix_all_equal(model, x, y, i, prefix);
-        let less = model.int_var(0, 1);
+        let less = model.int_var_aux(0, 1);
         model.reified_less_than(x[i], y[i], less);
-        let witness = model.int_var(0, 1);
+        let witness = model.int_var_aux(0, 1);
         bool_and(model, prefix, less, witness);
         witnesses.push(witness);
 
-        let greater = model.int_var(0, 1);
+        let greater = model.int_var_aux(0, 1);
         model.reified_less_than(y[i], x[i], greater);
-        let forbidden = model.int_var(0, 1);
+        let forbidden = model.int_var_aux(0, 1);
         bool_and(model, prefix, greater, forbidden);
         model.equal(forbidden, zero);
     }
 
     if allow_equal {
-        let all_equal = model.int_var(0, 1);
+        let all_equal = model.int_var_aux(0, 1);
         prefix_all_equal(model, x, y, n, all_equal);
         witnesses.push(all_equal);
     }
@@ -187,7 +187,7 @@ fn prefix_all_equal(
     }
     let mut eqs = Vec::with_capacity(upto);
     for i in 0..upto {
-        let eq = model.int_var(0, 1);
+        let eq = model.int_var_aux(0, 1);
         model.reified_equal(x[i], y[i], eq);
         eqs.push(eq);
     }
@@ -206,7 +206,7 @@ fn bool_and_many(model: &mut Model, inputs: &[VariableId], output: VariableId) {
         _ => {
             let mut acc = inputs[0];
             for &next in &inputs[1..inputs.len() - 1] {
-                let aux = model.int_var(0, 1);
+                let aux = model.int_var_aux(0, 1);
                 bool_and(model, acc, next, aux);
                 acc = aux;
             }
@@ -218,7 +218,7 @@ fn bool_and_many(model: &mut Model, inputs: &[VariableId], output: VariableId) {
 fn membership_reifs(model: &mut Model, xs: &[VariableId], value: VariableId) -> Vec<VariableId> {
     let mut reifs = Vec::with_capacity(xs.len());
     for &x in xs {
-        let reif = model.int_var(0, 1);
+        let reif = model.int_var_aux(0, 1);
         model.reified_equal(x, value, reif);
         reifs.push(reif);
     }
@@ -234,7 +234,7 @@ fn post_sum_equals(model: &mut Model, reifs: &[VariableId], total: VariableId) {
     let max_sum = i32::try_from(reifs.len()).unwrap_or(i32::MAX);
     let mut acc = reifs[0];
     for &reif in &reifs[1..] {
-        let next = model.int_var(0, max_sum);
+        let next = model.int_var_aux(0, max_sum);
         model.linear_eq(acc, reif, next);
         acc = next;
     }
@@ -249,7 +249,7 @@ fn in_set_reif(model: &mut Model, x: VariableId, values: &[i32], reif: VariableI
     }
     let mut eq_reifs = Vec::with_capacity(values.len());
     for &value in values {
-        let eq = model.int_var(0, 1);
+        let eq = model.int_var_aux(0, 1);
         let fixed = model.int_var_fixed(value);
         model.reified_equal(x, fixed, eq);
         eq_reifs.push(eq);
@@ -269,7 +269,7 @@ fn bool_or_many(model: &mut Model, inputs: &[VariableId], output: VariableId) {
         _ => {
             let mut acc = inputs[0];
             for &next in &inputs[1..inputs.len() - 1] {
-                let aux = model.int_var(0, 1);
+                let aux = model.int_var_aux(0, 1);
                 bool_or(model, acc, next, aux);
                 acc = aux;
             }

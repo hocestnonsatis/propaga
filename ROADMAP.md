@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish outside float/int decompose aux and fixed-int non-decision
+- Small polish outside compile/globals aux and float_sin CI
 
 ## Shipped after v1.0.0
 
@@ -57,6 +57,8 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - CI smoke: `set_cardinality.fzn` and `float_log2.fzn`
 - Float / int FlatZinc decompositions use `*_aux` for reifs and intermediates; `int_var_fixed` is non-decision
 - CI smoke: `float_minimize.fzn` / `set_optimize.fzn`
+- FlatZinc compile / globals intermediates use `int_var_aux` (unit-sum partials, reifs; sort permutation stays decision)
+- CI smoke: `float_sin`, `set_param`, `float_bounds`, `float_lin_le`; COMPATIBILITY `set_diff` note
 
 ## Shipped in v1.0.0
 

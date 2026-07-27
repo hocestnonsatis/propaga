@@ -33,6 +33,7 @@ jobs:
       - run: cargo run -p propaga-cli -- solve --file benchmarks/set_subset.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/set_eq.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/set_cardinality.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/set_param.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/set_diff.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/set_symdiff.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/float_round.fzn --quiet
@@ -44,7 +45,10 @@ jobs:
       - run: cargo run -p propaga-cli -- solve --file benchmarks/float_ln.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/float_sqrt.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/float_log2.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/float_sin.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/float_times.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/float_bounds.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/float_lin_le.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/float_minimize.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/set_optimize.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/lexicographic_multi.fzn --quiet

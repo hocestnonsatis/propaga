@@ -56,6 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Float / int FlatZinc decompositions (`float_max`/`min`, `float_in`/`dom`, array float extrema, `array_int_maximum`/`minimum`, `int_plus` overflow path, `array_bool_xor`) create auxiliaries with `*_aux`.
 - `Model::int_var_fixed` is no longer a search decision variable.
 - CI smoke solves for `float_minimize.fzn` and `set_optimize.fzn`.
+- FlatZinc compile paths for unit-sum chains / reified linear / set-element indexing, and globals decompositions (lex / count / nvalue / …), create intermediates with `int_var_aux` (sort permutation variables remain decisions).
+- Handwritten FlatZinc fixture `float_sin.fzn`; CI smoke for `float_sin`, `set_param`, `float_bounds`, and `float_lin_le`.
 
 ### Fixed
 
@@ -70,6 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - COMPATIBILITY.md documents float IEEE-hole projection per constraint family; README no longer lists shipped float array/membership builtins as gaps.
+- COMPATIBILITY.md clarifies `set_diff` decomposition (`L ⊆ R ∪ B`) and non-decision auxiliaries.
 
 ### Known limitations
 

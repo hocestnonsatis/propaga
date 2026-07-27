@@ -1952,7 +1952,7 @@ fn post_linear_eq(
     if coeffs.len() == 2 && coeffs[0] == 1 && coeffs[1] == 1 {
         let left = resolve_var(env, vars[0].clone())?;
         let right = resolve_var(env, vars[1].clone())?;
-        let sum = model.int_var(i32::MIN / 4, i32::MAX / 4);
+        let sum = model.int_var_aux(i32::MIN / 4, i32::MAX / 4);
         model.linear_eq(left, right, sum);
         model
             .engine_mut()
@@ -1987,7 +1987,7 @@ fn post_linear_le(
     if coeffs.len() == 2 && coeffs[0] == 1 && coeffs[1] == 1 {
         let left = resolve_var(env, vars[0].clone())?;
         let right = resolve_var(env, vars[1].clone())?;
-        let sum = model.int_var(i32::MIN / 4, i32::MAX / 4);
+        let sum = model.int_var_aux(i32::MIN / 4, i32::MAX / 4);
         model.linear_eq(left, right, sum);
         let bound = model.int_var_fixed(rhs);
         model.less_equal(sum, bound);
@@ -2020,7 +2020,7 @@ fn post_linear_ge(
     if coeffs.len() == 2 && coeffs[0] == 1 && coeffs[1] == 1 {
         let left = resolve_var(env, vars[0].clone())?;
         let right = resolve_var(env, vars[1].clone())?;
-        let sum = model.int_var(i32::MIN / 4, i32::MAX / 4);
+        let sum = model.int_var_aux(i32::MIN / 4, i32::MAX / 4);
         model.linear_eq(left, right, sum);
         let bound = model.int_var_fixed(rhs);
         model.greater_equal(sum, bound);
@@ -2117,7 +2117,7 @@ fn post_array_var_set_element(
             FlatZincError::Unsupported("array_var_set_element index offset too large".into())
         })?;
         let idx_var = model.int_var_fixed(idx);
-        let reif = model.int_var(0, 1);
+        let reif = model.int_var_aux(0, 1);
         model.reified_equal(index_var, idx_var, reif);
         model.set_eq_reif(set_var, value_var, reif);
     }
@@ -2186,7 +2186,7 @@ fn post_int_lin_ne(
         ));
     }
     let variables = resolve_var_list(env, Expr::List(vars))?;
-    let reif = model.int_var(0, 1);
+    let reif = model.int_var_aux(0, 1);
     model.reified_scalar_eq(coeffs.to_vec(), variables, rhs, reif);
     let zero = model.int_var_fixed(0);
     model.equal(reif, zero);
@@ -2598,7 +2598,7 @@ fn post_linear_ne_reif(
 
     let resolved = resolve_var_list(env, Expr::List(vars))?;
     let reif_var = resolve_var(env, reif)?;
-    let eq_reif = model.int_var(0, 1);
+    let eq_reif = model.int_var_aux(0, 1);
     model.reified_scalar_eq(coeffs.to_vec(), resolved, rhs, eq_reif);
     crate::decompose::bool_not(model, eq_reif, reif_var);
     Ok(())
@@ -2623,12 +2623,12 @@ fn post_unit_sum_le(model: &mut Model, vars: &[VariableId], rhs: i32) -> Result<
 
     let mut running = vars[0];
     for &next in &vars[1..vars.len() - 1] {
-        let partial = model.int_var(i32::MIN / 4, i32::MAX / 4);
+        let partial = model.int_var_aux(i32::MIN / 4, i32::MAX / 4);
         model.linear_eq(running, next, partial);
         running = partial;
     }
     let last = *vars.last().expect("len >= 2");
-    let total = model.int_var(i32::MIN / 4, i32::MAX / 4);
+    let total = model.int_var_aux(i32::MIN / 4, i32::MAX / 4);
     model.linear_eq(running, last, total);
     let bound = model.int_var_fixed(rhs);
     model.less_equal(total, bound);
@@ -2654,12 +2654,12 @@ fn post_unit_sum_ge(model: &mut Model, vars: &[VariableId], rhs: i32) -> Result<
 
     let mut running = vars[0];
     for &next in &vars[1..vars.len() - 1] {
-        let partial = model.int_var(i32::MIN / 4, i32::MAX / 4);
+        let partial = model.int_var_aux(i32::MIN / 4, i32::MAX / 4);
         model.linear_eq(running, next, partial);
         running = partial;
     }
     let last = *vars.last().expect("len >= 2");
-    let total = model.int_var(i32::MIN / 4, i32::MAX / 4);
+    let total = model.int_var_aux(i32::MIN / 4, i32::MAX / 4);
     model.linear_eq(running, last, total);
     let bound = model.int_var_fixed(rhs);
     model.greater_equal(total, bound);
@@ -2685,12 +2685,12 @@ fn post_unit_sum(model: &mut Model, vars: &[VariableId], rhs: i32) -> Result<(),
 
     let mut running = vars[0];
     for &next in &vars[1..vars.len() - 1] {
-        let partial = model.int_var(i32::MIN / 4, i32::MAX / 4);
+        let partial = model.int_var_aux(i32::MIN / 4, i32::MAX / 4);
         model.linear_eq(running, next, partial);
         running = partial;
     }
     let last = *vars.last().expect("len >= 2");
-    let total = model.int_var(i32::MIN / 4, i32::MAX / 4);
+    let total = model.int_var_aux(i32::MIN / 4, i32::MAX / 4);
     model.linear_eq(running, last, total);
     model
         .engine_mut()
