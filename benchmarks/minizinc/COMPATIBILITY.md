@@ -69,7 +69,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 |------------|--------|-----------------|
 | `set_card` | Supported | Cardinality propagator |
 | `set_subset`, `set_superset`, `set_eq`, `set_ne` | Supported | Set propagators / decomposition; subset also tightens cardinality bounds |
-| `set_in`, `set_le`, `set_lt`, `set_diff`, `set_symdiff` | Supported | Set decomposition; `set_diff` posts `R ⊆ L`, `R ∩ B = ∅`, `L ⊆ R ∪ B` with non-decision auxiliaries |
+| `set_in`, `set_le`, `set_lt`, `set_diff`, `set_symdiff` | Supported | Native `set_diff` propagator; `set_symdiff` decomposes via union/intersect/diff with non-decision auxiliaries |
 | `set_union`, `set_intersect` | Supported | Set union / intersection; both tighten cardinality bounds |
 | `set_*_reif` | Supported | Reified set propagators |
 

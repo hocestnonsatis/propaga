@@ -37,6 +37,7 @@ mod regular;
 mod reified;
 mod scheduling;
 mod set_card;
+mod set_diff;
 mod set_in;
 mod set_intersect;
 mod set_reif;
@@ -90,6 +91,7 @@ pub use reified::{
 };
 pub use scheduling::TaskSpec;
 pub use set_card::SetCardPropagator;
+pub use set_diff::SetDiffPropagator;
 pub use set_in::SetInPropagator;
 pub use set_intersect::SetIntersectPropagator;
 pub use set_reif::{SetEqReifPropagator, SetInReifPropagator, SetSubsetReifPropagator};

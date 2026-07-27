@@ -14,9 +14,9 @@ use propaga_propagators::{
     ReifiedFloatLinearEqPropagator, ReifiedFloatLinearGePropagator, ReifiedFloatLinearLePropagator,
     ReifiedLessEqualPropagator, ReifiedLessThanPropagator, ReifiedNotEqualPropagator,
     ReifiedScalarEqPropagator, ReifiedScalarGePropagator, ReifiedScalarLePropagator,
-    SetCardPropagator, SetEqReifPropagator, SetInPropagator, SetInReifPropagator,
-    SetIntersectPropagator, SetSubsetPropagator, SetSubsetReifPropagator, SetUnionPropagator,
-    TablePropagator, TaskSpec,
+    SetCardPropagator, SetDiffPropagator, SetEqReifPropagator, SetInPropagator,
+    SetInReifPropagator, SetIntersectPropagator, SetSubsetPropagator, SetSubsetReifPropagator,
+    SetUnionPropagator, TablePropagator, TaskSpec,
 };
 use propaga_search::{
     DepthFirstSearch, LexicographicOptimization, LexicographicResult, Objective,
@@ -283,6 +283,12 @@ impl Model {
     pub fn set_intersect(&mut self, left: VariableId, right: VariableId, result: VariableId) {
         self.engine
             .add_propagator(Box::new(SetIntersectPropagator::new(left, right, result)));
+    }
+
+    /// Posts `result = left \\ right`.
+    pub fn set_diff(&mut self, left: VariableId, right: VariableId, result: VariableId) {
+        self.engine
+            .add_propagator(Box::new(SetDiffPropagator::new(left, right, result)));
     }
 
     /// Posts `c = a * b` for float variables.

@@ -61,6 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Handwritten FlatZinc fixture `float_cos.fzn`; CI smoke for `float_cos`, `lex_less`, `all_different_only`, and `generic_min`.
 - CI smoke solves for core int/bool/reified/BnB/globals fixtures: `int_plus`, `int_times`, `int_abs`, `int_min`, `int_lin_ne`, `bool_clause`, `bool_xor`, `bool_logic`, `reified_eq`, `reified_ne`, `maximize_x`, `minimize_cost`, `regular_chain`, `automaton_chain`, and `nested_predicate`.
 - CI smoke solves for remaining handwritten fixtures: reified linear/lt/`bool_reify`, bounded/weighted sums, `count`/`cumulative`/`disjunctive`, ordered/strict chains, `permutation_sum`/`predicate_multi`/`table_puzzle`, and `int_search` order/restart.
+- Native `SetDiffPropagator` for FlatZinc `set_diff` (replaces multi-constraint aux decomposition); `Model::set_diff`.
 
 ### Fixed
 

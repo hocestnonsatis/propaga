@@ -62,13 +62,7 @@ pub fn set_lt(model: &mut Model, left: VariableId, right: VariableId) {
 
 /// Posts `result = left \\ right`.
 pub fn set_diff(model: &mut Model, left: VariableId, right: VariableId, result: VariableId) {
-    model.set_subset(result, left);
-    let empty = aux_set_from(model, &[left, right], 0, 0);
-    model.set_intersect(right, result, empty);
-    // left ⊆ result ∪ right (cover may properly contain left when right ⊈ left).
-    let cover = aux_set_from(model, &[left, right], 0, usize::MAX);
-    model.set_union(result, right, cover);
-    model.set_subset(left, cover);
+    model.set_diff(left, right, result);
 }
 
 /// Posts `result = left △ right`.

@@ -67,6 +67,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - `SetSubsetPropagator` raises `|B|` card_min by `|glb(B) \ lub(A)|` when `A ⊆ B`
 - `SetIntersectPropagator` raises operand card_min by `|glb(A) \ lub(R)|` when `R = A ∩ B`
 - `SetUnionPropagator` raises `|R|` card_min by `|glb(R) \ lub(A)|` when `R = A ∪ B`
+- Native `SetDiffPropagator` for FlatZinc `set_diff` (symdiff still decomposes)
 
 ## Shipped in v1.0.0
 
