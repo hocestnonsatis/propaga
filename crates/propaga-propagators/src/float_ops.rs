@@ -182,6 +182,25 @@ fn next_down(value: f64) -> f64 {
     }
 }
 
+fn fixed_integer_image(snap: &propaga_core::FloatDomainSnapshot) -> Option<f64> {
+    if !snap.is_fixed() {
+        return None;
+    }
+    let n = snap.min.round();
+    ((snap.min - n).abs() <= 1e-9).then_some(n)
+}
+
+/// Inclusive bounds for the preimage of `n` under `f64::round` (half away from zero).
+fn round_preimage_bounds(n: f64) -> (f64, f64) {
+    if n > 0.0 {
+        (n - 0.5, next_down(n + 0.5))
+    } else if n < 0.0 {
+        (next_up(n - 0.5), n + 0.5)
+    } else {
+        (next_up(-0.5), next_down(0.5))
+    }
+}
+
 fn tighten_reif(ctx: &mut dyn PropagationContext, reif: VariableId, value: i32) -> bool {
     let mut changed = false;
     if ctx.remove_below(reif, value) {
@@ -420,6 +439,28 @@ impl Propagator for FloatUnaryPropagator {
                     }
                 }
             }
+            FloatUnaryOp::Floor => {
+                if let Some(n) = fixed_integer_image(&output_snap) {
+                    // floor⁻¹(n) = [n, n+1)
+                    changed |= ext.tighten_float_below(self.watched[0], n);
+                    changed |= ext.tighten_float_above(self.watched[0], next_down(n + 1.0));
+                }
+            }
+            FloatUnaryOp::Ceil => {
+                if let Some(n) = fixed_integer_image(&output_snap) {
+                    // ceil⁻¹(n) = (n-1, n]
+                    changed |= ext.tighten_float_below(self.watched[0], next_up(n - 1.0));
+                    changed |= ext.tighten_float_above(self.watched[0], n);
+                }
+            }
+            FloatUnaryOp::Round => {
+                if let Some(n) = fixed_integer_image(&output_snap) {
+                    // Rust round is half-away-from-zero.
+                    let (lo, hi) = round_preimage_bounds(n);
+                    changed |= ext.tighten_float_below(self.watched[0], lo);
+                    changed |= ext.tighten_float_above(self.watched[0], hi);
+                }
+            }
             _ => {}
         }
 
@@ -497,6 +538,38 @@ mod tests {
     use super::*;
     use propaga_domains::{AnyDomain, HybridDomain};
     use propaga_engine::Engine;
+
+    #[test]
+    fn float_floor_reverse_projects_fixed_image() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::fix(2.0)));
+        engine.add_propagator(Box::new(FloatUnaryPropagator::new(
+            x,
+            y,
+            FloatUnaryOp::Floor,
+        )));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let domain = engine.domain(x).as_float().unwrap();
+        assert!((domain.lower_bound() - 2.0).abs() < 1e-9);
+        assert!(domain.upper_bound() < 3.0);
+    }
+
+    #[test]
+    fn float_round_reverse_projects_fixed_image() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::fix(1.0)));
+        engine.add_propagator(Box::new(FloatUnaryPropagator::new(
+            x,
+            y,
+            FloatUnaryOp::Round,
+        )));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let domain = engine.domain(x).as_float().unwrap();
+        assert!((domain.lower_bound() - 0.5).abs() < 1e-9);
+        assert!(domain.upper_bound() < 1.5);
+    }
 
     #[test]
     fn float_plus_projects_holes_when_addend_is_fixed() {

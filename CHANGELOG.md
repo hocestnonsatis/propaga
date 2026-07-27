@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SetIntersectPropagator` tightens set-cardinality bounds (`|A∩B| ≤ min(|A|,|B|, overlap)`, operand outside-overlap lower bounds).
 - `SetSubsetPropagator` tightens set-cardinality bounds (`|A| ≤ |B|` when `A ⊆ B`).
 - Handwritten FlatZinc fixtures `float_round.fzn` and `set_subset.fzn`; CI smoke solves for `set_union.fzn` and `float_round.fzn`.
+- `FloatUnaryPropagator` reverse-projects fixed integer images of `ceil` / `floor` / `round` onto the input domain.
 
 ### Fixed
 
