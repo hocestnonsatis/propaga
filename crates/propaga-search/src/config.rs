@@ -164,7 +164,8 @@ impl VariableOrdering {
     pub fn parse(value: &str) -> Option<Self> {
         match value.to_ascii_lowercase().as_str() {
             "mrv" | "size" | "first_fail" | "most_constrained" => Some(Self::Mrv),
-            "dom" | "anti_first_fail" | "least_constrained" => Some(Self::Dom),
+            "dom" | "anti_first_fail" | "least_constrained" | "smallest" | "occurrence"
+            | "degree" => Some(Self::Dom),
             "dom-wdeg" | "wdeg" | "domwdeg" | "largest" => Some(Self::DomWdeg),
             "input" | "input-order" | "input_order" => Some(Self::InputOrder),
             "activity" | "vsids" => Some(Self::Activity),
@@ -299,6 +300,14 @@ mod tests {
         assert_eq!(
             VariableOrdering::parse("most_constrained"),
             Some(VariableOrdering::Mrv)
+        );
+        assert_eq!(
+            VariableOrdering::parse("smallest"),
+            Some(VariableOrdering::Dom)
+        );
+        assert_eq!(
+            VariableOrdering::parse("occurrence"),
+            Some(VariableOrdering::Dom)
         );
     }
 

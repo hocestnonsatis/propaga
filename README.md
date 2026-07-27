@@ -80,7 +80,7 @@ Global options:
 | `--time-limit SECS` | — | Wall-clock cutoff (`TIMEOUT` / `status: timeout`) |
 | `--no-learning` | off | Disable nogood learning |
 | `--restarts` | (from annotation or `luby`) | `none`, `luby`, `luby:N`, `constant:N`, or `geometric:B:N` |
-| `--var-ordering` | (from annotation or `mrv`) | `mrv`, `dom`, `dom-wdeg`, `input-order`, `activity` |
+| `--var-ordering` | (from annotation or `mrv`) | `mrv`, `dom`, `dom-wdeg`, `input-order`, `activity` (also FlatZinc aliases: `first_fail`, `smallest`, …) |
 | `--value-ordering` | (from annotation or `asc`) | `asc`, `desc`, `lcv`, `split`, `reverse-split`, `median`, `random`, `interval` |
 | `--no-phase-saving` | off | Disable phase saving |
 | `--workers N` | `1` | Portfolio worker count for `solve` and puzzles |

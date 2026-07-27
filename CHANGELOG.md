@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FloatUnaryPropagator` reverse-projects fixed integer images of `ceil` / `floor` / `round` onto the input domain.
 - Handwritten FlatZinc fixtures `float_floor.fzn` and `float_ceil.fzn` (fixed-image reverse projection); CI smoke for `float_floor.fzn`.
 - CLI and README document the full `--var-ordering` / `--value-ordering` alias sets (including `split`, `reverse-split`, `interval`, `random`, `activity`).
+- CLI `--var-ordering` accepts FlatZinc aliases `smallest` / `occurrence` / `degree` (same mapping as compile); CI smoke-solves `float_ceil.fzn`.
 
 ### Fixed
 

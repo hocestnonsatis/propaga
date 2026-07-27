@@ -51,7 +51,7 @@ struct Cli {
     #[arg(long, global = true)]
     no_phase_saving: bool,
 
-    /// Variable ordering during search: mrv, dom, dom-wdeg, input-order, or activity.
+    /// Variable ordering during search: mrv, dom, dom-wdeg, input-order, or activity (FlatZinc aliases like first_fail/smallest also accepted).
     #[arg(long, global = true)]
     var_ordering: Option<String>,
 

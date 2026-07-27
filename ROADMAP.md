@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish / corpus outside CLI search-ordering docs refresh
+- Small polish / corpus outside CLI↔FlatZinc search-selector alias parity
 
 ## Shipped after v1.0.0
 
@@ -36,6 +36,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - `FloatUnaryPropagator` reverse-projects fixed `ceil` / `floor` / `round` images
 - FlatZinc fixtures `float_floor.fzn` / `float_ceil.fzn` + CI smoke for floor
 - CLI/README document full `--var-ordering` / `--value-ordering` aliases (split, interval, activity, …)
+- CLI `--var-ordering` accepts FlatZinc aliases (`smallest`, `occurrence`, `degree`); CI smoke for `float_ceil.fzn`
 
 ## Shipped in v1.0.0
 
