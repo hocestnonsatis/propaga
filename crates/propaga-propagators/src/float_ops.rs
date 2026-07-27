@@ -431,14 +431,25 @@ impl Propagator for FloatUnaryPropagator {
             }
         }
         match self.op {
-            FloatUnaryOp::Abs if input_dom.lower_bound() >= 0.0 => {
+            FloatUnaryOp::Abs => {
                 for hole in &reverse_holes {
-                    changed |= ext.exclude_float_point(self.watched[0], *hole);
+                    if *hole > 0.0 {
+                        changed |= ext.exclude_float_point(self.watched[0], *hole);
+                        changed |= ext.exclude_float_point(self.watched[0], -hole);
+                    }
                 }
-            }
-            FloatUnaryOp::Abs if input_dom.upper_bound() <= 0.0 => {
-                for hole in &reverse_holes {
-                    changed |= ext.exclude_float_point(self.watched[0], -hole);
+                if let Some(y) = fixed_float_image(&output_snap) {
+                    if y >= 0.0 {
+                        // abs⁻¹(y) = {-y, y}; tighten to the hull, then drop the opposite
+                        // sign when the input cannot reach it.
+                        changed |= ext.tighten_float_below(self.watched[0], -y);
+                        changed |= ext.tighten_float_above(self.watched[0], y);
+                        if input_dom.lower_bound() >= 0.0 {
+                            changed |= ext.tighten_float_below(self.watched[0], y);
+                        } else if input_dom.upper_bound() <= 0.0 {
+                            changed |= ext.tighten_float_above(self.watched[0], -y);
+                        }
+                    }
                 }
             }
             FloatUnaryOp::Sqrt => {
@@ -548,7 +559,6 @@ impl Propagator for FloatUnaryPropagator {
                     }
                 }
             }
-            _ => {}
         }
 
         if ext
@@ -773,6 +783,30 @@ mod tests {
         )));
         assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
         assert!(!engine.domain(x).as_float().unwrap().contains(4.0));
+    }
+
+    #[test]
+    fn float_abs_reverse_projects_holes_across_zero() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(-3.0, 3.0)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 3.0).exclude(2.0)));
+        engine.add_propagator(Box::new(FloatUnaryPropagator::new(x, y, FloatUnaryOp::Abs)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let domain = engine.domain(x).as_float().unwrap();
+        assert!(!domain.contains(2.0));
+        assert!(!domain.contains(-2.0));
+    }
+
+    #[test]
+    fn float_abs_reverse_projects_fixed_image_on_nonnegative_input() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::fix(2.0)));
+        engine.add_propagator(Box::new(FloatUnaryPropagator::new(x, y, FloatUnaryOp::Abs)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let domain = engine.domain(x).as_float().unwrap();
+        assert!((domain.lower_bound() - 2.0).abs() < 1e-9);
+        assert!((domain.upper_bound() - 2.0).abs() < 1e-9);
     }
 
     #[test]

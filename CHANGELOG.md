@@ -92,6 +92,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SetLexReifPropagator` posts the negated lex relation when reif is false (`¬(A≤B)≡B<A`, `¬(A<B)≡B≤A`); fixture `set_le_reif.fzn` + CI smoke.
 - `float_ceil` / `floor` / `round` reverse-project integer output holes onto singleton preimages; unary reverse projection keeps pre-tighten holes so endpoint sync cannot drop them.
 - `FloatMinMaxPropagator` reverse-projects result holes onto an operand when the other side cannot realize that value as the min/max; handwritten `float_min_hole.fzn` + CI smoke.
+- `float_abs` reverse-projects result holes `h > 0` to both `±h` on the input (including domains that straddle zero); fixed nonnegative images tighten to the abs preimage hull.
 
 ### Fixed
 
