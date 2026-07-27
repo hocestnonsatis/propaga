@@ -1,0 +1,12 @@
+% Linear bool_and / bool_or / bool_xor.
+var 0..1: a;
+var 0..1: b;
+var 0..1: aand;
+var 0..1: aor;
+var 0..1: axor;
+constraint bool_eq(a, 1);
+constraint bool_eq(b, 0);
+constraint bool_and(a, b, aand);
+constraint bool_or(a, b, aor);
+constraint bool_xor(a, b, axor);
+solve satisfy;

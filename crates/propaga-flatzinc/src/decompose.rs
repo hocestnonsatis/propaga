@@ -173,12 +173,11 @@ pub fn bool_not(model: &mut Model, a: VariableId, b: VariableId) {
     model.scalar_eq(vec![1, 1], vec![a, b], 1);
 }
 
-/// Posts `c = a xor b` for 0/1 variables.
+/// Posts `c = a xor b` for 0/1 variables (`c <=> a != b`).
 pub fn bool_xor(model: &mut Model, a: VariableId, b: VariableId, c: VariableId) {
-    model.table(
-        vec![a, b, c],
-        vec![vec![0, 0, 0], vec![0, 1, 1], vec![1, 0, 1], vec![1, 1, 0]],
-    );
+    let eq = model.int_var_aux(0, 1);
+    model.reified_equal(a, b, eq);
+    model.scalar_eq(vec![1, 1], vec![eq, c], 1);
 }
 
 /// Posts at-least-one clause over 0/1 literals.
@@ -231,18 +230,18 @@ pub fn array_bool_xor(model: &mut Model, xs: &[VariableId], c: VariableId) {
 
 /// Posts `c = a /\ b` for 0/1 variables.
 pub fn bool_and(model: &mut Model, a: VariableId, b: VariableId, c: VariableId) {
-    model.table(
-        vec![a, b, c],
-        vec![vec![0, 0, 0], vec![0, 1, 0], vec![1, 0, 0], vec![1, 1, 1]],
-    );
+    model.less_equal(c, a);
+    model.less_equal(c, b);
+    // c >= a + b - 1  ⇔  a + b - c <= 1
+    model.scalar_le(vec![1, 1, -1], vec![a, b, c], 1);
 }
 
 /// Posts `c = a \/ b` for 0/1 variables.
 pub fn bool_or(model: &mut Model, a: VariableId, b: VariableId, c: VariableId) {
-    model.table(
-        vec![a, b, c],
-        vec![vec![0, 0, 0], vec![0, 1, 1], vec![1, 0, 1], vec![1, 1, 1]],
-    );
+    model.less_equal(a, c);
+    model.less_equal(b, c);
+    // c <= a + b  ⇔  a + b - c >= 0
+    model.scalar_ge(vec![1, 1, -1], vec![a, b, c], 0);
 }
 
 #[cfg(test)]

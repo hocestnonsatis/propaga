@@ -59,7 +59,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `element`, `array_int_element`, `array_var_int_element` | Supported | Element; standard forms are 1-based, `_nonshifted` is 0-based |
 | `array_int_maximum`, `array_int_minimum` | Supported | Binary `int_min`/`int_max` fold |
 | `bool_eq`, `bool2int` | Supported | Equality on `0..1` |
-| `bool_not`, `bool_and`, `bool_or`, `bool_xor` | Supported | `bool_not` via `a+b=1`; and/or/xor table / reified |
+| `bool_not`, `bool_and`, `bool_or`, `bool_xor` | Supported | Linear / reified encodings (`a+b=1`, and/or inequalities, xor via `¬(a=b)`) |
 | `bool_clause`, `bool_clause_reif` | Supported | Clause decomposition |
 | `bool_le`, `bool_lt`, `bool_*_reif`, `bool_eq_reif` | Supported | Table / reified |
 | `bool_lin_eq`, `bool_lin_le` | Supported | Linear scalar on `0..1` vars |

@@ -83,6 +83,7 @@ jobs:
       - run: cargo run -p propaga-cli -- solve --file benchmarks/int_lin_ne.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/bool_clause.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/bool_xor.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/bool_and_or_xor.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/bool_logic.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/reified_eq.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/reified_ne.fzn --quiet
