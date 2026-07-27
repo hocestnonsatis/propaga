@@ -258,39 +258,86 @@ impl Propagator for SetInReifPropagator {
         };
 
         let mut changed = false;
+        let (value_min, value_max) = {
+            let domain = ctx.domain(value_id);
+            (domain.min(), domain.max())
+        };
+
         if let Some(value) = ctx.fixed_value(value_id) {
-            if !set.lub.contains(&value) {
+            if set.glb.contains(&value) {
+                if ctx.fixed_value(reif_id) == Some(0) {
+                    return PropagationStatus::Failure;
+                }
+                changed |= tighten_reif(ctx, reif_id, 1);
+            } else if !set.lub.contains(&value) {
+                if ctx.fixed_value(reif_id) == Some(1) {
+                    return PropagationStatus::Failure;
+                }
+                changed |= tighten_reif(ctx, reif_id, 0);
+            } else if ctx.fixed_value(reif_id) == Some(1)
+                && let Some(ext) = ctx.as_extended()
+            {
+                changed |= ext.force_set_in(set_id, value);
+            } else if ctx.fixed_value(reif_id) == Some(0)
+                && let Some(ext) = ctx.as_extended()
+            {
+                changed |= ext.force_set_out(set_id, value);
+            }
+        } else if let (Some(min), Some(max)) = (value_min, value_max) {
+            let mut any_in_lub = false;
+            let mut all_in_glb = true;
+            let mut any_value = false;
+            for value in min..=max {
+                if !ctx.domain(value_id).contains(value) {
+                    continue;
+                }
+                any_value = true;
+                if set.lub.contains(&value) {
+                    any_in_lub = true;
+                }
+                if !set.glb.contains(&value) {
+                    all_in_glb = false;
+                }
+            }
+            if !any_value {
                 return PropagationStatus::Failure;
             }
-            if ctx.fixed_value(reif_id) == Some(0) {
-                return PropagationStatus::Failure;
+            if all_in_glb {
+                changed |= tighten_reif(ctx, reif_id, 1);
+            } else if !any_in_lub {
+                changed |= tighten_reif(ctx, reif_id, 0);
             }
-            if let Some(ext) = ctx.as_extended() {
+        }
+
+        if ctx.fixed_value(reif_id) == Some(1) {
+            if let (Some(min), Some(max)) = (value_min, value_max) {
+                for value in min..=max {
+                    if ctx.domain(value_id).contains(value) && !set.lub.contains(&value) {
+                        changed |= ctx.remove_value(value_id, value);
+                    }
+                }
+            }
+            if let Some(value) = ctx.fixed_value(value_id)
+                && let Some(ext) = ctx.as_extended()
+            {
                 changed |= ext.force_set_in(set_id, value);
             }
         }
 
-        if ctx.fixed_value(reif_id) == Some(1)
-            && let Some(value) = ctx.fixed_value(value_id)
-            && let Some(ext) = ctx.as_extended()
-        {
-            changed |= ext.force_set_in(set_id, value);
-        }
-
-        if ctx.fixed_value(reif_id) == Some(0)
-            && let Some(value) = ctx.fixed_value(value_id)
-            && set.glb.contains(&value)
-        {
-            return PropagationStatus::Failure;
-        }
-
-        if let (Some(min), Some(max)) = (ctx.domain(value_id).min(), ctx.domain(value_id).max()) {
-            for value in min..=max {
-                if ctx.domain(value_id).contains(value) && !set.lub.contains(&value) {
-                    if ctx.fixed_value(reif_id) == Some(1) {
-                        return PropagationStatus::Failure;
-                    }
-                    changed |= ctx.remove_value(value_id, value);
+        if ctx.fixed_value(reif_id) == Some(0) {
+            if let Some(value) = ctx.fixed_value(value_id) {
+                if set.glb.contains(&value) {
+                    return PropagationStatus::Failure;
+                }
+                if let Some(ext) = ctx.as_extended() {
+                    changed |= ext.force_set_out(set_id, value);
+                }
+            } else if let (Some(min), Some(max)) = (value_min, value_max) {
+                // Membership is inevitable when every remaining value is forced in the set.
+                let inevitable = (min..=max)
+                    .all(|value| !ctx.domain(value_id).contains(value) || set.glb.contains(&value));
+                if inevitable {
+                    return PropagationStatus::Failure;
                 }
             }
         }
@@ -426,5 +473,44 @@ mod tests {
         engine.propagate_all().unwrap();
         assert!(engine.domain(sub).as_set().unwrap().card_max() <= 2);
         assert!(engine.domain(sup).as_set().unwrap().card_min() >= 2);
+    }
+
+    #[test]
+    fn set_in_reif_value_outside_lub_forces_false() {
+        let mut engine = Engine::new();
+        let set = SetIntervalDomain::universe(1..=2).with_cardinality(0, 2);
+        let value = engine.new_variable(IntervalDomain::fix(3));
+        let set_var = engine.new_variable(AnyDomain::Set(set));
+        let reif = engine.new_variable(IntervalDomain::new(0, 1));
+        engine.add_propagator(Box::new(SetInReifPropagator::new(value, set_var, reif)));
+        engine.propagate_all().unwrap();
+        assert_eq!(engine.hybrid_domain(reif).fixed_value(), Some(0));
+    }
+
+    #[test]
+    fn set_in_reif_value_in_glb_forces_true() {
+        let mut engine = Engine::new();
+        let set = SetIntervalDomain::universe(1..=3)
+            .with_cardinality(1, 3)
+            .force_in(2)
+            .unwrap();
+        let value = engine.new_variable(IntervalDomain::fix(2));
+        let set_var = engine.new_variable(AnyDomain::Set(set));
+        let reif = engine.new_variable(IntervalDomain::new(0, 1));
+        engine.add_propagator(Box::new(SetInReifPropagator::new(value, set_var, reif)));
+        engine.propagate_all().unwrap();
+        assert_eq!(engine.hybrid_domain(reif).fixed_value(), Some(1));
+    }
+
+    #[test]
+    fn set_in_reif_false_forces_value_out_of_set() {
+        let mut engine = Engine::new();
+        let set = SetIntervalDomain::universe(1..=3).with_cardinality(0, 3);
+        let value = engine.new_variable(IntervalDomain::fix(2));
+        let set_var = engine.new_variable(AnyDomain::Set(set));
+        let reif = engine.new_variable(IntervalDomain::fix(0));
+        engine.add_propagator(Box::new(SetInReifPropagator::new(value, set_var, reif)));
+        engine.propagate_all().unwrap();
+        assert!(!engine.domain(set_var).as_set().unwrap().lub().contains(&2));
     }
 }
