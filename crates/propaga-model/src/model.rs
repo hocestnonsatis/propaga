@@ -17,8 +17,9 @@ use propaga_propagators::{
     ReifiedLessThanPropagator, ReifiedNotEqualPropagator, ReifiedScalarEqPropagator,
     ReifiedScalarGePropagator, ReifiedScalarLePropagator, SetCardEqPropagator, SetCardPropagator,
     SetDiffPropagator, SetEqPropagator, SetEqReifPropagator, SetInPropagator, SetInReifPropagator,
-    SetIntersectPropagator, SetLtPropagator, SetNePropagator, SetSubsetPropagator,
-    SetSubsetReifPropagator, SetSymDiffPropagator, SetUnionPropagator, TablePropagator, TaskSpec,
+    SetIntersectPropagator, SetLexOp, SetLexPropagator, SetLexReifPropagator, SetLtPropagator,
+    SetNePropagator, SetSubsetPropagator, SetSubsetReifPropagator, SetSymDiffPropagator,
+    SetUnionPropagator, TablePropagator, TaskSpec,
 };
 use propaga_search::{
     DepthFirstSearch, LexicographicOptimization, LexicographicResult, Objective,
@@ -221,6 +222,40 @@ impl Model {
         self.set_subset(left, right);
         self.engine
             .add_propagator(Box::new(SetLtPropagator::new(left, right)));
+    }
+
+    /// Posts MiniZinc/FlatZinc `set_le`: sorted-list lexicographic `left ≤ right`.
+    pub fn set_lex_le(&mut self, left: VariableId, right: VariableId) {
+        self.engine
+            .add_propagator(Box::new(SetLexPropagator::new(left, right, SetLexOp::Le)));
+    }
+
+    /// Posts MiniZinc/FlatZinc `set_lt`: sorted-list lexicographic `left < right`.
+    pub fn set_lex_lt(&mut self, left: VariableId, right: VariableId) {
+        self.engine
+            .add_propagator(Box::new(SetLexPropagator::new(left, right, SetLexOp::Lt)));
+    }
+
+    /// Posts `reif <=> left ≤_lex right`.
+    pub fn set_lex_le_reif(&mut self, left: VariableId, right: VariableId, reif: VariableId) {
+        self.engine
+            .add_propagator(Box::new(SetLexReifPropagator::new(
+                left,
+                right,
+                reif,
+                SetLexOp::Le,
+            )));
+    }
+
+    /// Posts `reif <=> left <_lex right`.
+    pub fn set_lex_lt_reif(&mut self, left: VariableId, right: VariableId, reif: VariableId) {
+        self.engine
+            .add_propagator(Box::new(SetLexReifPropagator::new(
+                left,
+                right,
+                reif,
+                SetLexOp::Lt,
+            )));
     }
 
     /// Posts `value ∈ set`.

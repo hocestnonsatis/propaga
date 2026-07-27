@@ -1,9 +1,9 @@
-% Lexicographic set_lt: {1} <_lex {1,2}.
+% Lexicographic set_le: {1} ≤_lex {1,2}.
 var set of 1..2: a;
 var set of 1..2: b;
 var 1..1: one;
 constraint set_card(a, 1);
 constraint set_in(one, a);
 constraint set_card(b, 2);
-constraint set_lt(a, b);
+constraint set_le(a, b);
 solve satisfy;
