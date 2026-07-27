@@ -79,6 +79,7 @@ fn stdlib_corpus_lists_expected_models() {
         "float_log2",
         "float_search_ann",
         "float_sin",
+        "indomain_random_ann",
         "int_lin_ne_reif",
         "int_min",
         "int_plus",
@@ -105,6 +106,7 @@ fn search_annotation_fixtures_are_satisfiable() {
         "float_search_ann",
         "set_search_ann",
         "bool_search_ann",
+        "indomain_random_ann",
     ] {
         let source = fs::read_to_string(bundled_fzn_path(name)).expect("read fzn");
         let mut instance = compile(parse(&source).expect("parse")).expect("compile");

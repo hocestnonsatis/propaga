@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish / corpus outside optimize-path `search_phases` wiring
+- Small polish / corpus outside recent search-annotation and set-cardinality fixtures
 
 ## Shipped after v1.0.0
 
@@ -27,18 +27,19 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - COMPATIBILITY.md float hole semantics section; README FlatZinc gap blurb refreshed
 - Search annotations: `float_search` / `set_search`, `indomain_random` / `indomain_reverse_split`, selector aliases
 - Multi-phase `seq_search` and `indomain_interval` value ordering
-- Stdlib CI corpus fixtures for `seq_search`, `search_selectors`, `float_search_ann`, `set_search_ann`, `bool_search_ann` (compile + SAT; portfolio SAT for `seq_search`)
+- Stdlib CI corpus fixtures for `seq_search`, `search_selectors`, `float_search_ann`, `set_search_ann`, `bool_search_ann`, `indomain_random_ann` (compile + SAT; portfolio SAT for `seq_search`)
 - Portfolio search (`solve_portfolio` / `--workers`) propagates `search_phases` to every worker
 - `SetUnionPropagator` cardinality bound tightening via `tighten_set_cardinality`
 - `SetIntersectPropagator` cardinality bound tightening via `tighten_set_cardinality`
 - `SetSubsetPropagator` cardinality bound tightening via `tighten_set_cardinality`
-- CI smoke solves for `set_union.fzn` and `float_round.fzn`; handwritten `set_subset.fzn` / `float_round.fzn` fixtures
+- CI smoke solves for `set_union.fzn`, `set_intersect.fzn`, and `float_round.fzn`; handwritten `set_subset.fzn` / `float_round.fzn` fixtures
 - `FloatUnaryPropagator` reverse-projects fixed `ceil` / `floor` / `round` images
 - FlatZinc fixtures `float_floor.fzn` / `float_ceil.fzn` + CI smoke for floor
 - CLI/README document full `--var-ordering` / `--value-ordering` aliases (split, interval, activity, …)
 - CLI `--var-ordering` accepts FlatZinc aliases (`smallest`, `occurrence`, `degree`); CI smoke for `float_ceil.fzn`
 - Stdlib corpus fixture `bool_search_ann` (`bool_search` + `restart_geometric`, compile + SAT)
 - BnB / lex / Pareto wire `search_phases` like portfolio
+- Stdlib corpus fixture `indomain_random_ann`; CI smoke for `set_intersect.fzn`
 
 ## Shipped in v1.0.0
 

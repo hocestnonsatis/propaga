@@ -35,6 +35,7 @@ The root `benchmarks/` folder contains curated `.fzn` files (no MiniZinc toolcha
 | `int_search_order.fzn` | `int_search` variable order |
 | `int_search_restart.fzn` | `restart_luby` + minimize |
 | `set_union.fzn` / `set_subset.fzn` | Set ops + cardinality |
+| `set_intersect.fzn` | Set intersection + cardinality bounds |
 | `float_round.fzn` | Constant-domain `float_round` collapse |
 | `float_floor.fzn` / `float_ceil.fzn` | Fixed-image reverse projection |
 
@@ -58,8 +59,8 @@ MiniZinc models under `benchmarks/minizinc/stdlib/` exercise individual FlatZinc
 builtins and search annotations. Each model has a **hand-written** `.fzn` fixture
 used for offline/CI compile regression
 (`cargo test -p propaga-flatzinc --test builtin_corpus`). Search fixtures include
-`seq_search`, `search_selectors`, `float_search_ann`, `set_search_ann`, and
-`bool_search_ann` (compile + SAT; `seq_search` also under portfolio).
+`seq_search`, `search_selectors`, `float_search_ann`, `set_search_ann`,
+`bool_search_ann`, and `indomain_random_ann` (compile + SAT; `seq_search` also under portfolio).
 
 Optional local refresh into `target/flatzinc-stdlib/` (note: MiniZinc 2.9+ may
 emit solver-specific FlatZinc that Propaga does not yet accept — prefer the

@@ -25,18 +25,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Locally monotonic `sin`/`cos` preserve and reverse-project holes; `ceil`/`floor`/`round` collapse to a fixed point when constant on the domain.
 - FlatZinc `float_search` / `set_search` parsing; `indomain_random` (deterministic) and `indomain_reverse_split` value orderings; `most_constrained` / `least_constrained` aliases.
 - FlatZinc `indomain_interval` value ordering and multi-phase `seq_search` (per nested group selectors until that group's variables are fixed).
-- Stdlib corpus fixtures `seq_search`, `search_selectors`, `float_search_ann`, `set_search_ann`, and `bool_search_ann` with compile + SAT regression in `builtin_corpus` (including portfolio SAT for `seq_search`).
+- Stdlib corpus fixtures `seq_search`, `search_selectors`, `float_search_ann`, `set_search_ann`, `bool_search_ann`, and `indomain_random_ann` with compile + SAT regression in `builtin_corpus` (including portfolio SAT for `seq_search`).
 - Portfolio search attaches model `search_phases` to every worker so FlatZinc `seq_search` is respected with `--workers > 1`.
 - `ExtendedPropagationContext::tighten_set_cardinality` for set-cardinality bound updates during propagation.
 - `SetUnionPropagator` tightens set-cardinality bounds (`|A∪B| ≥ max(|A|,|B|)`, `|A∪B| ≤ |A|+|B|`, subset relations).
 - `SetIntersectPropagator` tightens set-cardinality bounds (`|A∩B| ≤ min(|A|,|B|, overlap)`, operand outside-overlap lower bounds).
 - `SetSubsetPropagator` tightens set-cardinality bounds (`|A| ≤ |B|` when `A ⊆ B`).
-- Handwritten FlatZinc fixtures `float_round.fzn` and `set_subset.fzn`; CI smoke solves for `set_union.fzn` and `float_round.fzn`.
+- Handwritten FlatZinc fixtures `float_round.fzn` and `set_subset.fzn`; CI smoke solves for `set_union.fzn`, `set_intersect.fzn`, and `float_round.fzn`.
 - `FloatUnaryPropagator` reverse-projects fixed integer images of `ceil` / `floor` / `round` onto the input domain.
 - Handwritten FlatZinc fixtures `float_floor.fzn` and `float_ceil.fzn` (fixed-image reverse projection); CI smoke for `float_floor.fzn`.
 - CLI and README document the full `--var-ordering` / `--value-ordering` alias sets (including `split`, `reverse-split`, `interval`, `random`, `activity`).
 - CLI `--var-ordering` accepts FlatZinc aliases `smallest` / `occurrence` / `degree` (same mapping as compile); CI smoke-solves `float_ceil.fzn`.
 - Stdlib corpus fixture `bool_search_ann` (`bool_search` + `restart_geometric`) with compile + SAT regression.
+- Stdlib corpus fixture `indomain_random_ann` (`indomain_random` value ordering) with compile + SAT regression.
 - BnB / lexicographic / Pareto search attach model `search_phases` (FlatZinc `seq_search` respected under optimize paths).
 
 ### Fixed
