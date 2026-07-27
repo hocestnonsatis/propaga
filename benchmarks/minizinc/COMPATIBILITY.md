@@ -151,21 +151,22 @@ Holes are **sound over-approximations**: dropping a hole never removes a feasibl
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| `int_search` / `bool_search` | Supported subset | Variable list, common selectors, `complete` |
+| `int_search` / `bool_search` | Supported subset | Variable list, common selectors, `complete` / `incomplete` |
+| `float_search` / `set_search` | Supported subset | Same selectors; `float_search` precision is accepted and ignored |
 | `restart_luby`, `restart_constant`, `restart_geometric`, `restart_none` | Supported | |
-| `incomplete` | Tolerated | Treated like `complete` |
+| `incomplete` | Tolerated | Treated like `complete` for exploration completeness |
 
 FlatZinc search annotations are applied when solving with `propaga solve`. CLI flags override annotation defaults when explicitly provided:
 
 | CLI flag | Overrides annotation |
 |----------|----------------------|
-| `--var-ordering` | `int_search` variable selection |
-| `--value-ordering` | `int_search` value selection |
+| `--var-ordering` | `*_search` variable selection |
+| `--value-ordering` | `*_search` value selection |
 | `--restarts` | `restart_*` policy |
 
-Supported `int_search` variable selectors: `input_order`, `first_fail`, `smallest`, `largest`, `occurrence`, `degree`, `anti_first_fail`.
+Supported variable selectors: `input_order`, `first_fail` / `most_constrained`, `smallest`, `largest`, `occurrence`, `degree`, `anti_first_fail` / `least_constrained`, `activity` / `vsids`.
 
-Supported `int_search` value selectors: `indomain_min`, `indomain_max`, `indomain_split`, `indomain_median`.
+Supported value selectors: `indomain_min`, `indomain_max`, `indomain_split`, `indomain_reverse_split`, `indomain_median`, `indomain_random` (deterministic shuffle).
 
 ## CLI features (FlatZinc path)
 

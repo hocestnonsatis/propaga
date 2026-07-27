@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small engine/docs polish outside the float-hole track (e.g. `float_round` hole notes already covered; CI corpus hygiene or search annotation gaps)
+- Broader search polish (`seq_search`, `indomain_interval`) or CI corpus additions for new annotation coverage
 
 ## Shipped after v1.0.0
 
@@ -25,6 +25,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Native `FloatElementPropagator` for `array_*_float_element` with hole sharing and common-absent hole projection
 - Locally monotonic `sin`/`cos` hole projection (+ reverse preimages); constant-domain `ceil`/`floor` collapse to fixed
 - COMPATIBILITY.md float hole semantics section; README FlatZinc gap blurb refreshed
+- Search annotations: `float_search` / `set_search`, `indomain_random` / `indomain_reverse_split`, selector aliases
 
 ## Shipped in v1.0.0
 

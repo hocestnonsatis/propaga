@@ -111,8 +111,12 @@ pub enum ValueOrdering {
     Lcv,
     /// Try values near the domain midpoint first (binary split style).
     Split,
+    /// Like [`Split`], but prefer the upper half of the domain first.
+    ReverseSplit,
     /// Try the median domain value first, then ascending.
     Median,
+    /// Deterministic pseudo-random order (stable for a given variable/domain).
+    Random,
 }
 
 impl ValueOrdering {
@@ -120,11 +124,15 @@ impl ValueOrdering {
     #[must_use]
     pub fn parse(value: &str) -> Option<Self> {
         match value.to_ascii_lowercase().as_str() {
-            "asc" | "ascending" | "min" => Some(Self::Ascending),
-            "desc" | "descending" | "max" => Some(Self::Descending),
+            "asc" | "ascending" | "min" | "indomain_min" => Some(Self::Ascending),
+            "desc" | "descending" | "max" | "indomain_max" => Some(Self::Descending),
             "lcv" => Some(Self::Lcv),
             "split" | "indomain_split" => Some(Self::Split),
+            "reverse-split" | "reverse_split" | "indomain_reverse_split" => {
+                Some(Self::ReverseSplit)
+            }
             "median" | "indomain_median" => Some(Self::Median),
+            "random" | "indomain_random" => Some(Self::Random),
             _ => None,
         }
     }
@@ -151,9 +159,9 @@ impl VariableOrdering {
     #[must_use]
     pub fn parse(value: &str) -> Option<Self> {
         match value.to_ascii_lowercase().as_str() {
-            "mrv" | "size" => Some(Self::Mrv),
-            "dom" => Some(Self::Dom),
-            "dom-wdeg" | "wdeg" | "domwdeg" => Some(Self::DomWdeg),
+            "mrv" | "size" | "first_fail" | "most_constrained" => Some(Self::Mrv),
+            "dom" | "anti_first_fail" | "least_constrained" => Some(Self::Dom),
+            "dom-wdeg" | "wdeg" | "domwdeg" | "largest" => Some(Self::DomWdeg),
             "input" | "input-order" | "input_order" => Some(Self::InputOrder),
             "activity" | "vsids" => Some(Self::Activity),
             _ => None,

@@ -196,6 +196,8 @@ pub fn compile(program: FlatZincProgram) -> Result<CompiledInstance, FlatZincErr
         &env,
         program.solve.annotations.int_search.as_ref(),
         program.solve.annotations.bool_search.as_ref(),
+        program.solve.annotations.float_search.as_ref(),
+        program.solve.annotations.set_search.as_ref(),
         &model,
     )?;
 
@@ -265,6 +267,8 @@ fn compile_search_config(
 ) -> Result<Option<AnnotationSearchConfig>, FlatZincError> {
     if annotations.int_search.is_none()
         && annotations.bool_search.is_none()
+        && annotations.float_search.is_none()
+        && annotations.set_search.is_none()
         && annotations.restart.is_none()
     {
         return Ok(None);
@@ -273,7 +277,9 @@ fn compile_search_config(
     let search_annotation = annotations
         .int_search
         .as_ref()
-        .or(annotations.bool_search.as_ref());
+        .or(annotations.bool_search.as_ref())
+        .or(annotations.float_search.as_ref())
+        .or(annotations.set_search.as_ref());
 
     let (variable_ordering, value_ordering) = if let Some(search) = search_annotation {
         let _ = search.complete;
@@ -320,8 +326,10 @@ fn parse_geometric_restart_base(base: &str) -> Result<f64, FlatZincError> {
 fn map_var_choice(choice: &str) -> Result<VariableOrdering, FlatZincError> {
     match choice {
         "input_order" => Ok(VariableOrdering::InputOrder),
-        "first_fail" => Ok(VariableOrdering::Mrv),
-        "smallest" | "occurrence" | "degree" | "anti_first_fail" => Ok(VariableOrdering::Dom),
+        "first_fail" | "most_constrained" => Ok(VariableOrdering::Mrv),
+        "smallest" | "occurrence" | "degree" | "anti_first_fail" | "least_constrained" => {
+            Ok(VariableOrdering::Dom)
+        }
         "largest" => Ok(VariableOrdering::DomWdeg),
         "activity" | "vsids" => Ok(VariableOrdering::Activity),
         other => Err(FlatZincError::Unsupported(format!(
@@ -335,7 +343,9 @@ fn map_value_choice(choice: &str) -> Result<ValueOrdering, FlatZincError> {
         "indomain_min" => Ok(ValueOrdering::Ascending),
         "indomain_max" => Ok(ValueOrdering::Descending),
         "indomain_split" => Ok(ValueOrdering::Split),
+        "indomain_reverse_split" => Ok(ValueOrdering::ReverseSplit),
         "indomain_median" => Ok(ValueOrdering::Median),
+        "indomain_random" => Ok(ValueOrdering::Random),
         other => Err(FlatZincError::Unsupported(format!(
             "unsupported value selection `{other}`"
         ))),
@@ -346,21 +356,15 @@ fn resolve_search_vars(
     env: &HashMap<String, Binding>,
     int_search: Option<&IntSearchAnnotation>,
     bool_search: Option<&IntSearchAnnotation>,
+    float_search: Option<&IntSearchAnnotation>,
+    set_search: Option<&IntSearchAnnotation>,
     model: &Model,
 ) -> Result<Vec<VariableId>, FlatZincError> {
-    if let Some(int_search) = int_search {
-        let vars = resolve_var_list(env, Expr::List(int_search.vars.clone()))?;
+    if let Some(search) = int_search.or(bool_search).or(float_search).or(set_search) {
+        let vars = resolve_var_list(env, Expr::List(search.vars.clone()))?;
         if vars.is_empty() {
             return Err(FlatZincError::Unsupported(
-                "int_search has no variables".to_string(),
-            ));
-        }
-        Ok(vars)
-    } else if let Some(bool_search) = bool_search {
-        let vars = resolve_var_list(env, Expr::List(bool_search.vars.clone()))?;
-        if vars.is_empty() {
-            return Err(FlatZincError::Unsupported(
-                "bool_search has no variables".to_string(),
+                "search annotation has no variables".to_string(),
             ));
         }
         Ok(vars)
@@ -3207,6 +3211,36 @@ mod tests {
                 value_ordering: ValueOrdering::Ascending,
                 restart_policy: RestartPolicy::default(),
             })
+        );
+    }
+
+    #[test]
+    fn compiles_indomain_random_and_float_search() {
+        let source = r#"
+            var 1..3: x;
+            solve :: int_search([x], most_constrained, indomain_random, complete) satisfy;
+        "#;
+        let program = parse(source).unwrap();
+        let instance = compile(program).unwrap();
+        assert_eq!(
+            instance.annotation_search.map(|c| c.value_ordering),
+            Some(ValueOrdering::Random)
+        );
+        assert_eq!(
+            instance.annotation_search.map(|c| c.variable_ordering),
+            Some(VariableOrdering::Mrv)
+        );
+
+        let source = r#"
+            var 0.0..1.0: y;
+            solve :: float_search([y], 1.0e-3, input_order, indomain_reverse_split, complete) satisfy;
+        "#;
+        let program = parse(source).unwrap();
+        let instance = compile(program).unwrap();
+        assert_eq!(instance.solve_vars.len(), 1);
+        assert_eq!(
+            instance.annotation_search.map(|c| c.value_ordering),
+            Some(ValueOrdering::ReverseSplit)
         );
     }
 

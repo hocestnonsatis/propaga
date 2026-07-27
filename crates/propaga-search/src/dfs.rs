@@ -850,6 +850,16 @@ impl DepthFirstSearch {
                     });
                 }
             }
+            crate::config::ValueOrdering::ReverseSplit => {
+                if let (Some(min), Some(max)) = (domain.min(), domain.max()) {
+                    let midpoint = min + (max - min) / 2;
+                    values.sort_by_key(|value| {
+                        let upper_first = if *value > midpoint { 0u8 } else { 1 };
+                        let distance = value.abs_diff(midpoint);
+                        (upper_first, distance, *value)
+                    });
+                }
+            }
             crate::config::ValueOrdering::Median => {
                 if !values.is_empty() {
                     let median = values[values.len() / 2];
@@ -857,6 +867,9 @@ impl DepthFirstSearch {
                     values.sort_unstable();
                     values.insert(0, median);
                 }
+            }
+            crate::config::ValueOrdering::Random => {
+                shuffle_values_deterministic(&mut values, var);
             }
         }
 
@@ -912,6 +925,28 @@ fn weighted_score(engine: &Engine, var: VariableId, weight: Option<u32>) -> u64 
     let size = engine.domain(var).size() as u64;
     let weight = weight.unwrap_or(1).max(1) as u64;
     size.saturating_mul(1_000) / weight
+}
+
+fn shuffle_values_deterministic(values: &mut [i32], var: VariableId) {
+    if values.len() < 2 {
+        return;
+    }
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    var.hash(&mut hasher);
+    values.len().hash(&mut hasher);
+    for &value in values.iter() {
+        value.hash(&mut hasher);
+    }
+    let mut state = hasher.finish() ^ 0x9e37_79b9_7f4a_7c15;
+    for i in (1..values.len()).rev() {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        let j = (state as usize) % (i + 1);
+        values.swap(i, j);
+    }
 }
 
 #[cfg(test)]

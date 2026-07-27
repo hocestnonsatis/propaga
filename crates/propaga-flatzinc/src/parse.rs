@@ -647,6 +647,10 @@ pub struct SearchAnnotations {
     pub int_search: Option<IntSearchAnnotation>,
     /// `bool_search(...)` annotation, when present.
     pub bool_search: Option<IntSearchAnnotation>,
+    /// `float_search(...)` annotation, when present.
+    pub float_search: Option<IntSearchAnnotation>,
+    /// `set_search(...)` annotation, when present.
+    pub set_search: Option<IntSearchAnnotation>,
     /// `restart_*` annotation, when present.
     pub restart: Option<RestartAnnotation>,
     /// `pareto([...])` annotation listing objective variables.
@@ -2501,33 +2505,7 @@ impl Parser {
                         "multiple int_search annotations".to_string(),
                     ));
                 }
-                self.expect_symbol("(")?;
-                let vars_expr = self.parse_expr()?;
-                let vars = match vars_expr {
-                    Expr::List(items) => items,
-                    other => vec![other],
-                };
-                self.expect_symbol(",")?;
-                let var_choice = self.expect_ident_token()?;
-                self.expect_symbol(",")?;
-                let value_choice = self.expect_ident_token()?;
-                self.expect_symbol(",")?;
-                let complete = match self.expect_ident_token()?.as_str() {
-                    "complete" => true,
-                    "incomplete" => false,
-                    other => {
-                        return Err(FlatZincError::Unsupported(format!(
-                            "unsupported int_search completeness `{other}`"
-                        )));
-                    }
-                };
-                self.expect_symbol(")")?;
-                annotations.int_search = Some(IntSearchAnnotation {
-                    vars,
-                    var_choice,
-                    value_choice,
-                    complete,
-                });
+                annotations.int_search = Some(self.parse_typed_search_annotation("int_search")?);
             }
             "bool_search" => {
                 if annotations.bool_search.is_some() {
@@ -2535,33 +2513,23 @@ impl Parser {
                         "multiple bool_search annotations".to_string(),
                     ));
                 }
-                self.expect_symbol("(")?;
-                let vars_expr = self.parse_expr()?;
-                let vars = match vars_expr {
-                    Expr::List(items) => items,
-                    other => vec![other],
-                };
-                self.expect_symbol(",")?;
-                let var_choice = self.expect_ident_token()?;
-                self.expect_symbol(",")?;
-                let value_choice = self.expect_ident_token()?;
-                self.expect_symbol(",")?;
-                let complete = match self.expect_ident_token()?.as_str() {
-                    "complete" => true,
-                    "incomplete" => false,
-                    other => {
-                        return Err(FlatZincError::Unsupported(format!(
-                            "unsupported bool_search completeness `{other}`"
-                        )));
-                    }
-                };
-                self.expect_symbol(")")?;
-                annotations.bool_search = Some(IntSearchAnnotation {
-                    vars,
-                    var_choice,
-                    value_choice,
-                    complete,
-                });
+                annotations.bool_search = Some(self.parse_typed_search_annotation("bool_search")?);
+            }
+            "set_search" => {
+                if annotations.set_search.is_some() {
+                    return Err(FlatZincError::Unsupported(
+                        "multiple set_search annotations".to_string(),
+                    ));
+                }
+                annotations.set_search = Some(self.parse_typed_search_annotation("set_search")?);
+            }
+            "float_search" => {
+                if annotations.float_search.is_some() {
+                    return Err(FlatZincError::Unsupported(
+                        "multiple float_search annotations".to_string(),
+                    ));
+                }
+                annotations.float_search = Some(self.parse_float_search_annotation()?);
             }
             "restart_constant" => {
                 if annotations.restart.is_some() {
@@ -2671,6 +2639,72 @@ impl Parser {
             }
         }
         Ok(())
+    }
+
+    fn parse_typed_search_annotation(
+        &mut self,
+        kind: &str,
+    ) -> Result<IntSearchAnnotation, FlatZincError> {
+        self.expect_symbol("(")?;
+        let vars_expr = self.parse_expr()?;
+        let vars = match vars_expr {
+            Expr::List(items) => items,
+            other => vec![other],
+        };
+        self.expect_symbol(",")?;
+        let var_choice = self.expect_ident_token()?;
+        self.expect_symbol(",")?;
+        let value_choice = self.expect_ident_token()?;
+        self.expect_symbol(",")?;
+        let complete = match self.expect_ident_token()?.as_str() {
+            "complete" => true,
+            "incomplete" => false,
+            other => {
+                return Err(FlatZincError::Unsupported(format!(
+                    "unsupported {kind} completeness `{other}`"
+                )));
+            }
+        };
+        self.expect_symbol(")")?;
+        Ok(IntSearchAnnotation {
+            vars,
+            var_choice,
+            value_choice,
+            complete,
+        })
+    }
+
+    fn parse_float_search_annotation(&mut self) -> Result<IntSearchAnnotation, FlatZincError> {
+        // float_search(vars, precision, var_choice, value_choice, complete)
+        self.expect_symbol("(")?;
+        let vars_expr = self.parse_expr()?;
+        let vars = match vars_expr {
+            Expr::List(items) => items,
+            other => vec![other],
+        };
+        self.expect_symbol(",")?;
+        let _precision = self.parse_expr()?;
+        self.expect_symbol(",")?;
+        let var_choice = self.expect_ident_token()?;
+        self.expect_symbol(",")?;
+        let value_choice = self.expect_ident_token()?;
+        self.expect_symbol(",")?;
+        let complete = match self.expect_ident_token()?.as_str() {
+            "complete" => true,
+            "incomplete" => false,
+            other => {
+                return Err(FlatZincError::Unsupported(format!(
+                    "unsupported float_search completeness `{other}`"
+                )));
+            }
+        };
+        self.expect_symbol(")")?;
+        Ok(IntSearchAnnotation {
+            vars,
+            var_choice,
+            value_choice,
+            complete,
+        })
     }
 
     fn parse_expr_list(&mut self) -> Result<Vec<Expr>, FlatZincError> {
@@ -3024,6 +3058,33 @@ mod tests {
         assert_eq!(int_search.value_choice, "indomain_min");
         assert!(int_search.complete);
         assert!(matches!(program.solve.goal, SolveGoal::Satisfy));
+    }
+
+    #[test]
+    fn parses_float_search_with_precision() {
+        let source = r#"
+            var 0.0..1.0: x;
+            solve :: float_search([x], 0.001, input_order, indomain_split, complete) satisfy;
+        "#;
+        let program = parse(source).unwrap();
+        let float_search = program
+            .solve
+            .annotations
+            .float_search
+            .expect("float_search");
+        assert_eq!(float_search.vars.len(), 1);
+        assert_eq!(float_search.var_choice, "input_order");
+        assert_eq!(float_search.value_choice, "indomain_split");
+    }
+
+    #[test]
+    fn parses_set_search_annotation() {
+        let source = r#"
+            var set of 1..3: s;
+            solve :: set_search([s], first_fail, indomain_min, complete) satisfy;
+        "#;
+        let program = parse(source).unwrap();
+        assert!(program.solve.annotations.set_search.is_some());
     }
 
     #[test]
