@@ -1,0 +1,5 @@
+% Constant-domain round collapses to a fixed image.
+var 1.1..1.4: a;
+var 0.0..3.0: b;
+constraint float_round(a, b);
+solve satisfy;

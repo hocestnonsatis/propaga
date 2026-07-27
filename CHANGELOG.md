@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SetUnionPropagator` tightens set-cardinality bounds (`|A∪B| ≥ max(|A|,|B|)`, `|A∪B| ≤ |A|+|B|`, subset relations).
 - `SetIntersectPropagator` tightens set-cardinality bounds (`|A∩B| ≤ min(|A|,|B|, overlap)`, operand outside-overlap lower bounds).
 - `SetSubsetPropagator` tightens set-cardinality bounds (`|A| ≤ |B|` when `A ⊆ B`).
+- Handwritten FlatZinc fixtures `float_round.fzn` and `set_subset.fzn`; CI smoke solves for `set_union.fzn` and `float_round.fzn`.
 
 ### Fixed
 

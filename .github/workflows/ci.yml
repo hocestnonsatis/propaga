@@ -28,6 +28,8 @@ jobs:
       - run: cargo run -p propaga-cli -- solve --file benchmarks/magic_square.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/cumulative.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/gcc_exact.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/set_union.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/float_round.fzn --quiet
       - run: cargo run -p propaga-cli -- schedule --file benchmarks/schedule_three_tasks.json --quiet
       - run: bash benchmarks/run.sh
 

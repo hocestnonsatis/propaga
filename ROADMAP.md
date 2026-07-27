@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish / CI hygiene outside set-cardinality propagation already shipped
+- Small polish outside CI smoke fixtures already added (docs or other corpus)
 
 ## Shipped after v1.0.0
 
@@ -32,6 +32,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - `SetUnionPropagator` cardinality bound tightening via `tighten_set_cardinality`
 - `SetIntersectPropagator` cardinality bound tightening via `tighten_set_cardinality`
 - `SetSubsetPropagator` cardinality bound tightening via `tighten_set_cardinality`
+- CI smoke solves for `set_union.fzn` and `float_round.fzn`; handwritten `set_subset.fzn` / `float_round.fzn` fixtures
 
 ## Shipped in v1.0.0
 

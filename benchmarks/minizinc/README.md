@@ -34,6 +34,8 @@ The root `benchmarks/` folder contains curated `.fzn` files (no MiniZinc toolcha
 | `cumulative.fzn` | Two-task cumulative |
 | `int_search_order.fzn` | `int_search` variable order |
 | `int_search_restart.fzn` | `restart_luby` + minimize |
+| `set_union.fzn` / `set_subset.fzn` | Set ops + cardinality |
+| `float_round.fzn` | Constant-domain `float_round` collapse |
 
 When adding MiniZinc sources here, prefer small models that use supported constraints only. See [COMPATIBILITY.md](COMPATIBILITY.md) for the full list.
 
