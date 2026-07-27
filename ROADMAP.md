@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish outside set-domain cardinality clamping and search fixtures already shipped
+- Small polish outside set-domain cardinality invariant maintenance
 
 ## Shipped after v1.0.0
 
@@ -43,6 +43,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Stdlib corpus fixture `reverse_split_ann` (`indomain_reverse_split` + `restart_constant`)
 - Stdlib corpus fixture `median_luby_ann` (`activity` + `indomain_median` + `restart_luby`)
 - `SetIntervalDomain::with_cardinality` clamps to GLB/LUB sizes; CI smoke `set_eq` / `set_subset`
+- `force_in` / `force_out` keep card bounds aligned with GLB/LUB
 
 ## Shipped in v1.0.0
 

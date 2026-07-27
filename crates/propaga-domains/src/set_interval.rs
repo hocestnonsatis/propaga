@@ -86,8 +86,10 @@ impl SetIntervalDomain {
         }
         let mut next = self.clone();
         next.glb.insert(value);
+        next.card_min = next.card_min.max(next.glb.len());
         if next.glb.len() == next.card_max {
             next.lub = next.glb.clone();
+            next.card_max = next.lub.len();
         }
         if next.glb.len() > next.card_max || next.is_empty() {
             None
@@ -104,8 +106,10 @@ impl SetIntervalDomain {
         }
         let mut next = self.clone();
         next.lub.remove(&value);
+        next.card_max = next.card_max.min(next.lub.len());
         if next.lub.len() == next.card_min {
             next.glb = next.lub.clone();
+            next.card_min = next.glb.len();
         }
         if next.lub.len() < next.card_min || next.is_empty() {
             None
@@ -184,5 +188,29 @@ mod tests {
     fn with_cardinality_can_still_detect_empty() {
         let domain = SetIntervalDomain::universe(1..=2).with_cardinality(3, 3);
         assert!(domain.is_empty());
+    }
+
+    #[test]
+    fn force_in_raises_card_min_to_glb_size() {
+        let domain = SetIntervalDomain::universe(1..=4)
+            .with_cardinality(0, 3)
+            .force_in(1)
+            .unwrap()
+            .force_in(2)
+            .unwrap();
+        assert_eq!(domain.card_min(), 2);
+        assert_eq!(domain.glb().len(), 2);
+    }
+
+    #[test]
+    fn force_out_lowers_card_max_to_lub_size() {
+        let domain = SetIntervalDomain::universe(1..=4)
+            .with_cardinality(0, 4)
+            .force_out(4)
+            .unwrap()
+            .force_out(3)
+            .unwrap();
+        assert_eq!(domain.card_max(), 2);
+        assert_eq!(domain.lub().len(), 2);
     }
 }
