@@ -320,10 +320,20 @@ pub enum Constraint {
     FloatDom(Expr, Vec<f64>),
     /// `float_in(x, lo, hi)`
     FloatIn(Expr, f64, f64),
-    /// `array_float_element(array, index, value)`
-    ArrayFloatElement(Expr, Expr, Expr),
-    /// `array_var_float_element(array, index, value)`
-    ArrayVarFloatElement(Expr, Expr, Expr),
+    /// `array_float_element` / `array_float_element_nonshifted`
+    ArrayFloatElement {
+        array: Expr,
+        index: Expr,
+        value: Expr,
+        one_based: bool,
+    },
+    /// `array_var_float_element` / `array_var_float_element_nonshifted`
+    ArrayVarFloatElement {
+        array: Expr,
+        index: Expr,
+        value: Expr,
+        one_based: bool,
+    },
     /// `array_float_maximum(xs, m)`
     ArrayFloatMaximum(Expr, Expr),
     /// `array_float_minimum(xs, m)`
@@ -535,8 +545,13 @@ pub enum Constraint {
     ArrayBoolAnd(Expr, Expr),
     /// `array_bool_xor(xs, c)`
     ArrayBoolXor(Expr, Expr),
-    /// `array_bool_element(array, index, value)`
-    ArrayBoolElement(Expr, Expr, Expr),
+    /// `array_bool_element` / `array_bool_element_nonshifted`
+    ArrayBoolElement {
+        array: Expr,
+        index: Expr,
+        value: Expr,
+        one_based: bool,
+    },
     /// `array_var_bool_element` / `array_var_bool_element_nonshifted`
     /// (`one_based` is true for the shifted/standard form).
     ArrayVarBoolElement {
@@ -553,10 +568,20 @@ pub enum Constraint {
     IntPow(Expr, Expr, Expr),
     /// `int_pow_fixed(base, exp, result)`
     IntPowFixed(Expr, i32, Expr),
-    /// `array_int_element(array, index, value)`
-    ArrayIntElement(Expr, Expr, Expr),
-    /// `array_var_int_element(array, index, value)`
-    ArrayVarIntElement(Expr, Expr, Expr),
+    /// `array_int_element` / `array_int_element_nonshifted`
+    ArrayIntElement {
+        array: Expr,
+        index: Expr,
+        value: Expr,
+        one_based: bool,
+    },
+    /// `array_var_int_element` / `array_var_int_element_nonshifted`
+    ArrayVarIntElement {
+        array: Expr,
+        index: Expr,
+        value: Expr,
+        one_based: bool,
+    },
     /// `array_int_maximum(xs, m)`
     ArrayIntMaximum(Expr, Expr),
     /// `array_int_minimum(xs, m)`
@@ -1482,7 +1507,25 @@ impl Parser {
                 let index = self.parse_expr()?;
                 self.expect_symbol(",")?;
                 let value = self.parse_expr()?;
-                Constraint::ArrayFloatElement(array, index, value)
+                Constraint::ArrayFloatElement {
+                    array,
+                    index,
+                    value,
+                    one_based: true,
+                }
+            }
+            "array_float_element_nonshifted" => {
+                let array = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let index = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let value = self.parse_expr()?;
+                Constraint::ArrayFloatElement {
+                    array,
+                    index,
+                    value,
+                    one_based: false,
+                }
             }
             "array_var_float_element" => {
                 let array = self.parse_expr()?;
@@ -1490,7 +1533,25 @@ impl Parser {
                 let index = self.parse_expr()?;
                 self.expect_symbol(",")?;
                 let value = self.parse_expr()?;
-                Constraint::ArrayVarFloatElement(array, index, value)
+                Constraint::ArrayVarFloatElement {
+                    array,
+                    index,
+                    value,
+                    one_based: true,
+                }
+            }
+            "array_var_float_element_nonshifted" => {
+                let array = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let index = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let value = self.parse_expr()?;
+                Constraint::ArrayVarFloatElement {
+                    array,
+                    index,
+                    value,
+                    one_based: false,
+                }
             }
             "array_float_maximum" => {
                 let xs = self.parse_expr()?;
@@ -2173,7 +2234,25 @@ impl Parser {
                 let index = self.parse_expr()?;
                 self.expect_symbol(",")?;
                 let value = self.parse_expr()?;
-                Constraint::ArrayBoolElement(array, index, value)
+                Constraint::ArrayBoolElement {
+                    array,
+                    index,
+                    value,
+                    one_based: true,
+                }
+            }
+            "array_bool_element_nonshifted" => {
+                let array = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let index = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let value = self.parse_expr()?;
+                Constraint::ArrayBoolElement {
+                    array,
+                    index,
+                    value,
+                    one_based: false,
+                }
             }
             "array_var_bool_element" => {
                 let array = self.parse_expr()?;
@@ -2247,7 +2326,25 @@ impl Parser {
                 let index = self.parse_expr()?;
                 self.expect_symbol(",")?;
                 let value = self.parse_expr()?;
-                Constraint::ArrayIntElement(array, index, value)
+                Constraint::ArrayIntElement {
+                    array,
+                    index,
+                    value,
+                    one_based: true,
+                }
+            }
+            "array_int_element_nonshifted" => {
+                let array = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let index = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let value = self.parse_expr()?;
+                Constraint::ArrayIntElement {
+                    array,
+                    index,
+                    value,
+                    one_based: false,
+                }
             }
             "array_var_int_element" => {
                 let array = self.parse_expr()?;
@@ -2255,7 +2352,25 @@ impl Parser {
                 let index = self.parse_expr()?;
                 self.expect_symbol(",")?;
                 let value = self.parse_expr()?;
-                Constraint::ArrayVarIntElement(array, index, value)
+                Constraint::ArrayVarIntElement {
+                    array,
+                    index,
+                    value,
+                    one_based: true,
+                }
+            }
+            "array_var_int_element_nonshifted" => {
+                let array = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let index = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let value = self.parse_expr()?;
+                Constraint::ArrayVarIntElement {
+                    array,
+                    index,
+                    value,
+                    one_based: false,
+                }
             }
             "array_int_maximum" => {
                 let xs = self.parse_expr()?;

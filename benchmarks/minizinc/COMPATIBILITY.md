@@ -51,7 +51,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `int_min`, `int_max`, `int_pow`, `int_pow_fixed` | Supported | Table decomposition |
 | `int2float` | Supported | Channeling propagator |
 | `min` / `max` (generic) | Supported | Dispatches to `int_*` or `float_*` by domain |
-| `element`, `array_int_element`, `array_var_int_element` | Supported | Element propagator |
+| `element`, `array_int_element`, `array_var_int_element` | Supported | Element; standard forms are 1-based, `_nonshifted` is 0-based |
 | `array_int_maximum`, `array_int_minimum` | Supported | Reified decomposition |
 | `bool_eq`, `bool2int` | Supported | Equality on `0..1` |
 | `bool_not`, `bool_and`, `bool_or`, `bool_xor` | Supported | Table decomposition |
@@ -87,7 +87,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `float_lin_*_reif` | Supported | Reified float linear |
 | `float_*_reif` | Supported | Reified float comparisons |
 | `float_dom`, `float_in` | Supported | Interval union / membership decomposition |
-| `array_float_element`, `array_var_float_element`, `array_float_maximum`, `array_float_minimum` | Supported | Native float element (hole-aware) + max/min decomposition |
+| `array_float_element`, `array_var_float_element`, `array_float_maximum`, `array_float_minimum` | Supported | Native float element (hole-aware; 1-based / `_nonshifted` 0-based) + max/min decomposition |
 
 **Soundness note:** Float propagation is **interval-based**. Bounds are conservative; non-convex unary functions (e.g. `sin` over a full period) widen to `[-1, 1]` when the input span exceeds one period.
 

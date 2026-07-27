@@ -77,6 +77,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Native `SetEqPropagator` for FlatZinc `set_eq`
 - `array_var_set_element` 1-based vs `_nonshifted` 0-based + CI fixtures
 - `array_var_bool_element` 1-based vs `_nonshifted` 0-based + CI fixtures
+- Int/float/bool `array_*_element` 1-based indexing + `_nonshifted` variants
 
 ## Shipped in v1.0.0
 

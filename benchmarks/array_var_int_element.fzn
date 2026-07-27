@@ -1,0 +1,11 @@
+% array_var_int_element with 1-based index.
+var 1..5: a;
+var 1..5: b;
+var 1..2: i;
+var 1..5: v;
+constraint int_eq(a, 3);
+constraint int_eq(b, 4);
+constraint array_var_int_element([a, b], i, v);
+constraint int_eq(i, 2);
+constraint int_eq(v, 4);
+solve satisfy;

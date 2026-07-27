@@ -638,11 +638,21 @@ fn post_constraint(
             let x = resolve_var(env, x)?;
             crate::decompose_float::float_in(model, x, lo, hi);
         }
-        Constraint::ArrayFloatElement(array, index, value) => {
-            post_array_float_element(model, env, array, index, value)?;
+        Constraint::ArrayFloatElement {
+            array,
+            index,
+            value,
+            one_based,
+        } => {
+            post_array_float_element(model, env, array, index, value, one_based)?;
         }
-        Constraint::ArrayVarFloatElement(array, index, value) => {
-            post_array_var_float_element(model, env, array, index, value)?;
+        Constraint::ArrayVarFloatElement {
+            array,
+            index,
+            value,
+            one_based,
+        } => {
+            post_array_var_float_element(model, env, array, index, value, one_based)?;
         }
         Constraint::ArrayFloatMaximum(xs, m) => {
             let xs = resolve_var_list(env, xs)?;
@@ -1063,14 +1073,21 @@ fn post_constraint(
             crate::decompose::int_pow_fixed(model, base, exp, result)
                 .map_err(FlatZincError::Unsupported)?;
         }
-        Constraint::ArrayIntElement(array, index, value) => {
-            post_array_int_element(model, env, array, index, value)?;
+        Constraint::ArrayIntElement {
+            array,
+            index,
+            value,
+            one_based,
+        } => {
+            post_array_int_element(model, env, array, index, value, one_based)?;
         }
-        Constraint::ArrayVarIntElement(array, index, value) => {
-            let array_vars = resolve_var_list(env, array)?;
-            let index_var = resolve_var(env, index)?;
-            let value_var = resolve_var(env, value)?;
-            model.element(index_var, array_vars, value_var);
+        Constraint::ArrayVarIntElement {
+            array,
+            index,
+            value,
+            one_based,
+        } => {
+            post_array_var_int_element(model, env, array, index, value, one_based)?;
         }
         Constraint::ArrayIntMaximum(xs, m) => {
             let xs = resolve_var_list(env, xs)?;
@@ -1154,8 +1171,13 @@ fn post_constraint(
             let c = resolve_var(env, c)?;
             crate::decompose::array_bool_xor(model, &xs, c);
         }
-        Constraint::ArrayBoolElement(array, index, value) => {
-            post_array_int_element(model, env, array, index, value)?;
+        Constraint::ArrayBoolElement {
+            array,
+            index,
+            value,
+            one_based,
+        } => {
+            post_array_int_element(model, env, array, index, value, one_based)?;
         }
         Constraint::ArrayVarBoolElement {
             array,
@@ -1453,12 +1475,28 @@ fn substitute_constraint(
         Constraint::Sort(x, y) => Constraint::Sort(map(x), map(y)),
         Constraint::FloatDom(x, values) => Constraint::FloatDom(map(x), values.clone()),
         Constraint::FloatIn(x, lo, hi) => Constraint::FloatIn(map(x), *lo, *hi),
-        Constraint::ArrayFloatElement(array, index, value) => {
-            Constraint::ArrayFloatElement(map(array), map(index), map(value))
-        }
-        Constraint::ArrayVarFloatElement(array, index, value) => {
-            Constraint::ArrayVarFloatElement(map(array), map(index), map(value))
-        }
+        Constraint::ArrayFloatElement {
+            array,
+            index,
+            value,
+            one_based,
+        } => Constraint::ArrayFloatElement {
+            array: map(array),
+            index: map(index),
+            value: map(value),
+            one_based: *one_based,
+        },
+        Constraint::ArrayVarFloatElement {
+            array,
+            index,
+            value,
+            one_based,
+        } => Constraint::ArrayVarFloatElement {
+            array: map(array),
+            index: map(index),
+            value: map(value),
+            one_based: *one_based,
+        },
         Constraint::ArrayFloatMaximum(xs, m) => Constraint::ArrayFloatMaximum(map(xs), map(m)),
         Constraint::ArrayFloatMinimum(xs, m) => Constraint::ArrayFloatMinimum(map(xs), map(m)),
         Constraint::Table { vars, tuples } => Constraint::Table {
@@ -1657,12 +1695,28 @@ fn substitute_constraint(
         Constraint::IntPowFixed(base, exp, result) => {
             Constraint::IntPowFixed(map(base), *exp, map(result))
         }
-        Constraint::ArrayIntElement(array, index, value) => {
-            Constraint::ArrayIntElement(map(array), map(index), map(value))
-        }
-        Constraint::ArrayVarIntElement(array, index, value) => {
-            Constraint::ArrayVarIntElement(map(array), map(index), map(value))
-        }
+        Constraint::ArrayIntElement {
+            array,
+            index,
+            value,
+            one_based,
+        } => Constraint::ArrayIntElement {
+            array: map(array),
+            index: map(index),
+            value: map(value),
+            one_based: *one_based,
+        },
+        Constraint::ArrayVarIntElement {
+            array,
+            index,
+            value,
+            one_based,
+        } => Constraint::ArrayVarIntElement {
+            array: map(array),
+            index: map(index),
+            value: map(value),
+            one_based: *one_based,
+        },
         Constraint::ArrayIntMaximum(xs, m) => Constraint::ArrayIntMaximum(map(xs), map(m)),
         Constraint::ArrayIntMinimum(xs, m) => Constraint::ArrayIntMinimum(map(xs), map(m)),
         Constraint::BoolNot(a, b) => Constraint::BoolNot(map(a), map(b)),
@@ -1696,9 +1750,17 @@ fn substitute_constraint(
         },
         Constraint::ArrayBoolAnd(xs, c) => Constraint::ArrayBoolAnd(map(xs), map(c)),
         Constraint::ArrayBoolXor(xs, c) => Constraint::ArrayBoolXor(map(xs), map(c)),
-        Constraint::ArrayBoolElement(array, index, value) => {
-            Constraint::ArrayBoolElement(map(array), map(index), map(value))
-        }
+        Constraint::ArrayBoolElement {
+            array,
+            index,
+            value,
+            one_based,
+        } => Constraint::ArrayBoolElement {
+            array: map(array),
+            index: map(index),
+            value: map(value),
+            one_based: *one_based,
+        },
         Constraint::ArrayVarBoolElement {
             array,
             index,
@@ -2157,17 +2219,51 @@ fn post_array_var_set_element(
     Ok(())
 }
 
+fn zero_based_element_index(
+    model: &mut Model,
+    index_var: VariableId,
+    array_len: usize,
+    one_based: bool,
+) -> VariableId {
+    if !one_based {
+        return index_var;
+    }
+    let max_zero_based = (array_len as i32 - 1).max(0);
+    let shifted = model.int_var_aux(0, max_zero_based);
+    // index = shifted + 1
+    model.scalar_eq(vec![1, -1], vec![index_var, shifted], 1);
+    shifted
+}
+
 fn post_array_int_element(
     model: &mut Model,
     env: &HashMap<String, Binding>,
     array: Expr,
     index: Expr,
     value: Expr,
+    one_based: bool,
 ) -> Result<(), FlatZincError> {
     let index_var = resolve_var(env, index)?;
     let value_var = resolve_var(env, value)?;
     let array_vars = resolve_int_array_vars(model, env, array)?;
-    model.element(index_var, array_vars, value_var);
+    let index_for_element = zero_based_element_index(model, index_var, array_vars.len(), one_based);
+    model.element(index_for_element, array_vars, value_var);
+    Ok(())
+}
+
+fn post_array_var_int_element(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    array: Expr,
+    index: Expr,
+    value: Expr,
+    one_based: bool,
+) -> Result<(), FlatZincError> {
+    let array_vars = resolve_var_list(env, array)?;
+    let index_var = resolve_var(env, index)?;
+    let value_var = resolve_var(env, value)?;
+    let index_for_element = zero_based_element_index(model, index_var, array_vars.len(), one_based);
+    model.element(index_for_element, array_vars, value_var);
     Ok(())
 }
 
@@ -2182,15 +2278,7 @@ fn post_array_var_bool_element(
     let array_vars = resolve_var_list(env, array)?;
     let index_var = resolve_var(env, index)?;
     let value_var = resolve_var(env, value)?;
-    let index_for_element = if one_based {
-        let max_zero_based = (array_vars.len() as i32 - 1).max(0);
-        let shifted = model.int_var_aux(0, max_zero_based);
-        // index = shifted + 1
-        model.scalar_eq(vec![1, -1], vec![index_var, shifted], 1);
-        shifted
-    } else {
-        index_var
-    };
+    let index_for_element = zero_based_element_index(model, index_var, array_vars.len(), one_based);
     model.element(index_for_element, array_vars, value_var);
     Ok(())
 }
@@ -2601,8 +2689,9 @@ fn post_array_float_element(
     array: Expr,
     index: Expr,
     value: Expr,
+    one_based: bool,
 ) -> Result<(), FlatZincError> {
-    post_array_var_float_element(model, env, array, index, value)
+    post_array_var_float_element(model, env, array, index, value, one_based)
 }
 
 fn post_array_var_float_element(
@@ -2611,11 +2700,18 @@ fn post_array_var_float_element(
     array: Expr,
     index: Expr,
     value: Expr,
+    one_based: bool,
 ) -> Result<(), FlatZincError> {
     let array_vars = resolve_var_list(env, array)?;
     let index_var = resolve_var(env, index)?;
     let value_var = resolve_var(env, value)?;
-    crate::decompose_float::array_var_float_element(model, &array_vars, index_var, value_var);
+    let index_for_element = zero_based_element_index(model, index_var, array_vars.len(), one_based);
+    crate::decompose_float::array_var_float_element(
+        model,
+        &array_vars,
+        index_for_element,
+        value_var,
+    );
     Ok(())
 }
 

@@ -67,11 +67,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Native `SetEqPropagator` for FlatZinc `set_eq` (membership + cardinality sync; replaces dual-subset encoding).
 - FlatZinc `array_var_set_element` uses 1-based indices; `array_var_set_element_nonshifted` stays 0-based; handwritten fixtures + CI smoke.
 - FlatZinc `array_var_bool_element` uses 1-based indices via an index shift into `ElementPropagator`; `_nonshifted` stays 0-based; handwritten fixtures + CI smoke.
+- FlatZinc `array_int_element` / `array_var_int_element` / `array_bool_element` / `array_float_element` / `array_var_float_element` use 1-based indices (with `_nonshifted` 0-based variants); shared index-shift helper; CI smoke for int/float element.
 
 ### Fixed
 
 - `array_var_set_element` indexes from 1 (was incorrectly 0-based like `_nonshifted`).
 - `array_var_bool_element` indexes from 1 (was incorrectly 0-based like `_nonshifted`).
+- `array_int_element` / `array_var_int_element` / `array_bool_element` / `array_float_element` / `array_var_float_element` index from 1 (were incorrectly 0-based).
 - `SetEqReifPropagator` only treats sets as definitely unequal on GLB/LUB conflicts (not mere domain asymmetry), assigns the reif literal when equality is decided, and syncs cardinality when reif is true.
 - `SetSubsetReifPropagator` assigns the reif on definite subset/violation, syncs cardinality when reif is true, and fails when reif is false but subsethood is inevitable.
 - `SetInReifPropagator` assigns the reif from membership facts (value outside LUB ⇒ false, in GLB ⇒ true) instead of failing, and forces set out when reif is false.
