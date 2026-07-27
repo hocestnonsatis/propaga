@@ -76,6 +76,7 @@ jobs:
       - run: cargo run -p propaga-cli -- solve --file benchmarks/int_plus.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/int_times.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/int_times_large.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/int_div.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/int_abs.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/int_min.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/int_lin_ne.fzn --quiet

@@ -1,0 +1,8 @@
+% Bound-consistent int_div (beyond former table size).
+var 0..1000: a;
+var 1..50: b;
+var -100..100: c;
+constraint int_div(a, b, c);
+constraint int_eq(b, 7);
+constraint int_eq(c, 12);
+solve satisfy;

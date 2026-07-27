@@ -9,16 +9,16 @@ use propaga_propagators::{
     FloatLinearGePropagator, FloatLinearLePropagator, FloatLinearNePropagator, FloatMinMaxOp,
     FloatMinMaxPropagator, FloatNePropagator, FloatTimesPropagator, FloatUnaryOp,
     FloatUnaryPropagator, GlobalCardinalityPropagator, Int2FloatPropagator, IntAbsPropagator,
-    IntMinMaxOp, IntMinMaxPropagator, IntTimesPropagator, InversePropagator, LessEqualPropagator,
-    LessThanPropagator, LinearEqPropagator, LinearScalarGePropagator, LinearScalarLePropagator,
-    NotEqualOffsetPropagator, RectangleSpec, RegularPropagator, ReifiedEqualityPropagator,
-    ReifiedFloatLinearEqPropagator, ReifiedFloatLinearGePropagator, ReifiedFloatLinearLePropagator,
-    ReifiedLessEqualPropagator, ReifiedLessThanPropagator, ReifiedNotEqualPropagator,
-    ReifiedScalarEqPropagator, ReifiedScalarGePropagator, ReifiedScalarLePropagator,
-    SetCardEqPropagator, SetCardPropagator, SetDiffPropagator, SetEqPropagator,
-    SetEqReifPropagator, SetInPropagator, SetInReifPropagator, SetIntersectPropagator,
-    SetLtPropagator, SetNePropagator, SetSubsetPropagator, SetSubsetReifPropagator,
-    SetSymDiffPropagator, SetUnionPropagator, TablePropagator, TaskSpec,
+    IntDivPropagator, IntMinMaxOp, IntMinMaxPropagator, IntTimesPropagator, InversePropagator,
+    LessEqualPropagator, LessThanPropagator, LinearEqPropagator, LinearScalarGePropagator,
+    LinearScalarLePropagator, NotEqualOffsetPropagator, RectangleSpec, RegularPropagator,
+    ReifiedEqualityPropagator, ReifiedFloatLinearEqPropagator, ReifiedFloatLinearGePropagator,
+    ReifiedFloatLinearLePropagator, ReifiedLessEqualPropagator, ReifiedLessThanPropagator,
+    ReifiedNotEqualPropagator, ReifiedScalarEqPropagator, ReifiedScalarGePropagator,
+    ReifiedScalarLePropagator, SetCardEqPropagator, SetCardPropagator, SetDiffPropagator,
+    SetEqPropagator, SetEqReifPropagator, SetInPropagator, SetInReifPropagator,
+    SetIntersectPropagator, SetLtPropagator, SetNePropagator, SetSubsetPropagator,
+    SetSubsetReifPropagator, SetSymDiffPropagator, SetUnionPropagator, TablePropagator, TaskSpec,
 };
 use propaga_search::{
     DepthFirstSearch, LexicographicOptimization, LexicographicResult, Objective,
@@ -522,6 +522,12 @@ impl Model {
     pub fn int_times(&mut self, a: VariableId, b: VariableId, c: VariableId) {
         self.engine
             .add_propagator(Box::new(IntTimesPropagator::new(a, b, c)));
+    }
+
+    /// Posts `c = a / b` (trunc toward zero) for integer variables; excludes `b = 0`.
+    pub fn int_div(&mut self, a: VariableId, b: VariableId, c: VariableId) {
+        self.engine
+            .add_propagator(Box::new(IntDivPropagator::new(a, b, c)));
     }
 
     /// Posts `left < right`.
