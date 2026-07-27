@@ -39,6 +39,8 @@ The root `benchmarks/` folder contains curated `.fzn` files (no MiniZinc toolcha
 | `set_eq.fzn` | Set equality (mutual subset) |
 | `float_round.fzn` | Constant-domain `float_round` collapse |
 | `float_floor.fzn` / `float_ceil.fzn` | Fixed-image reverse projection |
+| `seq_search_minimize.fzn` | Multi-phase `seq_search` under BnB minimize |
+| `float_abs.fzn` | Float absolute value |
 
 When adding MiniZinc sources here, prefer small models that use supported constraints only. See [COMPATIBILITY.md](COMPATIBILITY.md) for the full list.
 

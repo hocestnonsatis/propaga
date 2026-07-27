@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish outside set-domain cardinality invariant maintenance
+- Small polish outside BnB seq_search fixture and set-domain card invariants
 
 ## Shipped after v1.0.0
 
@@ -44,6 +44,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Stdlib corpus fixture `median_luby_ann` (`activity` + `indomain_median` + `restart_luby`)
 - `SetIntervalDomain::with_cardinality` clamps to GLB/LUB sizes; CI smoke `set_eq` / `set_subset`
 - `force_in` / `force_out` keep card bounds aligned with GLB/LUB
+- Handwritten `seq_search_minimize.fzn` + CI smoke (BnB phases / `float_abs`)
 
 ## Shipped in v1.0.0
 

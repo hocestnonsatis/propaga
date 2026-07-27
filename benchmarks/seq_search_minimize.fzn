@@ -1,0 +1,8 @@
+% seq_search phases must apply under branch-and-bound minimize.
+var 1..5: x;
+var 1..5: y;
+constraint int_lin_le([1, 1], [x, y], 6);
+solve :: seq_search([
+  int_search([x], input_order, indomain_min, complete),
+  int_search([y], input_order, indomain_max, complete)
+]) minimize x;
