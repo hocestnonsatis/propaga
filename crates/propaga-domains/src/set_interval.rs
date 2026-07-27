@@ -22,10 +22,13 @@ impl SetIntervalDomain {
         }
     }
 
+    /// Sets cardinality bounds, clamped to the structural range `[|GLB|, |LUB|]`.
     #[must_use]
     pub fn with_cardinality(mut self, min: usize, max: usize) -> Self {
-        self.card_min = min;
-        self.card_max = max;
+        let structural_min = self.glb.len();
+        let structural_max = self.lub.len();
+        self.card_min = min.max(structural_min);
+        self.card_max = max.min(structural_max);
         self
     }
 
@@ -165,5 +168,21 @@ mod tests {
         let domain = SetIntervalDomain::universe(1..=3).with_cardinality(1, 2);
         let next = domain.force_out(3).unwrap();
         assert!(!next.lub().contains(&3));
+    }
+
+    #[test]
+    fn with_cardinality_clamps_to_glb_lub() {
+        let domain = SetIntervalDomain::universe(1..=3)
+            .force_in(1)
+            .unwrap()
+            .with_cardinality(0, 5);
+        assert_eq!(domain.card_min(), 1);
+        assert_eq!(domain.card_max(), 3);
+    }
+
+    #[test]
+    fn with_cardinality_can_still_detect_empty() {
+        let domain = SetIntervalDomain::universe(1..=2).with_cardinality(3, 3);
+        assert!(domain.is_empty());
     }
 }
