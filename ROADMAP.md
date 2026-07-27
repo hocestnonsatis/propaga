@@ -87,6 +87,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Native `FloatMinMaxPropagator` for FlatZinc `float_min` / `float_max`
 - Native `IntMinMaxPropagator` for FlatZinc `int_min` / `int_max`; array float min/max fold
 - Native `IntAbsPropagator` for FlatZinc `int_abs`; array int min/max fold
+- Native `IntTimesPropagator` for FlatZinc `int_times` (no table size cap)
 
 ## Shipped in v1.0.0
 

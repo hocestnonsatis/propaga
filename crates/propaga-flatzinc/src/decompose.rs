@@ -130,27 +130,14 @@ pub fn int_abs(model: &mut Model, a: VariableId, b: VariableId) {
     model.int_abs(a, b);
 }
 
-/// Posts `c = a * b` using a domain table.
+/// Posts `c = a * b` with bound-consistent propagation.
 pub fn int_times(
     model: &mut Model,
     a: VariableId,
     b: VariableId,
     c: VariableId,
 ) -> Result<(), String> {
-    let (amin, amax) = domain_range(model, a);
-    let (bmin, bmax) = domain_range(model, b);
-    let a_len = (amax - amin + 1) as usize;
-    let b_len = (bmax - bmin + 1) as usize;
-    if table_too_large(a_len.saturating_mul(b_len)) {
-        return Err("int_times domain too large".to_string());
-    }
-    let mut tuples = Vec::with_capacity(a_len * b_len);
-    for av in amin..=amax {
-        for bv in bmin..=bmax {
-            tuples.push(vec![av, bv, av * bv]);
-        }
-    }
-    model.table(vec![a, b, c], tuples);
+    model.int_times(a, b, c);
     Ok(())
 }
 

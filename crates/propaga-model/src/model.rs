@@ -9,8 +9,8 @@ use propaga_propagators::{
     FloatLinearGePropagator, FloatLinearLePropagator, FloatLinearNePropagator, FloatMinMaxOp,
     FloatMinMaxPropagator, FloatNePropagator, FloatTimesPropagator, FloatUnaryOp,
     FloatUnaryPropagator, GlobalCardinalityPropagator, Int2FloatPropagator, IntAbsPropagator,
-    IntMinMaxOp, IntMinMaxPropagator, InversePropagator, LessEqualPropagator, LessThanPropagator,
-    LinearEqPropagator, LinearScalarGePropagator, LinearScalarLePropagator,
+    IntMinMaxOp, IntMinMaxPropagator, IntTimesPropagator, InversePropagator, LessEqualPropagator,
+    LessThanPropagator, LinearEqPropagator, LinearScalarGePropagator, LinearScalarLePropagator,
     NotEqualOffsetPropagator, RectangleSpec, RegularPropagator, ReifiedEqualityPropagator,
     ReifiedFloatLinearEqPropagator, ReifiedFloatLinearGePropagator, ReifiedFloatLinearLePropagator,
     ReifiedLessEqualPropagator, ReifiedLessThanPropagator, ReifiedNotEqualPropagator,
@@ -516,6 +516,12 @@ impl Model {
     pub fn int_abs(&mut self, a: VariableId, b: VariableId) {
         self.engine
             .add_propagator(Box::new(IntAbsPropagator::new(a, b)));
+    }
+
+    /// Posts `c = a * b` for integer variables.
+    pub fn int_times(&mut self, a: VariableId, b: VariableId, c: VariableId) {
+        self.engine
+            .add_propagator(Box::new(IntTimesPropagator::new(a, b, c)));
     }
 
     /// Posts `left < right`.

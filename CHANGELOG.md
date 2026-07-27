@@ -77,6 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Native `FloatMinMaxPropagator` for FlatZinc `float_min` / `float_max` (replaces reified OR encoding); handwritten `float_min_max.fzn` + CI smoke.
 - Native `IntMinMaxPropagator` for FlatZinc `int_min` / `int_max` (replaces domain tables); `array_float_minimum` / `maximum` fold via binary min/max; fixtures `int_min_max.fzn` / `array_float_min_max.fzn` + CI smoke.
 - Native `IntAbsPropagator` for FlatZinc `int_abs` (replaces domain table); `array_int_minimum` / `maximum` fold via binary min/max; fixture `array_int_min_max.fzn` + CI smoke.
+- Native `IntTimesPropagator` for FlatZinc `int_times` (replaces domain table / 10k cap); handwritten `int_times_large.fzn` + CI smoke.
 
 ### Fixed
 

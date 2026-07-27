@@ -1,0 +1,8 @@
+% Bound-consistent int_times with larger domains (beyond former table cap).
+var 1..200: x;
+var 1..200: y;
+var 1..40000: z;
+constraint int_times(x, y, z);
+constraint int_eq(x, 100);
+constraint int_eq(z, 15000);
+solve satisfy;

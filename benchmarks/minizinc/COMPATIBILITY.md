@@ -52,7 +52,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `int_*_reif` | Supported | Reified propagators |
 | `int_lin_eq`, `int_lin_le`, `int_lin_ge`, `int_lin_ne` | Supported | Linear scalar propagators |
 | `int_lin_*_reif` | Supported | Reified linear scalar |
-| `int_plus`, `int_abs`, `int_times`, `int_div`, `int_mod` | Supported | Bound-consistent `int_abs`; `int_times`/`div`/`mod` table / decomposition |
+| `int_plus`, `int_abs`, `int_times`, `int_div`, `int_mod` | Supported | Bound-consistent `int_abs`/`int_times`; `int_div`/`mod` table / decomposition |
 | `int_min`, `int_max`, `int_pow`, `int_pow_fixed` | Supported | Bound-consistent `int_min`/`int_max`; `int_pow*` table decomposition |
 | `int2float` | Supported | Channeling propagator |
 | `min` / `max` (generic) | Supported | Dispatches to `int_*` or `float_*` by domain |
@@ -66,7 +66,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `array_bool_and`, `array_bool_xor` | Supported | Decomposition |
 | `array_bool_element`, `array_var_bool_element` | Supported | Element; `array_var_bool_element` is 1-based, `_nonshifted` is 0-based |
 
-**Decomposition note:** `int_times`, `int_div`, `int_mod`, and `int_pow` use domain tables capped at **10 000 tuples**. Larger Cartesian products return an unsupported error at compile time.
+**Decomposition note:** `int_div`, `int_mod`, and `int_pow` use domain tables capped at **10 000 tuples**. Larger Cartesian products return an unsupported error at compile time. `int_times` uses bound-consistent propagation (no table size cap).
 
 ## Set constraints
 

@@ -28,6 +28,7 @@ mod forbidden_assignment;
 mod gcc;
 mod int_abs;
 mod int_minmax;
+mod int_times;
 mod inverse;
 mod less_equal;
 mod less_than;
@@ -85,6 +86,7 @@ pub use forbidden_assignment::{
 pub use gcc::{CardinalityBound, GlobalCardinalityPropagator};
 pub use int_abs::IntAbsPropagator;
 pub use int_minmax::{IntMinMaxOp, IntMinMaxPropagator};
+pub use int_times::IntTimesPropagator;
 pub use inverse::InversePropagator;
 pub use less_equal::LessEqualPropagator;
 pub use less_than::LessThanPropagator;
