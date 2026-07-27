@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stdlib corpus fixtures `seq_search`, `search_selectors`, `float_search_ann`, and `set_search_ann` with compile + SAT regression in `builtin_corpus` (including portfolio SAT for `seq_search`).
 - Portfolio search attaches model `search_phases` to every worker so FlatZinc `seq_search` is respected with `--workers > 1`.
 - `ExtendedPropagationContext::tighten_set_cardinality` for set-cardinality bound updates during propagation.
+- `SetUnionPropagator` tightens set-cardinality bounds (`|A∪B| ≥ max(|A|,|B|)`, `|A∪B| ≤ |A|+|B|`, subset relations).
 
 ### Fixed
 

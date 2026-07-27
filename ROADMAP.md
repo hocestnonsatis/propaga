@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish / CI hygiene outside float-hole and search-annotation work already shipped
+- `SetIntersectPropagator` cardinality bounds (mirror union), or other small polish/CI
 
 ## Shipped after v1.0.0
 
@@ -29,6 +29,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Multi-phase `seq_search` and `indomain_interval` value ordering
 - Stdlib CI corpus fixtures for `seq_search`, `search_selectors`, `float_search_ann`, `set_search_ann` (compile + SAT; portfolio SAT for `seq_search`)
 - Portfolio search (`solve_portfolio` / `--workers`) propagates `search_phases` to every worker
+- `SetUnionPropagator` cardinality bound tightening via `tighten_set_cardinality`
 
 ## Shipped in v1.0.0
 
