@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish / corpus outside bool_search / restart_geometric fixture
+- Small polish / corpus outside optimize-path `search_phases` wiring
 
 ## Shipped after v1.0.0
 
@@ -38,6 +38,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - CLI/README document full `--var-ordering` / `--value-ordering` aliases (split, interval, activity, …)
 - CLI `--var-ordering` accepts FlatZinc aliases (`smallest`, `occurrence`, `degree`); CI smoke for `float_ceil.fzn`
 - Stdlib corpus fixture `bool_search_ann` (`bool_search` + `restart_geometric`, compile + SAT)
+- BnB / lex / Pareto wire `search_phases` like portfolio
 
 ## Shipped in v1.0.0
 

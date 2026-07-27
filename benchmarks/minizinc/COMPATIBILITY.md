@@ -179,6 +179,8 @@ Supported value selectors: `indomain_min`, `indomain_max`, `indomain_split`, `in
 | `--stats`, `--format json` | Supported | Typed assignments; objective values for float/set |
 | `--workers N` | Supported | Portfolio search (satisfy); inherits FlatZinc `seq_search` phases |
 
+BnB, lexicographic, and Pareto optimize paths also inherit `seq_search` phases from the compiled model.
+
 ## MiniZinc workflow
 
 ```bash

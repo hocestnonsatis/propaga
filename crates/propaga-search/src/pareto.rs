@@ -1,4 +1,4 @@
-use crate::config::SearchConfig;
+use crate::config::{SearchConfig, SearchPhase};
 use crate::dfs::DepthFirstSearch;
 use crate::optimize::{ObjectiveDirection, ObjectiveValue, OptimizationTarget, is_better};
 use crate::stats::SearchStats;
@@ -82,6 +82,7 @@ pub struct ParetoOptimization {
     objectives: Vec<(OptimizationTarget, ObjectiveDirection)>,
     config: SearchConfig,
     float_holes: HashMap<VariableId, Vec<f64>>,
+    search_phases: Vec<SearchPhase>,
 }
 
 impl ParetoOptimization {
@@ -97,7 +98,15 @@ impl ParetoOptimization {
             objectives,
             config,
             float_holes: HashMap::new(),
+            search_phases: Vec::new(),
         }
+    }
+
+    /// Attaches sequenced search phases to each Pareto DFS restart.
+    #[must_use]
+    pub fn with_search_phases(mut self, search_phases: impl Into<Vec<SearchPhase>>) -> Self {
+        self.search_phases = search_phases.into();
+        self
     }
 
     /// Enumerates the Pareto front incrementally with dominance-cut pruning.
@@ -117,6 +126,7 @@ impl ParetoOptimization {
             }
 
             let mut dfs = DepthFirstSearch::with_config(self.variables.clone(), self.config)
+                .with_search_phases(self.search_phases.clone())
                 .with_float_holes(self.float_holes.clone());
             let Some(solution) = dfs.solve(engine) else {
                 merge_stats(&mut total_stats, dfs.stats());

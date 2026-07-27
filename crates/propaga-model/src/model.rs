@@ -706,7 +706,8 @@ impl Model {
             target,
             direction,
             self.search_config,
-        );
+        )
+        .with_search_phases(self.search_phases.clone());
         let result = search.optimize(&mut self.engine);
         (
             result.solution,
@@ -753,7 +754,8 @@ impl Model {
         variables: impl Into<Vec<VariableId>>,
         objectives: Vec<Objective>,
     ) -> LexicographicResult {
-        let mut search = LexicographicOptimization::new(variables, objectives, self.search_config);
+        let mut search = LexicographicOptimization::new(variables, objectives, self.search_config)
+            .with_search_phases(self.search_phases.clone());
         search.optimize(&mut self.engine)
     }
 
@@ -764,7 +766,8 @@ impl Model {
         objectives: Vec<(propaga_search::OptimizationTarget, ObjectiveDirection)>,
     ) -> ParetoResult {
         let _ = self.propagate();
-        let mut search = ParetoOptimization::new(variables, objectives, self.search_config);
+        let mut search = ParetoOptimization::new(variables, objectives, self.search_config)
+            .with_search_phases(self.search_phases.clone());
         search.optimize(&mut self.engine)
     }
 }

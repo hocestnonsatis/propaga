@@ -1,4 +1,4 @@
-use crate::config::SearchConfig;
+use crate::config::{SearchConfig, SearchPhase};
 use crate::dfs::DepthFirstSearch;
 use crate::stats::SearchStats;
 use crate::value::{AssignmentValue, Solution};
@@ -79,6 +79,7 @@ pub struct OptimizationSearch {
     target: OptimizationTarget,
     direction: ObjectiveDirection,
     config: SearchConfig,
+    search_phases: Vec<SearchPhase>,
 }
 
 impl OptimizationSearch {
@@ -111,12 +112,21 @@ impl OptimizationSearch {
             target,
             direction,
             config,
+            search_phases: Vec::new(),
         }
+    }
+
+    /// Attaches sequenced search phases (`seq_search` groups) to BnB DFS.
+    #[must_use]
+    pub fn with_search_phases(mut self, search_phases: impl Into<Vec<SearchPhase>>) -> Self {
+        self.search_phases = search_phases.into();
+        self
     }
 
     /// Runs branch-and-bound until no improving solution remains.
     pub fn optimize(&mut self, engine: &mut Engine) -> OptimizationResult {
-        let mut dfs = DepthFirstSearch::with_config(self.variables.clone(), self.config);
+        let mut dfs = DepthFirstSearch::with_config(self.variables.clone(), self.config)
+            .with_search_phases(self.search_phases.clone());
         let mut best_solution = None;
         let mut best_value = None;
         let mut total_stats = SearchStats::default();
@@ -515,5 +525,35 @@ mod tests {
         );
         let result = search.optimize(&mut engine);
         assert_eq!(result.objective_value, Some(ObjectiveValue::Float(0.0)));
+    }
+
+    #[test]
+    fn maximize_respects_search_phases() {
+        use crate::config::{ValueOrdering, VariableOrdering};
+
+        let mut engine = Engine::new();
+        let x = engine.new_variable(IntervalDomain::new(0, 5));
+        let y = engine.new_variable(IntervalDomain::new(0, 5));
+        engine.add_propagator(Box::new(LinearScalarLePropagator::new(
+            vec![1, 1],
+            vec![x, y],
+            5,
+        )));
+        let mut search = OptimizationSearch::new(
+            vec![x, y],
+            x,
+            ObjectiveDirection::Maximize,
+            SearchConfig::without_learning(),
+        )
+        .with_search_phases(vec![
+            SearchPhase::new(
+                vec![x],
+                VariableOrdering::InputOrder,
+                ValueOrdering::Descending,
+            ),
+            SearchPhase::new(vec![y], VariableOrdering::Mrv, ValueOrdering::Ascending),
+        ]);
+        let result = search.optimize(&mut engine);
+        assert_eq!(result.objective_value, Some(ObjectiveValue::Int(5)));
     }
 }

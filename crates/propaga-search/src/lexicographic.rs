@@ -1,6 +1,6 @@
 //! Lexicographic multi-objective optimization.
 
-use crate::config::SearchConfig;
+use crate::config::{SearchConfig, SearchPhase};
 use crate::optimize::{ObjectiveDirection, ObjectiveValue, OptimizationSearch, OptimizationTarget};
 use crate::stats::SearchStats;
 use crate::value::Solution;
@@ -63,6 +63,7 @@ pub struct LexicographicOptimization {
     variables: Vec<VariableId>,
     objectives: Vec<Objective>,
     config: SearchConfig,
+    search_phases: Vec<SearchPhase>,
 }
 
 impl LexicographicOptimization {
@@ -77,7 +78,15 @@ impl LexicographicOptimization {
             variables: variables.into(),
             objectives,
             config,
+            search_phases: Vec::new(),
         }
+    }
+
+    /// Attaches sequenced search phases shared by every BnB phase.
+    #[must_use]
+    pub fn with_search_phases(mut self, search_phases: impl Into<Vec<SearchPhase>>) -> Self {
+        self.search_phases = search_phases.into();
+        self
     }
 
     /// Optimizes objectives in order, fixing each optimal value before the next.
@@ -95,7 +104,8 @@ impl LexicographicOptimization {
                 objective.target,
                 objective.direction,
                 self.config,
-            );
+            )
+            .with_search_phases(self.search_phases.clone());
             let result = search.optimize(engine);
             merge_stats(&mut total_stats, result.stats);
 
