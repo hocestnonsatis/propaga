@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish / CI hygiene (set-subset cardinality, docs, or corpus)
+- Small polish / CI hygiene outside set-cardinality propagation already shipped
 
 ## Shipped after v1.0.0
 
@@ -31,6 +31,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Portfolio search (`solve_portfolio` / `--workers`) propagates `search_phases` to every worker
 - `SetUnionPropagator` cardinality bound tightening via `tighten_set_cardinality`
 - `SetIntersectPropagator` cardinality bound tightening via `tighten_set_cardinality`
+- `SetSubsetPropagator` cardinality bound tightening via `tighten_set_cardinality`
 
 ## Shipped in v1.0.0
 

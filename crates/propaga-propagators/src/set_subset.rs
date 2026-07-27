@@ -31,13 +31,58 @@ impl Propagator for SetSubsetPropagator {
             return PropagationStatus::Failure;
         };
         let mut changed = false;
+        let sub_id = self.watched[0];
+        let sup_id = self.watched[1];
         for &value in &sub.glb {
-            changed |= ext.force_set_in(self.watched[1], value);
+            changed |= ext.force_set_in(sup_id, value);
         }
         for value in sub.lub.clone() {
             if !sup.lub.contains(&value) {
-                changed |= ext.force_set_out(self.watched[0], value);
+                changed |= ext.force_set_out(sub_id, value);
             }
+        }
+
+        let (Some(sub), Some(sup)) = (ext.set_domain(sub_id), ext.set_domain(sup_id)) else {
+            return PropagationStatus::Failure;
+        };
+        if sub.is_empty() || sup.is_empty() {
+            return PropagationStatus::Failure;
+        }
+
+        // A ⊆ B ⇒ |A| ≤ |B|; also |B| ≤ |A| + |lub(B) \ lub(A)|.
+        let sup_outside = sup
+            .lub
+            .iter()
+            .filter(|value| !sub.lub.contains(value))
+            .count();
+
+        let sub_card_min = sub.card_min.max(sub.glb.len());
+        let sub_card_max = sub.card_max.min(sup.card_max).min(sub.lub.len());
+        if sub_card_min > sub_card_max {
+            return PropagationStatus::Failure;
+        }
+        if sub_card_min != sub.card_min || sub_card_max != sub.card_max {
+            changed |= ext.tighten_set_cardinality(sub_id, sub_card_min, sub_card_max);
+        }
+
+        let sup_card_min = sup.card_min.max(sub_card_min).max(sup.glb.len());
+        let sup_card_max = sup
+            .card_max
+            .min(sub_card_max.saturating_add(sup_outside))
+            .min(sup.lub.len());
+        if sup_card_min > sup_card_max {
+            return PropagationStatus::Failure;
+        }
+        if sup_card_min != sup.card_min || sup_card_max != sup.card_max {
+            changed |= ext.tighten_set_cardinality(sup_id, sup_card_min, sup_card_max);
+        }
+
+        let sub_after = ext.set_domain(sub_id);
+        let sup_after = ext.set_domain(sup_id);
+        if sub_after.as_ref().is_none_or(|d| d.is_empty())
+            || sup_after.as_ref().is_none_or(|d| d.is_empty())
+        {
+            return PropagationStatus::Failure;
         }
         if changed {
             PropagationStatus::OkChanged
@@ -78,6 +123,30 @@ mod tests {
         engine.add_propagator(Box::new(SetSubsetPropagator::new(sub, sup)));
         engine.propagate_all().unwrap();
         assert!(!engine.domain(sub).as_set().unwrap().lub().contains(&1));
+    }
+
+    #[test]
+    fn raises_superset_card_min_from_subset() {
+        let mut engine = Engine::new();
+        let subset = SetIntervalDomain::universe(1..=3).with_cardinality(2, 2);
+        let superset = SetIntervalDomain::universe(1..=3).with_cardinality(0, 3);
+        let sub = engine.new_variable(AnyDomain::Set(subset));
+        let sup = engine.new_variable(AnyDomain::Set(superset));
+        engine.add_propagator(Box::new(SetSubsetPropagator::new(sub, sup)));
+        engine.propagate_all().unwrap();
+        assert!(engine.domain(sup).as_set().unwrap().card_min() >= 2);
+    }
+
+    #[test]
+    fn lowers_subset_card_max_from_superset() {
+        let mut engine = Engine::new();
+        let subset = SetIntervalDomain::universe(1..=4).with_cardinality(0, 3);
+        let superset = SetIntervalDomain::universe(1..=4).with_cardinality(0, 1);
+        let sub = engine.new_variable(AnyDomain::Set(subset));
+        let sup = engine.new_variable(AnyDomain::Set(superset));
+        engine.add_propagator(Box::new(SetSubsetPropagator::new(sub, sup)));
+        engine.propagate_all().unwrap();
+        assert!(engine.domain(sub).as_set().unwrap().card_max() <= 1);
     }
 
     #[test]

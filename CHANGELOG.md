@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ExtendedPropagationContext::tighten_set_cardinality` for set-cardinality bound updates during propagation.
 - `SetUnionPropagator` tightens set-cardinality bounds (`|A∪B| ≥ max(|A|,|B|)`, `|A∪B| ≤ |A|+|B|`, subset relations).
 - `SetIntersectPropagator` tightens set-cardinality bounds (`|A∩B| ≤ min(|A|,|B|, overlap)`, operand outside-overlap lower bounds).
+- `SetSubsetPropagator` tightens set-cardinality bounds (`|A| ≤ |B|` when `A ⊆ B`).
 
 ### Fixed
 
