@@ -73,6 +73,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - `SetSubsetReifPropagator` reif assignment + card sync + inevitable-subset failure
 - `SetInReifPropagator` sound reif assignment (outside LUB ⇒ false) + force-out when false
 - `SetCardEqPropagator` for variable `set_card(S, k)`
+- `SetInPropagator` sound membership (keep forced members outside value domain)
 
 ## Shipped in v1.0.0
 
