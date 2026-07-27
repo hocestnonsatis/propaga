@@ -2683,7 +2683,7 @@ impl Parser {
             other => vec![other],
         };
         self.expect_symbol(",")?;
-        let _precision = self.parse_expr()?;
+        let _precision = self.expect_float()?;
         self.expect_symbol(",")?;
         let var_choice = self.expect_ident_token()?;
         self.expect_symbol(",")?;
