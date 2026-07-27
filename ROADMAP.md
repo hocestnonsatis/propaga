@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish / docs / corpus outside float ceil/floor/round reverse projection
+- Small polish / docs / corpus outside float unary reverse-projection fixtures
 
 ## Shipped after v1.0.0
 
@@ -34,6 +34,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - `SetSubsetPropagator` cardinality bound tightening via `tighten_set_cardinality`
 - CI smoke solves for `set_union.fzn` and `float_round.fzn`; handwritten `set_subset.fzn` / `float_round.fzn` fixtures
 - `FloatUnaryPropagator` reverse-projects fixed `ceil` / `floor` / `round` images
+- FlatZinc fixtures `float_floor.fzn` / `float_ceil.fzn` + CI smoke for floor
 
 ## Shipped in v1.0.0
 

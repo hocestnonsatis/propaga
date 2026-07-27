@@ -556,6 +556,22 @@ mod tests {
     }
 
     #[test]
+    fn float_ceil_reverse_projects_fixed_image() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::fix(2.0)));
+        engine.add_propagator(Box::new(FloatUnaryPropagator::new(
+            x,
+            y,
+            FloatUnaryOp::Ceil,
+        )));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let domain = engine.domain(x).as_float().unwrap();
+        assert!(domain.lower_bound() > 1.0);
+        assert!((domain.upper_bound() - 2.0).abs() < 1e-9);
+    }
+
+    #[test]
     fn float_round_reverse_projects_fixed_image() {
         let mut engine = Engine::new();
         let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0)));
