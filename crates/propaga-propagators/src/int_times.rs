@@ -76,16 +76,15 @@ impl Propagator for IntTimesPropagator {
 
     fn propagate(&mut self, ctx: &mut dyn PropagationContext) -> PropagationStatus {
         let [a, b, c] = self.watched;
-        let (Some(amin), Some(amax), Some(bmin), Some(bmax), Some(cmin), Some(cmax)) = (
-            ctx.domain(a).min(),
-            ctx.domain(a).max(),
-            ctx.domain(b).min(),
-            ctx.domain(b).max(),
-            ctx.domain(c).min(),
-            ctx.domain(c).max(),
-        ) else {
+        if ctx.domain(a).min().is_none()
+            || ctx.domain(a).max().is_none()
+            || ctx.domain(b).min().is_none()
+            || ctx.domain(b).max().is_none()
+            || ctx.domain(c).min().is_none()
+            || ctx.domain(c).max().is_none()
+        {
             return PropagationStatus::Failure;
-        };
+        }
 
         let mut changed = false;
 
