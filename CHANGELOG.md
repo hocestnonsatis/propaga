@@ -63,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI smoke solves for remaining handwritten fixtures: reified linear/lt/`bool_reify`, bounded/weighted sums, `count`/`cumulative`/`disjunctive`, ordered/strict chains, `permutation_sum`/`predicate_multi`/`table_puzzle`, and `int_search` order/restart.
 - Native `SetDiffPropagator` for FlatZinc `set_diff` (replaces multi-constraint aux decomposition); `Model::set_diff`.
 - Native `SetSymDiffPropagator` for FlatZinc `set_symdiff`; `Model::set_symdiff`.
+- `SetCardEqPropagator` / `Model::set_card_eq` for FlatZinc `set_card(S, k)` with a variable cardinality; handwritten `set_card_var.fzn` + CI smoke.
 
 ### Fixed
 

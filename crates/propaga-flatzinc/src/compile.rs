@@ -720,10 +720,18 @@ fn post_constraint(
                 accepting,
             )?;
         }
-        Constraint::SetCard(set_expr, card) => {
+        Constraint::SetCard(set_expr, card_expr) => {
             let set = resolve_var(env, set_expr)?;
-            let card = card.max(0) as usize;
-            model.constrain_set_cardinality(set, card, card);
+            match card_expr {
+                Expr::Int(card) => {
+                    let card = card.max(0) as usize;
+                    model.constrain_set_cardinality(set, card, card);
+                }
+                other => {
+                    let card = resolve_var(env, other)?;
+                    model.set_card_eq(set, card);
+                }
+            }
         }
         Constraint::SetSubset(subset, superset) => {
             let subset = resolve_var(env, subset)?;
@@ -1489,7 +1497,7 @@ fn substitute_constraint(
             start: *start,
             accepting: accepting.clone(),
         },
-        Constraint::SetCard(set, card) => Constraint::SetCard(map(set), *card),
+        Constraint::SetCard(set, card) => Constraint::SetCard(map(set), map(card)),
         Constraint::SetSubset(subset, superset) => {
             Constraint::SetSubset(map(subset), map(superset))
         }

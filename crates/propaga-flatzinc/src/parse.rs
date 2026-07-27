@@ -350,8 +350,8 @@ pub enum Constraint {
         /// Accepting state(s).
         accepting: Vec<i32>,
     },
-    /// `set_card(set, card)`
-    SetCard(Expr, i32),
+    /// `set_card(set, card)` — `card` may be an integer literal or variable
+    SetCard(Expr, Expr),
     /// `set_subset(subset, superset)`
     SetSubset(Expr, Expr),
     /// `set_eq(left, right)`
@@ -1587,7 +1587,7 @@ impl Parser {
             "set_card" => {
                 let set = self.parse_expr()?;
                 self.expect_symbol(",")?;
-                let card = self.expect_int()?;
+                let card = self.parse_expr()?;
                 Constraint::SetCard(set, card)
             }
             "set_subset" => {

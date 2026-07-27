@@ -67,7 +67,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 
 | Constraint | Status | Propaga mapping |
 |------------|--------|-----------------|
-| `set_card` | Supported | Cardinality propagator |
+| `set_card` | Supported | Constant or variable cardinality (`SetCardEqPropagator`) |
 | `set_subset`, `set_superset`, `set_eq`, `set_ne` | Supported | Set propagators / decomposition; subset also tightens cardinality bounds |
 | `set_in`, `set_le`, `set_lt`, `set_diff`, `set_symdiff` | Supported | Native `set_diff` / `set_symdiff` propagators |
 | `set_union`, `set_intersect` | Supported | Set union / intersection; both tighten cardinality bounds |

@@ -1,0 +1,6 @@
+% Variable set cardinality link: |s| = k.
+var set of 1..4: s;
+var 1..3: k;
+constraint set_card(s, k);
+constraint int_eq(k, 2);
+solve satisfy;

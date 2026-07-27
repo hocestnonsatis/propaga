@@ -14,9 +14,9 @@ use propaga_propagators::{
     ReifiedFloatLinearEqPropagator, ReifiedFloatLinearGePropagator, ReifiedFloatLinearLePropagator,
     ReifiedLessEqualPropagator, ReifiedLessThanPropagator, ReifiedNotEqualPropagator,
     ReifiedScalarEqPropagator, ReifiedScalarGePropagator, ReifiedScalarLePropagator,
-    SetCardPropagator, SetDiffPropagator, SetEqReifPropagator, SetInPropagator,
-    SetInReifPropagator, SetIntersectPropagator, SetSubsetPropagator, SetSubsetReifPropagator,
-    SetSymDiffPropagator, SetUnionPropagator, TablePropagator, TaskSpec,
+    SetCardEqPropagator, SetCardPropagator, SetDiffPropagator, SetEqReifPropagator,
+    SetInPropagator, SetInReifPropagator, SetIntersectPropagator, SetSubsetPropagator,
+    SetSubsetReifPropagator, SetSymDiffPropagator, SetUnionPropagator, TablePropagator, TaskSpec,
 };
 use propaga_search::{
     DepthFirstSearch, LexicographicOptimization, LexicographicResult, Objective,
@@ -188,6 +188,12 @@ impl Model {
             self.engine.set_domain(set, AnyDomain::Set(updated));
         }
         self.set_card(set);
+    }
+
+    /// Posts `|set| = card` for a set variable and an integer cardinality variable.
+    pub fn set_card_eq(&mut self, set: VariableId, card: VariableId) {
+        self.engine
+            .add_propagator(Box::new(SetCardEqPropagator::new(set, card)));
     }
 
     /// Posts `subset ⊆ superset`.
