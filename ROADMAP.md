@@ -79,6 +79,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - `array_var_bool_element` 1-based vs `_nonshifted` 0-based + CI fixtures
 - Int/float/bool `array_*_element` 1-based indexing + `_nonshifted` variants
 - FlatZinc `array […] of var set of …` declarations + CI fixture
+- FlatZinc `array […] of var float` / float-bounded arrays + CI fixture
 
 ## Shipped in v1.0.0
 

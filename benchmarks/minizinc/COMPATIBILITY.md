@@ -29,6 +29,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `var set of L..U: x;` | Supported | `SetIntervalDomain` with cardinality |
 | `array [L..U] of var set of A..B: xs;` | Supported | Indexed set variables |
 | `var low..high: x;` (float bounds) | Supported | Inclusive interval; may gain interior IEEE holes during search |
+| `array [L..U] of var float: xs;` / `array [L..U] of var lo..hi: xs;` (float) | Supported | Indexed float variables |
 
 ## Parameters
 

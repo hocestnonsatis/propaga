@@ -129,6 +129,19 @@ pub enum VarDecl {
         /// Domain upper bound.
         high: f64,
     },
+    /// Array of float variables with inclusive bounds.
+    FloatArray {
+        /// Array name.
+        name: String,
+        /// Inclusive lower index.
+        index_low: i32,
+        /// Inclusive upper index.
+        index_high: i32,
+        /// Domain lower bound.
+        low: f64,
+        /// Domain upper bound.
+        high: f64,
+    },
 }
 
 /// A FlatZinc constraint call.
@@ -1127,6 +1140,30 @@ impl Parser {
             self.expect_symbol(":")?;
             let name = self.expect_ident_token()?;
             return Ok(VarDecl::SetArray {
+                name,
+                index_low,
+                index_high,
+                low,
+                high,
+            });
+        }
+        if self.peek_is_ident("float") {
+            self.expect_ident("float")?;
+            self.expect_symbol(":")?;
+            let name = self.expect_ident_token()?;
+            return Ok(VarDecl::FloatArray {
+                name,
+                index_low,
+                index_high,
+                low: f64::NEG_INFINITY,
+                high: f64::INFINITY,
+            });
+        }
+        if matches!(self.peek(), Some(Token::Float(_))) {
+            let (low, high) = self.parse_float_domain()?;
+            self.expect_symbol(":")?;
+            let name = self.expect_ident_token()?;
+            return Ok(VarDecl::FloatArray {
                 name,
                 index_low,
                 index_high,
