@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish outside BnB seq_search fixture and set-domain card invariants
+- Small polish outside fixed exp/ln/sqrt reverse projection
 
 ## Shipped after v1.0.0
 
@@ -45,6 +45,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - `SetIntervalDomain::with_cardinality` clamps to GLB/LUB sizes; CI smoke `set_eq` / `set_subset`
 - `force_in` / `force_out` keep card bounds aligned with GLB/LUB
 - Handwritten `seq_search_minimize.fzn` + CI smoke (BnB phases / `float_abs`)
+- `FloatUnaryPropagator` reverse-projects fixed `exp` / `ln` / `sqrt` images
 
 ## Shipped in v1.0.0
 

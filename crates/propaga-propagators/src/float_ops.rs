@@ -190,6 +190,10 @@ fn fixed_integer_image(snap: &propaga_core::FloatDomainSnapshot) -> Option<f64> 
     ((snap.min - n).abs() <= 1e-9).then_some(n)
 }
 
+fn fixed_float_image(snap: &propaga_core::FloatDomainSnapshot) -> Option<f64> {
+    snap.is_fixed().then_some(snap.min)
+}
+
 /// Inclusive bounds for the preimage of `n` under `f64::round` (half away from zero).
 fn round_preimage_bounds(n: f64) -> (f64, f64) {
     if n > 0.0 {
@@ -408,6 +412,13 @@ impl Propagator for FloatUnaryPropagator {
                         changed |= ext.exclude_float_point(self.watched[0], hole * hole);
                     }
                 }
+                if let Some(y) = fixed_float_image(&output_snap) {
+                    if y >= 0.0 {
+                        let x = y * y;
+                        changed |= ext.tighten_float_below(self.watched[0], x);
+                        changed |= ext.tighten_float_above(self.watched[0], x);
+                    }
+                }
             }
             FloatUnaryOp::Exp => {
                 for hole in &output_snap.holes {
@@ -415,10 +426,22 @@ impl Propagator for FloatUnaryPropagator {
                         changed |= ext.exclude_float_point(self.watched[0], hole.ln());
                     }
                 }
+                if let Some(y) = fixed_float_image(&output_snap) {
+                    if y > 0.0 {
+                        let x = y.ln();
+                        changed |= ext.tighten_float_below(self.watched[0], x);
+                        changed |= ext.tighten_float_above(self.watched[0], x);
+                    }
+                }
             }
             FloatUnaryOp::Ln => {
                 for hole in &output_snap.holes {
                     changed |= ext.exclude_float_point(self.watched[0], hole.exp());
+                }
+                if let Some(y) = fixed_float_image(&output_snap) {
+                    let x = y.exp();
+                    changed |= ext.tighten_float_below(self.watched[0], x);
+                    changed |= ext.tighten_float_above(self.watched[0], x);
                 }
             }
             FloatUnaryOp::Sin => {
@@ -585,6 +608,46 @@ mod tests {
         let domain = engine.domain(x).as_float().unwrap();
         assert!((domain.lower_bound() - 0.5).abs() < 1e-9);
         assert!(domain.upper_bound() < 1.5);
+    }
+
+    #[test]
+    fn float_exp_reverse_projects_fixed_image() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(-2.0, 2.0)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::fix(1.0_f64.exp())));
+        engine.add_propagator(Box::new(FloatUnaryPropagator::new(x, y, FloatUnaryOp::Exp)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let domain = engine.domain(x).as_float().unwrap();
+        assert!((domain.lower_bound() - 1.0).abs() < 1e-9);
+        assert!((domain.upper_bound() - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn float_ln_reverse_projects_fixed_image() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.1, 5.0)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::fix(0.0)));
+        engine.add_propagator(Box::new(FloatUnaryPropagator::new(x, y, FloatUnaryOp::Ln)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let domain = engine.domain(x).as_float().unwrap();
+        assert!((domain.lower_bound() - 1.0).abs() < 1e-9);
+        assert!((domain.upper_bound() - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn float_sqrt_reverse_projects_fixed_image() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 20.0)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::fix(3.0)));
+        engine.add_propagator(Box::new(FloatUnaryPropagator::new(
+            x,
+            y,
+            FloatUnaryOp::Sqrt,
+        )));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let domain = engine.domain(x).as_float().unwrap();
+        assert!((domain.lower_bound() - 9.0).abs() < 1e-9);
+        assert!((domain.upper_bound() - 9.0).abs() < 1e-9);
     }
 
     #[test]

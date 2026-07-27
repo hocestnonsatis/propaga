@@ -80,7 +80,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `float_le`, `float_eq`, `float_lt`, `float_ne` | Supported | Interval propagators; `eq`/`ne` share or exclude holes |
 | `float_times`, `float_plus`, `float_div`, `float_abs` | Supported | Interval arithmetic; holes projected when a side is fixed / safe |
 | `float_min`, `float_max` | Supported | Reified interval decomposition |
-| `float_sqrt`, `float_sin`, `float_cos`, `float_ln`, `float_log2`, `float_exp` | Supported | Unary interval ops; hole-aware when locally invertible / monotonic; `float_log2` via `ln` / `ln(2)` |
+| `float_sqrt`, `float_sin`, `float_cos`, `float_ln`, `float_log2`, `float_exp` | Supported | Unary interval ops; hole-aware when locally invertible / monotonic; fixed `sqrt`/`ln`/`exp` images reverse-project; `float_log2` via `ln` / `ln(2)` |
 | `float_ceil`, `float_floor`, `float_round` | Supported | Unary interval ops; constant domains collapse to fixed |
 | `float_lin_eq`, `float_lin_le`, `float_lin_ge`, `float_lin_ne` | Supported | `FloatLinear*` (eq projects holes; ne excludes interior forcing points) |
 | `float_lin_*_reif` | Supported | Reified float linear |
