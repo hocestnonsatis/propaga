@@ -59,7 +59,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `bool_le`, `bool_lt`, `bool_*_reif`, `bool_eq_reif` | Supported | Table / reified |
 | `bool_lin_eq`, `bool_lin_le` | Supported | Linear scalar on `0..1` vars |
 | `array_bool_and`, `array_bool_xor` | Supported | Decomposition |
-| `array_bool_element`, `array_var_bool_element` | Supported | Element |
+| `array_bool_element`, `array_var_bool_element` | Supported | Element; `array_var_bool_element` is 1-based, `_nonshifted` is 0-based |
 
 **Decomposition note:** `int_times`, `int_div`, `int_mod`, and `int_pow` use domain tables capped at **10 000 tuples**. Larger Cartesian products return an unsupported error at compile time.
 

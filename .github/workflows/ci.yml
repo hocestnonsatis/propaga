@@ -34,6 +34,8 @@ jobs:
       - run: cargo run -p propaga-cli -- solve --file benchmarks/set_eq.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/array_var_set_element.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/array_var_set_element_nonshifted.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/array_var_bool_element.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/array_var_bool_element_nonshifted.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/set_cardinality.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/set_card_var.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/set_param.fzn --quiet

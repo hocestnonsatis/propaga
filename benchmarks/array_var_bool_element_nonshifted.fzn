@@ -1,0 +1,11 @@
+% array_var_bool_element_nonshifted with 0-based index.
+var 0..1: a;
+var 0..1: b;
+var 0..1: i;
+var 0..1: v;
+constraint int_eq(a, 0);
+constraint int_eq(b, 1);
+constraint array_var_bool_element_nonshifted([a, b], i, v);
+constraint int_eq(i, 1);
+constraint int_eq(v, 1);
+solve satisfy;

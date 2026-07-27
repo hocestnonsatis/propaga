@@ -537,8 +537,14 @@ pub enum Constraint {
     ArrayBoolXor(Expr, Expr),
     /// `array_bool_element(array, index, value)`
     ArrayBoolElement(Expr, Expr, Expr),
-    /// `array_var_bool_element(array, index, value)`
-    ArrayVarBoolElement(Expr, Expr, Expr),
+    /// `array_var_bool_element` / `array_var_bool_element_nonshifted`
+    /// (`one_based` is true for the shifted/standard form).
+    ArrayVarBoolElement {
+        array: Expr,
+        index: Expr,
+        value: Expr,
+        one_based: bool,
+    },
     /// `int_min(a, b, c)`
     IntMin(Expr, Expr, Expr),
     /// `int_max(a, b, c)`
@@ -2169,13 +2175,31 @@ impl Parser {
                 let value = self.parse_expr()?;
                 Constraint::ArrayBoolElement(array, index, value)
             }
-            "array_var_bool_element" | "array_var_bool_element_nonshifted" => {
+            "array_var_bool_element" => {
                 let array = self.parse_expr()?;
                 self.expect_symbol(",")?;
                 let index = self.parse_expr()?;
                 self.expect_symbol(",")?;
                 let value = self.parse_expr()?;
-                Constraint::ArrayVarBoolElement(array, index, value)
+                Constraint::ArrayVarBoolElement {
+                    array,
+                    index,
+                    value,
+                    one_based: true,
+                }
+            }
+            "array_var_bool_element_nonshifted" => {
+                let array = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let index = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let value = self.parse_expr()?;
+                Constraint::ArrayVarBoolElement {
+                    array,
+                    index,
+                    value,
+                    one_based: false,
+                }
             }
             "int_plus" => {
                 let a = self.parse_expr()?;

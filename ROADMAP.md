@@ -76,6 +76,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - `SetInPropagator` sound membership (keep forced members outside value domain)
 - Native `SetEqPropagator` for FlatZinc `set_eq`
 - `array_var_set_element` 1-based vs `_nonshifted` 0-based + CI fixtures
+- `array_var_bool_element` 1-based vs `_nonshifted` 0-based + CI fixtures
 
 ## Shipped in v1.0.0
 

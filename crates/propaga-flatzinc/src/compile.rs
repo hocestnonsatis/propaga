@@ -1157,11 +1157,13 @@ fn post_constraint(
         Constraint::ArrayBoolElement(array, index, value) => {
             post_array_int_element(model, env, array, index, value)?;
         }
-        Constraint::ArrayVarBoolElement(array, index, value) => {
-            let array_vars = resolve_var_list(env, array)?;
-            let index_var = resolve_var(env, index)?;
-            let value_var = resolve_var(env, value)?;
-            model.element(index_var, array_vars, value_var);
+        Constraint::ArrayVarBoolElement {
+            array,
+            index,
+            value,
+            one_based,
+        } => {
+            post_array_var_bool_element(model, env, array, index, value, one_based)?;
         }
         Constraint::Automaton {
             vars,
@@ -1697,9 +1699,17 @@ fn substitute_constraint(
         Constraint::ArrayBoolElement(array, index, value) => {
             Constraint::ArrayBoolElement(map(array), map(index), map(value))
         }
-        Constraint::ArrayVarBoolElement(array, index, value) => {
-            Constraint::ArrayVarBoolElement(map(array), map(index), map(value))
-        }
+        Constraint::ArrayVarBoolElement {
+            array,
+            index,
+            value,
+            one_based,
+        } => Constraint::ArrayVarBoolElement {
+            array: map(array),
+            index: map(index),
+            value: map(value),
+            one_based: *one_based,
+        },
         Constraint::Automaton {
             vars,
             num_symbols,
@@ -2158,6 +2168,30 @@ fn post_array_int_element(
     let value_var = resolve_var(env, value)?;
     let array_vars = resolve_int_array_vars(model, env, array)?;
     model.element(index_var, array_vars, value_var);
+    Ok(())
+}
+
+fn post_array_var_bool_element(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    array: Expr,
+    index: Expr,
+    value: Expr,
+    one_based: bool,
+) -> Result<(), FlatZincError> {
+    let array_vars = resolve_var_list(env, array)?;
+    let index_var = resolve_var(env, index)?;
+    let value_var = resolve_var(env, value)?;
+    let index_for_element = if one_based {
+        let max_zero_based = (array_vars.len() as i32 - 1).max(0);
+        let shifted = model.int_var_aux(0, max_zero_based);
+        // index = shifted + 1
+        model.scalar_eq(vec![1, -1], vec![index_var, shifted], 1);
+        shifted
+    } else {
+        index_var
+    };
+    model.element(index_for_element, array_vars, value_var);
     Ok(())
 }
 
