@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FloatLeReifPropagator` with reif=false now tightens the correct float bounds (strict greater-than encoding).
 - DFS `solve_each` set branching no longer applies in/out forces eagerly before trail marks (both membership branches are explored).
 
+### Changed
+
+- COMPATIBILITY.md documents float IEEE-hole projection per constraint family; README no longer lists shipped float array/membership builtins as gaps.
+
 ### Known limitations
 
 - `ceil`/`floor`/`round` still drop sparse holes when the map is non-constant (preimages are intervals).
