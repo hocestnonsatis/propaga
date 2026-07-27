@@ -90,21 +90,36 @@ fn propagate_index(
         changed |= tighten_equal(ctx, value, element);
     }
 
-    if let Some(val) = ctx.fixed_value(value) {
-        let mut supported = Vec::new();
-        for (position, &element) in array.iter().enumerate() {
-            if ctx.domain(element).contains(val) {
-                supported.push(position as i32);
-            }
-        }
-        for idx in domain_values(ctx, index) {
-            if !supported.contains(&idx) && ctx.remove_value(index, idx) {
-                changed = true;
-            }
+    // Drop indices whose cells cannot meet `value` (bound/fixed disjointness).
+    for idx in domain_values(ctx, index) {
+        let element = array[idx as usize];
+        if !domains_may_match(ctx, element, value) && ctx.remove_value(index, idx) {
+            changed = true;
         }
     }
 
     changed
+}
+
+fn domains_may_match(ctx: &dyn PropagationContext, left: VariableId, right: VariableId) -> bool {
+    let (Some(lmin), Some(lmax), Some(rmin), Some(rmax)) = (
+        ctx.domain(left).min(),
+        ctx.domain(left).max(),
+        ctx.domain(right).min(),
+        ctx.domain(right).max(),
+    ) else {
+        return false;
+    };
+    if lmax < rmin || rmax < lmin {
+        return false;
+    }
+    if let Some(fixed) = ctx.fixed_value(right) {
+        return ctx.domain(left).contains(fixed);
+    }
+    if let Some(fixed) = ctx.fixed_value(left) {
+        return ctx.domain(right).contains(fixed);
+    }
+    true
 }
 
 fn propagate_value_bounds(
@@ -252,6 +267,23 @@ mod tests {
         let b = engine.new_variable(IntervalDomain::new(1, 5));
         let c = engine.new_variable(IntervalDomain::fix(9));
         let value = engine.new_variable(IntervalDomain::fix(9));
+        engine.add_propagator(Box::new(ElementPropagator::new(
+            index,
+            vec![a, b, c],
+            value,
+        )));
+        engine.propagate_all().unwrap();
+        assert_eq!(engine.hybrid_domain(index).fixed_value(), Some(2));
+    }
+
+    #[test]
+    fn bound_disjoint_value_prunes_unsupported_indices() {
+        let mut engine = Engine::new();
+        let index = engine.new_variable(IntervalDomain::new(0, 2));
+        let a = engine.new_variable(IntervalDomain::new(1, 3));
+        let b = engine.new_variable(IntervalDomain::new(1, 5));
+        let c = engine.new_variable(IntervalDomain::new(7, 10));
+        let value = engine.new_variable(IntervalDomain::new(7, 7));
         engine.add_propagator(Box::new(ElementPropagator::new(
             index,
             vec![a, b, c],

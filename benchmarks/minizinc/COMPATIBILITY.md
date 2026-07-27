@@ -56,7 +56,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `int_min`, `int_max`, `int_pow`, `int_pow_fixed` | Supported | Bound-consistent min/max; `int_pow_fixed` multiply chain; `int_pow` exponent case-split + element (table fallback) |
 | `int2float` | Supported | Channeling propagator |
 | `min` / `max` (generic) | Supported | Dispatches to `int_*` or `float_*` by domain |
-| `element`, `array_int_element`, `array_var_int_element` | Supported | Element; standard forms are 1-based, `_nonshifted` is 0-based |
+| `element`, `array_int_element`, `array_var_int_element` | Supported | Element; 1-based / `_nonshifted` 0-based; prunes indices disjoint from value |
 | `array_int_maximum`, `array_int_minimum` | Supported | Binary `int_min`/`int_max` fold |
 | `bool_eq`, `bool2int` | Supported | Equality on `0..1` |
 | `bool_not`, `bool_and`, `bool_or`, `bool_xor` | Supported | Linear / reified encodings (`a+b=1`, and/or inequalities, xor via `¬(a=b)`) |
