@@ -1,0 +1,6 @@
+% float_div with fixed divisor (a = c * b).
+var 0.0..20.0: a;
+var 2.0..2.0: b;
+var 3.0..3.0: c;
+constraint float_div(a, b, c);
+solve satisfy;

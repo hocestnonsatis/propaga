@@ -69,6 +69,7 @@ jobs:
       - run: cargo run -p propaga-cli -- solve --file benchmarks/float_sin.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/float_cos.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/float_times.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/float_div.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/float_bounds.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/float_lin_le.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/float_minimize.fzn --quiet

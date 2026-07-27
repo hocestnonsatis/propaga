@@ -194,7 +194,7 @@ impl FloatDomain {
     /// Returns a sound interval quotient `self / divisor`.
     ///
     /// When `divisor` contains zero the result is unbounded (no tightening).
-    /// When `divisor` is a nonzero fixed point, holes are mapped through the quotient.
+    /// When either side is a nonzero fixed point, holes are mapped through the quotient.
     #[must_use]
     pub fn divide(&self, divisor: &Self) -> Self {
         if self.is_empty() || divisor.is_empty() {
@@ -214,6 +214,20 @@ impl FloatDomain {
         ];
         let min = corners.iter().copied().fold(f64::INFINITY, f64::min);
         let max = corners.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        if self.is_fixed() {
+            let a = self.min;
+            let mut result = Self::new(min, max);
+            // a / h is the unique quotient image of divisor hole h when a ≠ 0.
+            if a != 0.0 {
+                for &hole in &divisor.holes {
+                    let image = a / hole;
+                    if image.is_finite() {
+                        result = result.exclude(image);
+                    }
+                }
+            }
+            return result;
+        }
         Self::new(min, max)
     }
 
@@ -787,5 +801,15 @@ mod tests {
         let a = c.divide(&b);
         assert!(a.lower_bound().is_infinite() && a.lower_bound() < 0.0);
         assert!(a.upper_bound().is_infinite() && a.upper_bound() > 0.0);
+    }
+
+    #[test]
+    fn divide_maps_divisor_holes_when_dividend_is_fixed() {
+        let a = FloatDomain::fix(6.0);
+        let c = FloatDomain::new(1.0, 10.0).exclude(2.0);
+        let b = a.divide(&c);
+        assert!(!b.contains(3.0));
+        assert!((b.lower_bound() - 0.6).abs() < 1e-9);
+        assert!((b.upper_bound() - 6.0).abs() < 1e-9);
     }
 }

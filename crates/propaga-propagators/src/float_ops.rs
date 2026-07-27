@@ -319,15 +319,30 @@ impl Propagator for FloatBinaryPropagator {
             let b_snap = ext
                 .float_domain(self.watched[1])
                 .unwrap_or_else(|| b.clone());
-            // c = a / b  ⇒  a = c * b when b is fixed and nonzero
-            if b_snap.is_fixed() && b_snap.min != 0.0 {
-                let c_dom =
-                    FloatDomain::from_bounds_with_holes(c_snap.min, c_snap.max, &c_snap.holes);
-                let a_from_c = c_dom.times(&FloatDomain::fix(b_snap.min));
-                changed |= ext.tighten_float_below(self.watched[0], a_from_c.lower_bound());
-                changed |= ext.tighten_float_above(self.watched[0], a_from_c.upper_bound());
-                for hole in a_from_c.holes() {
+            let a_snap = ext
+                .float_domain(self.watched[0])
+                .unwrap_or_else(|| a.clone());
+            // c = a / b  ⇒  a = c * b and b = a / c (when 0 ∉ Dom(c))
+            let a_from_cb =
+                FloatDomain::from_bounds_with_holes(c_snap.min, c_snap.max, &c_snap.holes).times(
+                    &FloatDomain::from_bounds_with_holes(b_snap.min, b_snap.max, &b_snap.holes),
+                );
+            if a_from_cb.lower_bound().is_finite() {
+                changed |= ext.tighten_float_below(self.watched[0], a_from_cb.lower_bound());
+                changed |= ext.tighten_float_above(self.watched[0], a_from_cb.upper_bound());
+                for hole in a_from_cb.holes() {
                     changed |= ext.exclude_float_point(self.watched[0], *hole);
+                }
+            }
+            let b_from_ac =
+                FloatDomain::from_bounds_with_holes(a_snap.min, a_snap.max, &a_snap.holes).divide(
+                    &FloatDomain::from_bounds_with_holes(c_snap.min, c_snap.max, &c_snap.holes),
+                );
+            if b_from_ac.lower_bound().is_finite() {
+                changed |= ext.tighten_float_below(self.watched[1], b_from_ac.lower_bound());
+                changed |= ext.tighten_float_above(self.watched[1], b_from_ac.upper_bound());
+                for hole in b_from_ac.holes() {
+                    changed |= ext.exclude_float_point(self.watched[1], *hole);
                 }
             }
         }
@@ -758,6 +773,39 @@ mod tests {
         )));
         assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
         assert!(!engine.domain(c).as_float().unwrap().contains(4.0));
+    }
+
+    #[test]
+    fn float_div_reverse_projects_holes_when_dividend_is_fixed() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(AnyDomain::Float(FloatDomain::fix(6.0)));
+        let b = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.5, 10.0)));
+        let c = engine.new_variable(AnyDomain::Float(FloatDomain::new(1.0, 10.0).exclude(2.0)));
+        engine.add_propagator(Box::new(FloatBinaryPropagator::new(
+            a,
+            b,
+            c,
+            FloatBinaryOp::Div,
+        )));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(!engine.domain(b).as_float().unwrap().contains(3.0));
+    }
+
+    #[test]
+    fn float_div_reverse_projects_holes_when_quotient_is_fixed() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 10.0).exclude(4.0)));
+        let b = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.5, 10.0)));
+        let c = engine.new_variable(AnyDomain::Float(FloatDomain::fix(2.0)));
+        engine.add_propagator(Box::new(FloatBinaryPropagator::new(
+            a,
+            b,
+            c,
+            FloatBinaryOp::Div,
+        )));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(!engine.domain(b).as_float().unwrap().contains(2.0));
+        assert!(!engine.domain(a).as_float().unwrap().contains(4.0));
     }
 
     #[test]

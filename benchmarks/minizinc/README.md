@@ -44,6 +44,7 @@ The root `benchmarks/` folder contains curated `.fzn` files (no MiniZinc toolcha
 | `float_exp.fzn` | Fixed `float_exp` reverse projection |
 | `lexicographic_multi.fzn` / `pareto_biobjective.fzn` | Multi-objective search |
 | `float_times.fzn` | Float multiplication |
+| `float_div.fzn` | Float division (fixed divisor reverse) |
 
 When adding MiniZinc sources here, prefer small models that use supported constraints only. See [COMPATIBILITY.md](COMPATIBILITY.md) for the full list.
 
