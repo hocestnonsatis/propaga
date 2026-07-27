@@ -1,0 +1,8 @@
+% Bound-consistent int_mod.
+var 0..100: a;
+var 1..20: b;
+var -20..20: r;
+constraint int_mod(a, b, r);
+constraint int_eq(b, 7);
+constraint int_eq(r, 3);
+solve satisfy;

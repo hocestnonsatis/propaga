@@ -152,32 +152,14 @@ pub fn int_div(
     Ok(())
 }
 
-/// Posts `c = a mod b` using a domain table.
+/// Posts `c = a mod b` with bound-consistent propagation.
 pub fn int_mod(
     model: &mut Model,
     a: VariableId,
     b: VariableId,
     c: VariableId,
 ) -> Result<(), String> {
-    let (amin, amax) = domain_range(model, a);
-    let (bmin, bmax) = domain_range(model, b);
-    let a_len = (amax - amin + 1) as usize;
-    let b_len = (bmax - bmin + 1) as usize;
-    if table_too_large(a_len.saturating_mul(b_len)) {
-        return Err("int_mod domain too large".to_string());
-    }
-    let mut tuples = Vec::new();
-    for av in amin..=amax {
-        for bv in bmin..=bmax {
-            if bv != 0 {
-                tuples.push(vec![av, bv, av % bv]);
-            }
-        }
-    }
-    if tuples.is_empty() {
-        return Err("int_mod has no valid divisor values".to_string());
-    }
-    model.table(vec![a, b, c], tuples);
+    model.int_mod(a, b, c);
     Ok(())
 }
 
@@ -186,9 +168,9 @@ pub fn int_plus(model: &mut Model, a: VariableId, b: VariableId, c: VariableId) 
     model.linear_eq(a, b, c);
 }
 
-/// Posts `b = not a` for 0/1 variables.
+/// Posts `b = not a` for 0/1 variables (`a + b = 1`).
 pub fn bool_not(model: &mut Model, a: VariableId, b: VariableId) {
-    model.table(vec![a, b], vec![vec![0, 1], vec![1, 0]]);
+    model.scalar_eq(vec![1, 1], vec![a, b], 1);
 }
 
 /// Posts `c = a xor b` for 0/1 variables.

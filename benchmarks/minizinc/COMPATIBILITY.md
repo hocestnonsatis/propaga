@@ -52,21 +52,21 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `int_*_reif` | Supported | Reified propagators |
 | `int_lin_eq`, `int_lin_le`, `int_lin_ge`, `int_lin_ne` | Supported | Linear scalar propagators |
 | `int_lin_*_reif` | Supported | Reified linear scalar |
-| `int_plus`, `int_abs`, `int_times`, `int_div`, `int_mod` | Supported | Bound-consistent `int_abs`/`int_times`/`int_div`; `int_plus` via linear; `int_mod` table |
+| `int_plus`, `int_abs`, `int_times`, `int_div`, `int_mod` | Supported | Bound-consistent arithmetic (`int_plus` via linear; `bool_not` via `a+b=1`) |
 | `int_min`, `int_max`, `int_pow`, `int_pow_fixed` | Supported | Bound-consistent `int_min`/`int_max`; `int_pow*` table decomposition |
 | `int2float` | Supported | Channeling propagator |
 | `min` / `max` (generic) | Supported | Dispatches to `int_*` or `float_*` by domain |
 | `element`, `array_int_element`, `array_var_int_element` | Supported | Element; standard forms are 1-based, `_nonshifted` is 0-based |
 | `array_int_maximum`, `array_int_minimum` | Supported | Binary `int_min`/`int_max` fold |
 | `bool_eq`, `bool2int` | Supported | Equality on `0..1` |
-| `bool_not`, `bool_and`, `bool_or`, `bool_xor` | Supported | Table decomposition |
+| `bool_not`, `bool_and`, `bool_or`, `bool_xor` | Supported | `bool_not` via `a+b=1`; and/or/xor table / reified |
 | `bool_clause`, `bool_clause_reif` | Supported | Clause decomposition |
 | `bool_le`, `bool_lt`, `bool_*_reif`, `bool_eq_reif` | Supported | Table / reified |
 | `bool_lin_eq`, `bool_lin_le` | Supported | Linear scalar on `0..1` vars |
 | `array_bool_and`, `array_bool_xor` | Supported | Decomposition |
 | `array_bool_element`, `array_var_bool_element` | Supported | Element; `array_var_bool_element` is 1-based, `_nonshifted` is 0-based |
 
-**Decomposition note:** `int_mod` and `int_pow` use domain tables capped at **10 000 tuples**. Larger Cartesian products return an unsupported error at compile time. `int_times` / `int_div` use bound-consistent propagation (no table size cap).
+**Decomposition note:** `int_pow` uses domain tables capped at **10 000 tuples**. Larger Cartesian products return an unsupported error at compile time. `int_times` / `int_div` / `int_mod` use bound-consistent propagation (no table size cap).
 
 ## Set constraints
 

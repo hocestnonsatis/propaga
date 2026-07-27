@@ -9,14 +9,14 @@ use propaga_propagators::{
     FloatLinearGePropagator, FloatLinearLePropagator, FloatLinearNePropagator, FloatMinMaxOp,
     FloatMinMaxPropagator, FloatNePropagator, FloatTimesPropagator, FloatUnaryOp,
     FloatUnaryPropagator, GlobalCardinalityPropagator, Int2FloatPropagator, IntAbsPropagator,
-    IntDivPropagator, IntMinMaxOp, IntMinMaxPropagator, IntTimesPropagator, InversePropagator,
-    LessEqualPropagator, LessThanPropagator, LinearEqPropagator, LinearScalarGePropagator,
-    LinearScalarLePropagator, NotEqualOffsetPropagator, RectangleSpec, RegularPropagator,
-    ReifiedEqualityPropagator, ReifiedFloatLinearEqPropagator, ReifiedFloatLinearGePropagator,
-    ReifiedFloatLinearLePropagator, ReifiedLessEqualPropagator, ReifiedLessThanPropagator,
-    ReifiedNotEqualPropagator, ReifiedScalarEqPropagator, ReifiedScalarGePropagator,
-    ReifiedScalarLePropagator, SetCardEqPropagator, SetCardPropagator, SetDiffPropagator,
-    SetEqPropagator, SetEqReifPropagator, SetInPropagator, SetInReifPropagator,
+    IntDivPropagator, IntMinMaxOp, IntMinMaxPropagator, IntModPropagator, IntTimesPropagator,
+    InversePropagator, LessEqualPropagator, LessThanPropagator, LinearEqPropagator,
+    LinearScalarGePropagator, LinearScalarLePropagator, NotEqualOffsetPropagator, RectangleSpec,
+    RegularPropagator, ReifiedEqualityPropagator, ReifiedFloatLinearEqPropagator,
+    ReifiedFloatLinearGePropagator, ReifiedFloatLinearLePropagator, ReifiedLessEqualPropagator,
+    ReifiedLessThanPropagator, ReifiedNotEqualPropagator, ReifiedScalarEqPropagator,
+    ReifiedScalarGePropagator, ReifiedScalarLePropagator, SetCardEqPropagator, SetCardPropagator,
+    SetDiffPropagator, SetEqPropagator, SetEqReifPropagator, SetInPropagator, SetInReifPropagator,
     SetIntersectPropagator, SetLtPropagator, SetNePropagator, SetSubsetPropagator,
     SetSubsetReifPropagator, SetSymDiffPropagator, SetUnionPropagator, TablePropagator, TaskSpec,
 };
@@ -528,6 +528,12 @@ impl Model {
     pub fn int_div(&mut self, a: VariableId, b: VariableId, c: VariableId) {
         self.engine
             .add_propagator(Box::new(IntDivPropagator::new(a, b, c)));
+    }
+
+    /// Posts `c = a mod b` (truncating remainder) for integer variables; excludes `b = 0`.
+    pub fn int_mod(&mut self, a: VariableId, b: VariableId, c: VariableId) {
+        self.engine
+            .add_propagator(Box::new(IntModPropagator::new(a, b, c)));
     }
 
     /// Posts `left < right`.

@@ -79,6 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Native `IntAbsPropagator` for FlatZinc `int_abs` (replaces domain table); `array_int_minimum` / `maximum` fold via binary min/max; fixture `array_int_min_max.fzn` + CI smoke.
 - Native `IntTimesPropagator` for FlatZinc `int_times` (replaces domain table / 10k cap); handwritten `int_times_large.fzn` + CI smoke.
 - Native `IntDivPropagator` for FlatZinc `int_div` (trunc toward zero, excludes divisor 0); `int_plus` always posts `linear_eq`; handwritten `int_div.fzn` + CI smoke.
+- Native `IntModPropagator` for FlatZinc `int_mod`; `bool_not` posts `a + b = 1`; handwritten `int_mod.fzn` + CI smoke.
 
 ### Fixed
 
