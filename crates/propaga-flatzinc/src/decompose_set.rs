@@ -26,10 +26,9 @@ pub fn set_le(model: &mut Model, left: VariableId, right: VariableId) {
     model.set_subset(left, right);
 }
 
-/// Posts `left < right`.
+/// Posts `left < right` (proper subset).
 pub fn set_lt(model: &mut Model, left: VariableId, right: VariableId) {
-    set_le(model, left, right);
-    set_ne(model, left, right);
+    model.set_lt(left, right);
 }
 
 /// Posts `result = left \\ right`.

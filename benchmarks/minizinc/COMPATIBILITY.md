@@ -74,7 +74,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 |------------|--------|-----------------|
 | `set_card` | Supported | Constant or variable cardinality (`SetCardEqPropagator`) |
 | `set_subset`, `set_superset`, `set_eq`, `set_ne` | Supported | Native `set_eq` / `set_ne` / subset propagators |
-| `set_in`, `set_le`, `set_lt`, `set_diff`, `set_symdiff` | Supported | Native `set_diff` / `set_symdiff` propagators |
+| `set_in`, `set_le`, `set_lt`, `set_diff`, `set_symdiff` | Supported | Native `set_diff` / `set_symdiff`; `set_lt` uses subset + proper-card |
 | `set_union`, `set_intersect` | Supported | Set union / intersection; both tighten cardinality bounds |
 | `set_*_reif` | Supported | Reified set propagators |
 | `array_var_set_element` | Supported | 1-based index; `_nonshifted` is 0-based |
