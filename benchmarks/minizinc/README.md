@@ -60,8 +60,8 @@ builtins and search annotations. Each model has a **hand-written** `.fzn` fixtur
 used for offline/CI compile regression
 (`cargo test -p propaga-flatzinc --test builtin_corpus`). Search fixtures include
 `seq_search`, `search_selectors`, `float_search_ann`, `set_search_ann`,
-`bool_search_ann`, `indomain_random_ann`, and `reverse_split_ann`
-(compile + SAT; `seq_search` also under portfolio).
+`bool_search_ann`, `indomain_random_ann`, `reverse_split_ann`, and
+`median_luby_ann` (compile + SAT; `seq_search` also under portfolio).
 
 Optional local refresh into `target/flatzinc-stdlib/` (note: MiniZinc 2.9+ may
 emit solver-specific FlatZinc that Propaga does not yet accept — prefer the
