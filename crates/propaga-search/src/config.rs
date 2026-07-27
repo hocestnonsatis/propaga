@@ -292,5 +292,34 @@ mod tests {
             Some(VariableOrdering::DomWdeg)
         );
         assert_eq!(VariableOrdering::parse("mrv"), Some(VariableOrdering::Mrv));
+        assert_eq!(
+            VariableOrdering::parse("activity"),
+            Some(VariableOrdering::Activity)
+        );
+        assert_eq!(
+            VariableOrdering::parse("most_constrained"),
+            Some(VariableOrdering::Mrv)
+        );
+    }
+
+    #[test]
+    fn parses_value_ordering() {
+        assert_eq!(
+            ValueOrdering::parse("indomain_min"),
+            Some(ValueOrdering::Ascending)
+        );
+        assert_eq!(
+            ValueOrdering::parse("reverse-split"),
+            Some(ValueOrdering::ReverseSplit)
+        );
+        assert_eq!(
+            ValueOrdering::parse("indomain_interval"),
+            Some(ValueOrdering::Interval)
+        );
+        assert_eq!(
+            ValueOrdering::parse("indomain_random"),
+            Some(ValueOrdering::Random)
+        );
+        assert_eq!(ValueOrdering::parse("nope"), None);
     }
 }

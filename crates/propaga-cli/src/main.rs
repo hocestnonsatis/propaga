@@ -43,7 +43,7 @@ struct Cli {
     #[arg(long, global = true)]
     restarts: Option<String>,
 
-    /// Value ordering during search: asc, desc, or lcv.
+    /// Value ordering during search: asc, desc, lcv, split, reverse-split, median, random, or interval.
     #[arg(long, global = true)]
     value_ordering: Option<String>,
 
@@ -51,7 +51,7 @@ struct Cli {
     #[arg(long, global = true)]
     no_phase_saving: bool,
 
-    /// Variable ordering during search: mrv, dom, dom-wdeg, or input-order.
+    /// Variable ordering during search: mrv, dom, dom-wdeg, input-order, or activity.
     #[arg(long, global = true)]
     var_ordering: Option<String>,
 

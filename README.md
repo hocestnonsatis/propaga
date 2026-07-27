@@ -48,7 +48,7 @@ Equality, disequality, linear constraints, ordering (`<=`, `<`), reified compari
 
 ### Search
 
-MRV, DOM, DOM/W-DEG, activity-based, and input-order variable ordering; ascending, descending, LCV, split, and median value ordering; first-UIP nogood learning; optional lazy clause pruning; Luby, constant, geometric, linear, and on-solution restarts; phase saving; parallel portfolio search (`--workers`, including FlatZinc `seq_search` phases); lexicographic multi-objective optimization; branch-and-bound for single-objective optimization.
+MRV, DOM, DOM/W-DEG, activity-based, and input-order variable ordering; ascending, descending, LCV, split, reverse-split, median, random, and interval value ordering; first-UIP nogood learning; optional lazy clause pruning; Luby, constant, geometric, linear, and on-solution restarts; phase saving; parallel portfolio search (`--workers`, including FlatZinc `seq_search` phases); lexicographic multi-objective optimization; branch-and-bound for single-objective optimization.
 
 ### FlatZinc
 
@@ -80,8 +80,8 @@ Global options:
 | `--time-limit SECS` | — | Wall-clock cutoff (`TIMEOUT` / `status: timeout`) |
 | `--no-learning` | off | Disable nogood learning |
 | `--restarts` | (from annotation or `luby`) | `none`, `luby`, `luby:N`, `constant:N`, or `geometric:B:N` |
-| `--var-ordering` | (from annotation or `mrv`) | `mrv`, `dom`, `dom-wdeg`, `input-order` |
-| `--value-ordering` | (from annotation or `asc`) | `asc`, `desc`, or `lcv` |
+| `--var-ordering` | (from annotation or `mrv`) | `mrv`, `dom`, `dom-wdeg`, `input-order`, `activity` |
+| `--value-ordering` | (from annotation or `asc`) | `asc`, `desc`, `lcv`, `split`, `reverse-split`, `median`, `random`, `interval` |
 | `--no-phase-saving` | off | Disable phase saving |
 | `--workers N` | `1` | Portfolio worker count for `solve` and puzzles |
 | `--deterministic` | off | Use only the base search configuration in portfolio mode |
