@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish outside set-aux decision vars / float_ln·sqrt CI
+- Small polish outside decomposition aux vars / float_log2 CI
 
 ## Shipped after v1.0.0
 
@@ -53,6 +53,8 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Handwritten `set_diff.fzn` / `set_symdiff.fzn` + CI smoke
 - `Model::set_var_aux` keeps FlatZinc set decomposition auxiliaries out of decision variables
 - CI smoke: `float_ln.fzn` / `float_sqrt.fzn` fixed-image reverse projection
+- `Model::int_var_aux` / `float_var_aux`; set reif and `float_log2` decompositions use them
+- CI smoke: `set_cardinality.fzn` and `float_log2.fzn`
 
 ## Shipped in v1.0.0
 

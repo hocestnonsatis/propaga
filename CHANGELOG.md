@@ -51,6 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SetIntervalDomain::wipeout` for failed membership forces; `with_cardinality(…, 0)` collapses to the fixed empty set.
 - `Model::set_var_aux` for non-decision set auxiliaries; FlatZinc `set_diff` / `set_symdiff` decompositions use it.
 - Handwritten FlatZinc fixtures `float_ln.fzn` and `float_sqrt.fzn`; CI smoke solves for both.
+- `Model::int_var_aux` and `Model::float_var_aux` for non-decision decomposition variables.
+- Handwritten FlatZinc fixture `float_log2.fzn`; CI smoke for `float_log2` and `set_cardinality`.
 
 ### Fixed
 

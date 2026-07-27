@@ -90,8 +90,19 @@ impl Model {
 
     /// Declares an integer variable with inclusive bounds and returns its handle.
     pub fn int_var(&mut self, min: i32, max: i32) -> VariableId {
+        self.declare_int_var(min, max, true)
+    }
+
+    /// Declares an auxiliary integer variable that is not a search decision variable.
+    pub fn int_var_aux(&mut self, min: i32, max: i32) -> VariableId {
+        self.declare_int_var(min, max, false)
+    }
+
+    fn declare_int_var(&mut self, min: i32, max: i32, decision: bool) -> VariableId {
         let var = self.engine.new_variable(HybridDomain::new(min, max));
-        self.variables.push(var);
+        if decision {
+            self.variables.push(var);
+        }
         var
     }
 
@@ -146,10 +157,21 @@ impl Model {
 
     /// Declares a float variable with inclusive bounds.
     pub fn float_var(&mut self, min: f64, max: f64) -> VariableId {
+        self.declare_float_var(min, max, true)
+    }
+
+    /// Declares an auxiliary float variable that is not a search decision variable.
+    pub fn float_var_aux(&mut self, min: f64, max: f64) -> VariableId {
+        self.declare_float_var(min, max, false)
+    }
+
+    fn declare_float_var(&mut self, min: f64, max: f64, decision: bool) -> VariableId {
         let var = self
             .engine
             .new_variable(AnyDomain::Float(FloatDomain::new(min, max)));
-        self.variables.push(var);
+        if decision {
+            self.variables.push(var);
+        }
         var
     }
 

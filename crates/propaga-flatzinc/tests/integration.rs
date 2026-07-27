@@ -357,3 +357,16 @@ fn set_diff_auxiliaries_are_not_decision_variables() {
     );
     assert!(instance.model.solve().is_some());
 }
+
+#[test]
+fn float_log2_auxiliaries_are_not_decision_variables() {
+    let source = include_str!("../../../benchmarks/float_log2.fzn");
+    let program = parse(source).expect("parse float_log2");
+    let mut instance = compile(program).expect("compile float_log2");
+    assert_eq!(
+        instance.model.decision_variables().len(),
+        2,
+        "only a, b should be decision vars"
+    );
+    assert!(instance.model.solve().is_some());
+}

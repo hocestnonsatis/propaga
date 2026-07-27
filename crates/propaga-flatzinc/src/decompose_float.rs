@@ -30,9 +30,9 @@ pub fn float_ln(model: &mut Model, a: VariableId, b: VariableId) {
 }
 
 pub fn float_log2(model: &mut Model, a: VariableId, b: VariableId) {
-    let ln_a = model.float_var(f64::NEG_INFINITY, f64::INFINITY);
+    let ln_a = model.float_var_aux(f64::NEG_INFINITY, f64::INFINITY);
     float_ln(model, a, ln_a);
-    let ln2 = model.float_var(std::f64::consts::LN_2, std::f64::consts::LN_2);
+    let ln2 = model.float_var_aux(std::f64::consts::LN_2, std::f64::consts::LN_2);
     model.float_div(ln_a, ln2, b);
 }
 

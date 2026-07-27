@@ -33,7 +33,7 @@ pub fn set_eq(model: &mut Model, left: VariableId, right: VariableId) {
 
 /// Posts `left != right`.
 pub fn set_ne(model: &mut Model, left: VariableId, right: VariableId) {
-    let reif = model.int_var(0, 1);
+    let reif = model.int_var_aux(0, 1);
     model.set_eq_reif(left, right, reif);
     let zero = model.int_var_fixed(0);
     model.equal(reif, zero);
@@ -87,7 +87,7 @@ pub fn set_eq_reif(model: &mut Model, left: VariableId, right: VariableId, reif:
 
 /// Posts `reif <=> left != right`.
 pub fn set_ne_reif(model: &mut Model, left: VariableId, right: VariableId, reif: VariableId) {
-    let eq = model.int_var(0, 1);
+    let eq = model.int_var_aux(0, 1);
     model.set_eq_reif(left, right, eq);
     let zero = model.int_var_fixed(0);
     model.reified_equal(eq, zero, reif);
@@ -125,11 +125,11 @@ pub fn set_le_reif(model: &mut Model, left: VariableId, right: VariableId, reif:
 
 /// Posts `reif <=> left < right`.
 pub fn set_lt_reif(model: &mut Model, left: VariableId, right: VariableId, reif: VariableId) {
-    let le_reif = model.int_var(0, 1);
+    let le_reif = model.int_var_aux(0, 1);
     set_subset_reif(model, left, right, le_reif);
-    let eq = model.int_var(0, 1);
+    let eq = model.int_var_aux(0, 1);
     model.set_eq_reif(left, right, eq);
-    let ne_reif = model.int_var(0, 1);
+    let ne_reif = model.int_var_aux(0, 1);
     let zero = model.int_var_fixed(0);
     model.reified_equal(eq, zero, ne_reif);
     crate::decompose::bool_and(model, le_reif, ne_reif, reif);
