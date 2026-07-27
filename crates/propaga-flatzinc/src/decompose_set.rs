@@ -8,10 +8,7 @@ pub fn set_eq(model: &mut Model, left: VariableId, right: VariableId) {
 
 /// Posts `left != right`.
 pub fn set_ne(model: &mut Model, left: VariableId, right: VariableId) {
-    let reif = model.int_var_aux(0, 1);
-    model.set_eq_reif(left, right, reif);
-    let zero = model.int_var_fixed(0);
-    model.equal(reif, zero);
+    model.set_ne(left, right);
 }
 
 /// Posts `superset ⊇ subset`.

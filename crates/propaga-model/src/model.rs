@@ -16,8 +16,8 @@ use propaga_propagators::{
     ReifiedScalarEqPropagator, ReifiedScalarGePropagator, ReifiedScalarLePropagator,
     SetCardEqPropagator, SetCardPropagator, SetDiffPropagator, SetEqPropagator,
     SetEqReifPropagator, SetInPropagator, SetInReifPropagator, SetIntersectPropagator,
-    SetSubsetPropagator, SetSubsetReifPropagator, SetSymDiffPropagator, SetUnionPropagator,
-    TablePropagator, TaskSpec,
+    SetNePropagator, SetSubsetPropagator, SetSubsetReifPropagator, SetSymDiffPropagator,
+    SetUnionPropagator, TablePropagator, TaskSpec,
 };
 use propaga_search::{
     DepthFirstSearch, LexicographicOptimization, LexicographicResult, Objective,
@@ -207,6 +207,12 @@ impl Model {
     pub fn set_eq(&mut self, left: VariableId, right: VariableId) {
         self.engine
             .add_propagator(Box::new(SetEqPropagator::new(left, right)));
+    }
+
+    /// Posts `left != right` for set variables.
+    pub fn set_ne(&mut self, left: VariableId, right: VariableId) {
+        self.engine
+            .add_propagator(Box::new(SetNePropagator::new(left, right)));
     }
 
     /// Posts `value ∈ set`.
