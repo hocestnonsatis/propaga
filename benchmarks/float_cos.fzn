@@ -1,0 +1,5 @@
+% Satisfiable float_cos on a monotonic quarter-period.
+var 0.0..1.5708: a;
+var -1.0..1.0: c;
+constraint float_cos(a, c);
+solve satisfy;

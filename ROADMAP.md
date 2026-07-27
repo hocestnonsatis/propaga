@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Small polish outside compile/globals aux and float_sin CI
+- Small polish outside float_cos / lex CI smoke coverage
 
 ## Shipped after v1.0.0
 
@@ -59,6 +59,8 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - CI smoke: `float_minimize.fzn` / `set_optimize.fzn`
 - FlatZinc compile / globals intermediates use `int_var_aux` (unit-sum partials, reifs; sort permutation stays decision)
 - CI smoke: `float_sin`, `set_param`, `float_bounds`, `float_lin_le`; COMPATIBILITY `set_diff` note
+- Handwritten `float_cos.fzn`; CI smoke `float_cos` / `lex_less` / `all_different_only` / `generic_min`
+- README notes FlatZinc decomposition auxiliaries are non-decision
 
 ## Shipped in v1.0.0
 

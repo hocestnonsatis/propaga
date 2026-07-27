@@ -52,7 +52,7 @@ MRV, DOM, DOM/W-DEG, activity-based, and input-order variable ordering; ascendin
 
 ### FlatZinc
 
-Parses and compiles FlatZinc 1.6 builtins for the MiniZinc stdlib workflow: integer, bool, set, and float variables; linear and global constraints; reified forms; `output` directives; `solve satisfy | minimize | maximize` (including float and set-cardinality objectives); lexicographic and Pareto objectives (int, float, set-cardinality); search annotations (`int_search`, `bool_search`, `float_search`, `set_search`, `seq_search`, `restart_*`); and user `predicate` declarations with nested expansion. Batch solving with `propaga solve --dir`. CLI flags override annotation defaults when explicitly set.
+Parses and compiles FlatZinc 1.6 builtins for the MiniZinc stdlib workflow: integer, bool, set, and float variables; linear and global constraints; reified forms; `output` directives; `solve satisfy | minimize | maximize` (including float and set-cardinality objectives); lexicographic and Pareto objectives (int, float, set-cardinality); search annotations (`int_search`, `bool_search`, `float_search`, `set_search`, `seq_search`, `restart_*`); and user `predicate` declarations with nested expansion. Decomposition auxiliaries are not search decision variables (named FlatZinc vars and sort permutations still are). Batch solving with `propaga solve --dir`. CLI flags override annotation defaults when explicitly set.
 
 Full constraint matrix: [COMPATIBILITY.md](benchmarks/minizinc/COMPATIBILITY.md). MiniZinc workflow and stdlib corpus: [benchmarks/minizinc/README.md](benchmarks/minizinc/README.md).
 
