@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stdlib corpus fixture `indomain_random_ann` (`indomain_random` value ordering) with compile + SAT regression.
 - Stdlib corpus fixture `reverse_split_ann` (`indomain_reverse_split` + `restart_constant`) with compile + SAT regression.
 - Stdlib corpus fixture `median_luby_ann` (`activity` + `indomain_median` + `restart_luby`) with compile + SAT regression.
+- BnB / lexicographic / Pareto search attach model `search_phases` (FlatZinc `seq_search` respected under optimize paths).
 - `SetIntervalDomain::with_cardinality` clamps requested bounds to `[|GLB|, |LUB|]`.
 - CI smoke solves for `set_subset.fzn` and `set_eq.fzn`.
 
