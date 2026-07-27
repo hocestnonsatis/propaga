@@ -651,6 +651,8 @@ pub struct SearchAnnotations {
     pub float_search: Option<IntSearchAnnotation>,
     /// `set_search(...)` annotation, when present.
     pub set_search: Option<IntSearchAnnotation>,
+    /// `seq_search([...])` ordered list of nested typed searches.
+    pub seq_search: Option<Vec<IntSearchAnnotation>>,
     /// `restart_*` annotation, when present.
     pub restart: Option<RestartAnnotation>,
     /// `pareto([...])` annotation listing objective variables.
@@ -2531,6 +2533,14 @@ impl Parser {
                 }
                 annotations.float_search = Some(self.parse_float_search_annotation()?);
             }
+            "seq_search" => {
+                if annotations.seq_search.is_some() {
+                    return Err(FlatZincError::Unsupported(
+                        "multiple seq_search annotations".to_string(),
+                    ));
+                }
+                annotations.seq_search = Some(self.parse_seq_search_annotation()?);
+            }
             "restart_constant" => {
                 if annotations.restart.is_some() {
                     return Err(FlatZincError::Unsupported(
@@ -2705,6 +2715,43 @@ impl Parser {
             value_choice,
             complete,
         })
+    }
+
+    fn parse_seq_search_annotation(&mut self) -> Result<Vec<IntSearchAnnotation>, FlatZincError> {
+        self.expect_symbol("(")?;
+        self.expect_symbol("[")?;
+        let mut items = Vec::new();
+        if !self.peek_is_symbol("]") {
+            loop {
+                items.push(self.parse_nested_search_annotation()?);
+                if self.peek_is_symbol(",") {
+                    self.expect_symbol(",")?;
+                    continue;
+                }
+                break;
+            }
+        }
+        self.expect_symbol("]")?;
+        self.expect_symbol(")")?;
+        if items.is_empty() {
+            return Err(FlatZincError::Unsupported(
+                "seq_search requires at least one nested search".to_string(),
+            ));
+        }
+        Ok(items)
+    }
+
+    fn parse_nested_search_annotation(&mut self) -> Result<IntSearchAnnotation, FlatZincError> {
+        let name = self.expect_ident_token()?;
+        match name.as_str() {
+            "int_search" | "bool_search" | "set_search" => {
+                self.parse_typed_search_annotation(&name)
+            }
+            "float_search" => self.parse_float_search_annotation(),
+            other => Err(FlatZincError::Unsupported(format!(
+                "unsupported nested search annotation `{other}` in seq_search"
+            ))),
+        }
     }
 
     fn parse_expr_list(&mut self) -> Result<Vec<Expr>, FlatZincError> {
@@ -3085,6 +3132,20 @@ mod tests {
         "#;
         let program = parse(source).unwrap();
         assert!(program.solve.annotations.set_search.is_some());
+    }
+
+    #[test]
+    fn parses_seq_search_annotation() {
+        let source = r#"
+            var 1..3: x;
+            var 1..3: y;
+            solve :: seq_search([int_search([x], first_fail, indomain_min, complete), int_search([y], input_order, indomain_max, complete)]) satisfy;
+        "#;
+        let program = parse(source).unwrap();
+        let seq = program.solve.annotations.seq_search.expect("seq_search");
+        assert_eq!(seq.len(), 2);
+        assert_eq!(seq[0].var_choice, "first_fail");
+        assert_eq!(seq[1].value_choice, "indomain_max");
     }
 
     #[test]

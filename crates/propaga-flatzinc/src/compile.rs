@@ -198,6 +198,7 @@ pub fn compile(program: FlatZincProgram) -> Result<CompiledInstance, FlatZincErr
         program.solve.annotations.bool_search.as_ref(),
         program.solve.annotations.float_search.as_ref(),
         program.solve.annotations.set_search.as_ref(),
+        program.solve.annotations.seq_search.as_deref(),
         &model,
     )?;
 
@@ -269,19 +270,29 @@ fn compile_search_config(
         && annotations.bool_search.is_none()
         && annotations.float_search.is_none()
         && annotations.set_search.is_none()
+        && annotations.seq_search.is_none()
         && annotations.restart.is_none()
     {
         return Ok(None);
     }
 
-    let search_annotation = annotations
+    let (variable_ordering, value_ordering) = if let Some(seq) = annotations.seq_search.as_ref() {
+        // Approximate seq_search by concatenating variables (InputOrder) and
+        // using the first nested annotation's value selection.
+        let first = seq.first().ok_or_else(|| {
+            FlatZincError::Unsupported("seq_search requires at least one nested search".to_string())
+        })?;
+        (
+            VariableOrdering::InputOrder,
+            map_value_choice(&first.value_choice)?,
+        )
+    } else if let Some(search) = annotations
         .int_search
         .as_ref()
         .or(annotations.bool_search.as_ref())
         .or(annotations.float_search.as_ref())
-        .or(annotations.set_search.as_ref());
-
-    let (variable_ordering, value_ordering) = if let Some(search) = search_annotation {
+        .or(annotations.set_search.as_ref())
+    {
         let _ = search.complete;
         (
             map_var_choice(&search.var_choice)?,
@@ -346,6 +357,7 @@ fn map_value_choice(choice: &str) -> Result<ValueOrdering, FlatZincError> {
         "indomain_reverse_split" => Ok(ValueOrdering::ReverseSplit),
         "indomain_median" => Ok(ValueOrdering::Median),
         "indomain_random" => Ok(ValueOrdering::Random),
+        "indomain_interval" => Ok(ValueOrdering::Interval),
         other => Err(FlatZincError::Unsupported(format!(
             "unsupported value selection `{other}`"
         ))),
@@ -358,8 +370,21 @@ fn resolve_search_vars(
     bool_search: Option<&IntSearchAnnotation>,
     float_search: Option<&IntSearchAnnotation>,
     set_search: Option<&IntSearchAnnotation>,
+    seq_search: Option<&[IntSearchAnnotation]>,
     model: &Model,
 ) -> Result<Vec<VariableId>, FlatZincError> {
+    if let Some(seq) = seq_search {
+        let mut vars = Vec::new();
+        for search in seq {
+            vars.extend(resolve_var_list(env, Expr::List(search.vars.clone()))?);
+        }
+        if vars.is_empty() {
+            return Err(FlatZincError::Unsupported(
+                "seq_search has no variables".to_string(),
+            ));
+        }
+        return Ok(vars);
+    }
     if let Some(search) = int_search.or(bool_search).or(float_search).or(set_search) {
         let vars = resolve_var_list(env, Expr::List(search.vars.clone()))?;
         if vars.is_empty() {
@@ -3241,6 +3266,26 @@ mod tests {
         assert_eq!(
             instance.annotation_search.map(|c| c.value_ordering),
             Some(ValueOrdering::ReverseSplit)
+        );
+    }
+
+    #[test]
+    fn compiles_seq_search_and_indomain_interval() {
+        let source = r#"
+            var 1..3: x;
+            var 1..3: y;
+            solve :: seq_search([int_search([x], first_fail, indomain_interval, complete), int_search([y], input_order, indomain_max, complete)]) satisfy;
+        "#;
+        let program = parse(source).unwrap();
+        let instance = compile(program).unwrap();
+        assert_eq!(instance.solve_vars.len(), 2);
+        assert_eq!(
+            instance.annotation_search.map(|c| c.variable_ordering),
+            Some(VariableOrdering::InputOrder)
+        );
+        assert_eq!(
+            instance.annotation_search.map(|c| c.value_ordering),
+            Some(ValueOrdering::Interval)
         );
     }
 

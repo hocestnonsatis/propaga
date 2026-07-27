@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FloatElementPropagator` for float `array_element`: shares holes when the index is fixed and projects holes absent from every remaining candidate.
 - Locally monotonic `sin`/`cos` preserve and reverse-project holes; `ceil`/`floor` collapse to a fixed point when constant on the domain.
 - FlatZinc `float_search` / `set_search` parsing; `indomain_random` (deterministic) and `indomain_reverse_split` value orderings; `most_constrained` / `least_constrained` aliases.
+- FlatZinc `seq_search` (concatenated variable order + first nested value selector) and `indomain_interval` value ordering.
 - `ExtendedPropagationContext::tighten_set_cardinality` for set-cardinality bound updates during propagation.
 
 ### Fixed

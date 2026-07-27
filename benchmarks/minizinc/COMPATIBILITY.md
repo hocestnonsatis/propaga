@@ -153,6 +153,7 @@ Holes are **sound over-approximations**: dropping a hole never removes a feasibl
 |---------|--------|-------|
 | `int_search` / `bool_search` | Supported subset | Variable list, common selectors, `complete` / `incomplete` |
 | `float_search` / `set_search` | Supported subset | Same selectors; `float_search` precision is accepted and ignored |
+| `seq_search([...])` | Supported (approx.) | Concatenates nested variable lists with `input_order`; first nested value selector wins |
 | `restart_luby`, `restart_constant`, `restart_geometric`, `restart_none` | Supported | |
 | `incomplete` | Tolerated | Treated like `complete` for exploration completeness |
 
@@ -166,7 +167,7 @@ FlatZinc search annotations are applied when solving with `propaga solve`. CLI f
 
 Supported variable selectors: `input_order`, `first_fail` / `most_constrained`, `smallest`, `largest`, `occurrence`, `degree`, `anti_first_fail` / `least_constrained`, `activity` / `vsids`.
 
-Supported value selectors: `indomain_min`, `indomain_max`, `indomain_split`, `indomain_reverse_split`, `indomain_median`, `indomain_random` (deterministic shuffle).
+Supported value selectors: `indomain_min`, `indomain_max`, `indomain_split`, `indomain_reverse_split`, `indomain_median`, `indomain_random` (deterministic shuffle), `indomain_interval` (first contiguous component, else split).
 
 ## CLI features (FlatZinc path)
 

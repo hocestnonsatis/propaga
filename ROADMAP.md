@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Broader search polish (`seq_search`, `indomain_interval`) or CI corpus additions for new annotation coverage
+- True multi-phase `seq_search` (finish group before next) or CI corpus fixtures for search annotations
 
 ## Shipped after v1.0.0
 
@@ -26,6 +26,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Locally monotonic `sin`/`cos` hole projection (+ reverse preimages); constant-domain `ceil`/`floor` collapse to fixed
 - COMPATIBILITY.md float hole semantics section; README FlatZinc gap blurb refreshed
 - Search annotations: `float_search` / `set_search`, `indomain_random` / `indomain_reverse_split`, selector aliases
+- `seq_search` (concatenated InputOrder approx.) and `indomain_interval` value ordering
 
 ## Shipped in v1.0.0
 

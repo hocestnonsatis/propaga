@@ -871,6 +871,9 @@ impl DepthFirstSearch {
             crate::config::ValueOrdering::Random => {
                 shuffle_values_deterministic(&mut values, var);
             }
+            crate::config::ValueOrdering::Interval => {
+                order_first_interval_or_split(&mut values, domain.min(), domain.max());
+            }
         }
 
         if self.config.phase_saving
@@ -946,6 +949,35 @@ fn shuffle_values_deterministic(values: &mut [i32], var: VariableId) {
         state ^= state << 17;
         let j = (state as usize) % (i + 1);
         values.swap(i, j);
+    }
+}
+
+fn order_first_interval_or_split(values: &mut Vec<i32>, min: Option<i32>, max: Option<i32>) {
+    if values.is_empty() {
+        return;
+    }
+    let Some(min) = min else {
+        return;
+    };
+    let mut first_end = values[0];
+    for window in values.windows(2) {
+        if window[1] == window[0] + 1 {
+            first_end = window[1];
+        } else {
+            break;
+        }
+    }
+    let has_gap = values.last().is_some_and(|last| *last > first_end);
+    if has_gap {
+        values.sort_by_key(|value| if *value <= first_end { 0u8 } else { 1 });
+        return;
+    }
+    if let Some(max) = max {
+        let midpoint = min + (max - min) / 2;
+        values.sort_by_key(|value| {
+            let distance = value.abs_diff(midpoint);
+            (distance, *value)
+        });
     }
 }
 

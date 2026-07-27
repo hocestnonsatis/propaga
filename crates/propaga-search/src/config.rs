@@ -117,6 +117,8 @@ pub enum ValueOrdering {
     Median,
     /// Deterministic pseudo-random order (stable for a given variable/domain).
     Random,
+    /// Prefer values in the first contiguous domain interval; otherwise behave like [`Split`].
+    Interval,
 }
 
 impl ValueOrdering {
@@ -133,6 +135,7 @@ impl ValueOrdering {
             }
             "median" | "indomain_median" => Some(Self::Median),
             "random" | "indomain_random" => Some(Self::Random),
+            "interval" | "indomain_interval" => Some(Self::Interval),
             _ => None,
         }
     }
