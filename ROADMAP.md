@@ -70,6 +70,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Native `SetDiffPropagator` for FlatZinc `set_diff` (symdiff still decomposes)
 - Native `SetSymDiffPropagator` for FlatZinc `set_symdiff`
 - `SetEqReifPropagator` sound `definitely_ne` + reif assignment + card sync
+- `SetSubsetReifPropagator` reif assignment + card sync + inevitable-subset failure
 
 ## Shipped in v1.0.0
 

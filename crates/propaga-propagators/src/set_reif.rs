@@ -135,37 +135,84 @@ impl Propagator for SetSubsetReifPropagator {
 
     fn propagate(&mut self, ctx: &mut dyn PropagationContext) -> PropagationStatus {
         let (subset_id, superset_id, reif_id) = (self.watched[0], self.watched[1], self.watched[2]);
-        let subset = {
+        let (subset, superset) = {
             let Some(ext) = ctx.as_extended() else {
                 return PropagationStatus::OkNoChange;
             };
-            let Some(subset) = ext.set_domain(subset_id) else {
+            let (Some(subset), Some(superset)) =
+                (ext.set_domain(subset_id), ext.set_domain(superset_id))
+            else {
                 return PropagationStatus::Failure;
             };
-            subset.clone()
+            (subset.clone(), superset.clone())
         };
 
         let mut changed = false;
+
+        let violated = subset.glb.iter().any(|v| !superset.lub.contains(v));
+        let definitely_subset = subset.lub.iter().all(|v| superset.glb.contains(v));
+
+        if violated {
+            changed |= tighten_reif(ctx, reif_id, 0);
+        }
+        if definitely_subset {
+            changed |= tighten_reif(ctx, reif_id, 1);
+        }
+
         if ctx.fixed_value(reif_id) == Some(1)
             && let Some(ext) = ctx.as_extended()
         {
             for &value in &subset.glb {
                 changed |= ext.force_set_in(superset_id, value);
             }
-            if let Some(superset) = ext.set_domain(superset_id) {
-                for value in subset.lub.clone() {
-                    if !superset.lub.contains(&value) {
-                        changed |= ext.force_set_out(subset_id, value);
-                    }
+            for value in subset.lub.clone() {
+                if let Some(superset) = ext.set_domain(superset_id)
+                    && !superset.lub.contains(&value)
+                {
+                    changed |= ext.force_set_out(subset_id, value);
                 }
+            }
+
+            let (Some(subset), Some(superset)) =
+                (ext.set_domain(subset_id), ext.set_domain(superset_id))
+            else {
+                return PropagationStatus::Failure;
+            };
+            if subset.is_empty() || superset.is_empty() {
+                return PropagationStatus::Failure;
+            }
+
+            let forced_outside_sub = superset
+                .glb
+                .iter()
+                .filter(|value| !subset.lub.contains(value))
+                .count();
+            let sub_card_min = subset.card_min.max(subset.glb.len());
+            let sub_card_max = subset.card_max.min(superset.card_max).min(subset.lub.len());
+            if sub_card_min > sub_card_max {
+                return PropagationStatus::Failure;
+            }
+            if sub_card_min != subset.card_min || sub_card_max != subset.card_max {
+                changed |= ext.tighten_set_cardinality(subset_id, sub_card_min, sub_card_max);
+            }
+
+            let sup_card_min = superset
+                .card_min
+                .max(sub_card_min.saturating_add(forced_outside_sub))
+                .max(superset.glb.len());
+            let sup_card_max = superset.card_max.min(superset.lub.len());
+            if sup_card_min > sup_card_max {
+                return PropagationStatus::Failure;
+            }
+            if sup_card_min != superset.card_min || sup_card_max != superset.card_max {
+                changed |= ext.tighten_set_cardinality(superset_id, sup_card_min, sup_card_max);
             }
         }
 
-        if let Some(ext) = ctx.as_extended()
-            && let Some(superset) = ext.set_domain(superset_id)
-        {
-            let violated = subset.glb.iter().any(|v| !superset.lub.contains(v));
-            if violated && ctx.fixed_value(reif_id) == Some(1) {
+        if ctx.fixed_value(reif_id) == Some(0) {
+            // Fixed A fully inside forced B means A ⊆ B is inevitable.
+            let subset_fixed = subset.glb.len() == subset.lub.len();
+            if subset_fixed && subset.glb.iter().all(|v| superset.glb.contains(v)) {
                 return PropagationStatus::Failure;
             }
         }
@@ -329,5 +376,55 @@ mod tests {
         assert_eq!(engine.domain(a).as_set().unwrap().card_max(), 2);
         assert_eq!(engine.domain(b).as_set().unwrap().card_min(), 2);
         assert_eq!(engine.domain(b).as_set().unwrap().card_max(), 2);
+    }
+
+    #[test]
+    fn subset_violation_forces_reif_false() {
+        let mut engine = Engine::new();
+        let subset = SetIntervalDomain::universe(1..=3)
+            .with_cardinality(1, 2)
+            .force_in(1)
+            .unwrap();
+        let superset = SetIntervalDomain::universe(2..=3).with_cardinality(0, 2);
+        let sub = engine.new_variable(AnyDomain::Set(subset));
+        let sup = engine.new_variable(AnyDomain::Set(superset));
+        let reif = engine.new_variable(IntervalDomain::new(0, 1));
+        engine.add_propagator(Box::new(SetSubsetReifPropagator::new(sub, sup, reif)));
+        engine.propagate_all().unwrap();
+        assert_eq!(engine.hybrid_domain(reif).fixed_value(), Some(0));
+    }
+
+    #[test]
+    fn definite_subset_forces_reif_true() {
+        let mut engine = Engine::new();
+        // Fixed {1} with 1 ∈ glb(B) ⇒ lub(A) ⊆ glb(B).
+        let subset = SetIntervalDomain::universe(1..=1)
+            .with_cardinality(1, 1)
+            .force_in(1)
+            .unwrap();
+        let superset = SetIntervalDomain::universe(1..=3)
+            .with_cardinality(1, 3)
+            .force_in(1)
+            .unwrap();
+        let sub = engine.new_variable(AnyDomain::Set(subset));
+        let sup = engine.new_variable(AnyDomain::Set(superset));
+        let reif = engine.new_variable(IntervalDomain::new(0, 1));
+        engine.add_propagator(Box::new(SetSubsetReifPropagator::new(sub, sup, reif)));
+        engine.propagate_all().unwrap();
+        assert_eq!(engine.hybrid_domain(reif).fixed_value(), Some(1));
+    }
+
+    #[test]
+    fn subset_reif_true_syncs_card_bounds() {
+        let mut engine = Engine::new();
+        let subset = SetIntervalDomain::universe(1..=4).with_cardinality(2, 3);
+        let superset = SetIntervalDomain::universe(1..=4).with_cardinality(0, 2);
+        let sub = engine.new_variable(AnyDomain::Set(subset));
+        let sup = engine.new_variable(AnyDomain::Set(superset));
+        let reif = engine.new_variable(IntervalDomain::fix(1));
+        engine.add_propagator(Box::new(SetSubsetReifPropagator::new(sub, sup, reif)));
+        engine.propagate_all().unwrap();
+        assert!(engine.domain(sub).as_set().unwrap().card_max() <= 2);
+        assert!(engine.domain(sup).as_set().unwrap().card_min() >= 2);
     }
 }
