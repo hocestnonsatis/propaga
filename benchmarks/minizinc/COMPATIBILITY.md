@@ -10,12 +10,12 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 |------|--------|
 | Integer / bool primitives & linear constraints | **Supported** |
 | Set variables, parameters, and builtins | **Supported** |
-| Float interval arithmetic & linear constraints | **Supported** (sound intervals, not exact reals) |
+| Float interval arithmetic & linear constraints | **Supported** (sound intervals + IEEE holes; not exact reals) |
 | Stdlib globals (`count`, `among`, `lex_*`, `nvalue`, …) | **Supported** (decomposition) |
 | Single-objective minimize / maximize | **Supported** (int, float, set cardinality) |
 | Lexicographic / Pareto multi-objective | **Supported** (int, float, set-cardinality) |
 | `function` / `test` top-level | **Skipped** (like `annotation`) |
-| `sort`, `array_float_*`, `float_dom`, `float_in` | **Supported** (decomposition) |
+| `sort`, `array_float_*`, `float_dom`, `float_in` | **Supported** |
 
 ## Variable declarations
 
@@ -27,7 +27,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `var bool: b;` | Supported | Modeled as `0..1` integer |
 | `array [L..U] of var bool: bs;` | Supported | Modeled as `0..1` integers |
 | `var set of L..U: x;` | Supported | `SetIntervalDomain` with cardinality |
-| `var low..high: x;` (float bounds) | Supported | Inclusive interval domain |
+| `var low..high: x;` (float bounds) | Supported | Inclusive interval; may gain interior IEEE holes during search |
 
 ## Parameters
 
@@ -77,18 +77,35 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 
 | Constraint | Status | Propaga mapping |
 |------------|--------|-----------------|
-| `float_le`, `float_eq`, `float_lt`, `float_ne` | Supported | Interval propagators |
-| `float_times`, `float_plus`, `float_div`, `float_abs` | Supported | Interval arithmetic |
+| `float_le`, `float_eq`, `float_lt`, `float_ne` | Supported | Interval propagators; `eq`/`ne` share or exclude holes |
+| `float_times`, `float_plus`, `float_div`, `float_abs` | Supported | Interval arithmetic; holes projected when a side is fixed / safe |
 | `float_min`, `float_max` | Supported | Reified interval decomposition |
-| `float_sqrt`, `float_sin`, `float_cos`, `float_ln`, `float_log2`, `float_exp` | Supported | Unary interval ops; `float_log2` via `ln` / `ln(2)` |
-| `float_ceil`, `float_floor`, `float_round` | Supported | Unary interval ops |
-| `float_lin_eq`, `float_lin_le`, `float_lin_ge`, `float_lin_ne` | Supported | `FloatLinear*` propagators |
+| `float_sqrt`, `float_sin`, `float_cos`, `float_ln`, `float_log2`, `float_exp` | Supported | Unary interval ops; hole-aware when locally invertible / monotonic; `float_log2` via `ln` / `ln(2)` |
+| `float_ceil`, `float_floor`, `float_round` | Supported | Unary interval ops; constant `ceil`/`floor` collapse to fixed |
+| `float_lin_eq`, `float_lin_le`, `float_lin_ge`, `float_lin_ne` | Supported | `FloatLinear*` (eq projects holes; ne excludes interior forcing points) |
 | `float_lin_*_reif` | Supported | Reified float linear |
 | `float_*_reif` | Supported | Reified float comparisons |
 | `float_dom`, `float_in` | Supported | Interval union / membership decomposition |
-| `array_float_element`, `array_var_float_element`, `array_float_maximum`, `array_float_minimum` | Supported | Native float element + max/min decomposition |
+| `array_float_element`, `array_var_float_element`, `array_float_maximum`, `array_float_minimum` | Supported | Native float element (hole-aware) + max/min decomposition |
 
-**Soundness note:** Float propagation is **interval-based**. Bounds are conservative; non-convex unary functions (e.g. `sin`) widen to `[-1, 1]` when the input span exceeds one period.
+**Soundness note:** Float propagation is **interval-based**. Bounds are conservative; non-convex unary functions (e.g. `sin` over a full period) widen to `[-1, 1]` when the input span exceeds one period.
+
+### Float domain holes
+
+`FloatDomain` stores an inclusive `[min, max]` plus a finite set of excluded IEEE points (**holes**). Holes arise from `float_ne`, assignment blocking (`encode_forbidden_float` / Pareto), and propagators that project exclusions.
+
+| Situation | Hole behavior |
+|-----------|---------------|
+| `float_eq` | Holes are shared both ways inside the common interval |
+| `float_ne` / unit `float_lin_ne` | Forbidden point excluded (endpoint shrink or interior hole) |
+| `float_plus` / `float_times` / `float_div` | Holes map through affine / fixed-operand images; reverse when one side is fixed |
+| `float_lin_eq` | Affine hole sharing when exactly two variables remain free |
+| `float_abs` / `sqrt` / `ln` / `exp` | Preserve or safely project; reverse-project when locally invertible |
+| `float_sin` / `float_cos` | Project (and reverse-project) only on locally monotonic intervals |
+| `float_ceil` / `float_floor` / `float_round` | Sparse holes dropped when the map is non-constant (preimages are intervals) |
+| `array_*_float_element` | Share holes when index is fixed; project holes absent from every remaining candidate |
+
+Holes are **sound over-approximations**: dropping a hole never removes a feasible real, but keeping every hole through non-injective maps is not always possible.
 
 ## Global constraints
 

@@ -25,7 +25,7 @@ propaga-model = "0.6"
 propaga-flatzinc = "0.6"
 ```
 
-FlatZinc support covers the MiniZinc **FlatZinc 1.6 stdlib workflow** (compile `.mzn` → solve `.fzn`). See [COMPATIBILITY.md](benchmarks/minizinc/COMPATIBILITY.md) for the full matrix and known gaps (`sort`, `array_float_*`, `float_dom`/`float_in`).
+FlatZinc support covers the MiniZinc **FlatZinc 1.6 stdlib workflow** (compile `.mzn` → solve `.fzn`). See [COMPATIBILITY.md](benchmarks/minizinc/COMPATIBILITY.md) for the full matrix, including float interval + IEEE-hole semantics.
 
 ## Workspace
 

@@ -4,7 +4,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 
 ## Next
 
-- Docs / polish pass on float hole semantics in COMPATIBILITY, or other small post-v1.0 gaps from CI/corpus
+- Small engine/docs polish outside the float-hole track (e.g. `float_round` hole notes already covered; CI corpus hygiene or search annotation gaps)
 
 ## Shipped after v1.0.0
 
@@ -24,6 +24,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Hole-aware unary float maps: `abs`/`sqrt`/`ln`/`exp` preserve or safely project holes; unary propagator reverse-projects invertible cases
 - Native `FloatElementPropagator` for `array_*_float_element` with hole sharing and common-absent hole projection
 - Locally monotonic `sin`/`cos` hole projection (+ reverse preimages); constant-domain `ceil`/`floor` collapse to fixed
+- COMPATIBILITY.md float hole semantics section; README FlatZinc gap blurb refreshed
 
 ## Shipped in v1.0.0
 
