@@ -62,6 +62,69 @@ impl Propagator for SetIntersectPropagator {
             }
         }
 
+        let (Some(left), Some(right), Some(result)) = (
+            ext.set_domain(left_id),
+            ext.set_domain(right_id),
+            ext.set_domain(result_id),
+        ) else {
+            return PropagationStatus::Failure;
+        };
+        if left.is_empty() || right.is_empty() || result.is_empty() {
+            return PropagationStatus::Failure;
+        }
+
+        // result ⊆ left ∩ right: |R| ≤ min(|A|, |B|, |lub(A) ∩ lub(B)|);
+        // |R| ≥ |A| − |lub(A) \ lub(B)| (and symmetrically).
+        let overlap = left
+            .lub
+            .iter()
+            .filter(|value| right.lub.contains(value))
+            .count();
+        let left_outside = left.lub.len().saturating_sub(overlap);
+        let right_outside = right.lub.len().saturating_sub(overlap);
+
+        let result_card_min = result
+            .card_min
+            .max(result.glb.len())
+            .max(left.card_min.saturating_sub(left_outside))
+            .max(right.card_min.saturating_sub(right_outside));
+        let result_card_max = result
+            .card_max
+            .min(left.card_max)
+            .min(right.card_max)
+            .min(overlap)
+            .min(result.lub.len());
+        if result_card_min > result_card_max {
+            return PropagationStatus::Failure;
+        }
+        if result_card_min != result.card_min || result_card_max != result.card_max {
+            changed |= ext.tighten_set_cardinality(result_id, result_card_min, result_card_max);
+        }
+
+        let left_card_min = left.card_min.max(result_card_min).max(left.glb.len());
+        let left_card_max = left
+            .card_max
+            .min(result_card_max.saturating_add(left_outside))
+            .min(left.lub.len());
+        if left_card_min > left_card_max {
+            return PropagationStatus::Failure;
+        }
+        if left_card_min != left.card_min || left_card_max != left.card_max {
+            changed |= ext.tighten_set_cardinality(left_id, left_card_min, left_card_max);
+        }
+
+        let right_card_min = right.card_min.max(result_card_min).max(right.glb.len());
+        let right_card_max = right
+            .card_max
+            .min(result_card_max.saturating_add(right_outside))
+            .min(right.lub.len());
+        if right_card_min > right_card_max {
+            return PropagationStatus::Failure;
+        }
+        if right_card_min != right.card_min || right_card_max != right.card_max {
+            changed |= ext.tighten_set_cardinality(right_id, right_card_min, right_card_max);
+        }
+
         let left_after = ext.set_domain(left_id);
         let right_after = ext.set_domain(right_id);
         let result_after = ext.set_domain(result_id);
@@ -113,7 +176,36 @@ mod tests {
     }
 
     #[test]
-    fn already_satisfied_no_change() {
+    fn lowers_result_card_max_from_operands() {
+        let mut engine = Engine::new();
+        let left = SetIntervalDomain::universe(1..=4).with_cardinality(0, 1);
+        let right = SetIntervalDomain::universe(1..=4).with_cardinality(0, 2);
+        let result = SetIntervalDomain::universe(1..=4).with_cardinality(0, 4);
+        let x = engine.new_variable(AnyDomain::Set(left));
+        let y = engine.new_variable(AnyDomain::Set(right));
+        let r = engine.new_variable(AnyDomain::Set(result));
+        engine.add_propagator(Box::new(SetIntersectPropagator::new(x, y, r)));
+        engine.propagate_all().unwrap();
+        assert!(engine.domain(r).as_set().unwrap().card_max() <= 1);
+    }
+
+    #[test]
+    fn raises_result_card_min_from_operand_outside_overlap() {
+        let mut engine = Engine::new();
+        // lub(A)={1,2}, lub(B)={1,2}; card_min(A)=2 ⇒ |A∩B| ≥ 2.
+        let left = SetIntervalDomain::universe(1..=2).with_cardinality(2, 2);
+        let right = SetIntervalDomain::universe(1..=2).with_cardinality(0, 2);
+        let result = SetIntervalDomain::universe(1..=2).with_cardinality(0, 2);
+        let x = engine.new_variable(AnyDomain::Set(left));
+        let y = engine.new_variable(AnyDomain::Set(right));
+        let r = engine.new_variable(AnyDomain::Set(result));
+        engine.add_propagator(Box::new(SetIntersectPropagator::new(x, y, r)));
+        engine.propagate_all().unwrap();
+        assert!(engine.domain(r).as_set().unwrap().card_min() >= 2);
+    }
+
+    #[test]
+    fn already_satisfied_membership_still_tightens_operand_card() {
         let mut engine = Engine::new();
         let left = SetIntervalDomain::universe(1..=3)
             .with_cardinality(1, 2)
@@ -133,8 +225,10 @@ mod tests {
         engine.add_propagator(Box::new(SetIntersectPropagator::new(x, y, r)));
         assert_eq!(
             engine.propagate_all().unwrap(),
-            PropagationStatus::OkNoChange
+            PropagationStatus::OkChanged
         );
+        assert!(engine.domain(x).as_set().unwrap().card_max() <= 1);
+        assert!(engine.domain(y).as_set().unwrap().card_max() <= 1);
     }
 
     #[test]

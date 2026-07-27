@@ -70,7 +70,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `set_card` | Supported | Cardinality propagator |
 | `set_subset`, `set_superset`, `set_eq`, `set_ne` | Supported | Set propagators / decomposition |
 | `set_in`, `set_le`, `set_lt`, `set_diff`, `set_symdiff` | Supported | Set decomposition |
-| `set_union`, `set_intersect` | Supported | Set union / intersection; union also tightens cardinality bounds |
+| `set_union`, `set_intersect` | Supported | Set union / intersection; both tighten cardinality bounds |
 | `set_*_reif` | Supported | Reified set propagators |
 
 ## Float constraints
