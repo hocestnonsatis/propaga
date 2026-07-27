@@ -96,6 +96,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - Int `ElementPropagator` prunes indices disjoint from the value domain (bound/fixed)
 - `FloatDomain` ceil/floor/round drop hole-emptied integer images (endpoint cases)
 - FlatZinc `indomain_middle` value ordering + corpus fixture
+- Correct `smallest`/`largest`/`max_regret`/`anti_first_fail`/`dom_w_deg` var selectors
 
 ## Shipped in v1.0.0
 

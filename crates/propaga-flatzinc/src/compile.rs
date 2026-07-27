@@ -438,10 +438,11 @@ fn map_var_choice(choice: &str) -> Result<VariableOrdering, FlatZincError> {
     match choice {
         "input_order" => Ok(VariableOrdering::InputOrder),
         "first_fail" | "most_constrained" => Ok(VariableOrdering::Mrv),
-        "smallest" | "occurrence" | "degree" | "anti_first_fail" | "least_constrained" => {
-            Ok(VariableOrdering::Dom)
-        }
-        "largest" => Ok(VariableOrdering::DomWdeg),
+        "anti_first_fail" | "least_constrained" => Ok(VariableOrdering::Dom),
+        "smallest" => Ok(VariableOrdering::SmallestMin),
+        "largest" => Ok(VariableOrdering::LargestMax),
+        "dom_w_deg" | "occurrence" | "degree" => Ok(VariableOrdering::DomWdeg),
+        "max_regret" => Ok(VariableOrdering::MaxRegret),
         "activity" | "vsids" => Ok(VariableOrdering::Activity),
         other => Err(FlatZincError::Unsupported(format!(
             "unsupported variable selection `{other}`"
@@ -3553,6 +3554,53 @@ mod tests {
         assert_eq!(
             instance.annotation_search.map(|c| c.value_ordering),
             Some(ValueOrdering::Middle)
+        );
+    }
+
+    #[test]
+    fn compiles_max_regret_and_largest_var_choice() {
+        let source = r#"
+            var 1..5: x;
+            solve :: int_search([x], max_regret, indomain_min, complete) satisfy;
+        "#;
+        let program = parse(source).unwrap();
+        let instance = compile(program).unwrap();
+        assert_eq!(
+            instance.annotation_search.map(|c| c.variable_ordering),
+            Some(VariableOrdering::MaxRegret)
+        );
+
+        let source = r#"
+            var 1..5: x;
+            solve :: int_search([x], largest, indomain_min, complete) satisfy;
+        "#;
+        let program = parse(source).unwrap();
+        let instance = compile(program).unwrap();
+        assert_eq!(
+            instance.annotation_search.map(|c| c.variable_ordering),
+            Some(VariableOrdering::LargestMax)
+        );
+
+        let source = r#"
+            var 1..5: x;
+            solve :: int_search([x], smallest, indomain_min, complete) satisfy;
+        "#;
+        let program = parse(source).unwrap();
+        let instance = compile(program).unwrap();
+        assert_eq!(
+            instance.annotation_search.map(|c| c.variable_ordering),
+            Some(VariableOrdering::SmallestMin)
+        );
+
+        let source = r#"
+            var 1..5: x;
+            solve :: int_search([x], dom_w_deg, indomain_min, complete) satisfy;
+        "#;
+        let program = parse(source).unwrap();
+        let instance = compile(program).unwrap();
+        assert_eq!(
+            instance.annotation_search.map(|c| c.variable_ordering),
+            Some(VariableOrdering::DomWdeg)
         );
     }
 

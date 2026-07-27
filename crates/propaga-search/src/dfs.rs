@@ -809,11 +809,12 @@ impl DepthFirstSearch {
                 .into_iter()
                 .min_by_key(|&var| engine.domain(var).size()),
             crate::config::VariableOrdering::Dom => {
-                candidates.into_iter().min_by(|&left, &right| {
+                candidates.into_iter().max_by(|&left, &right| {
                     let left_size = engine.domain(left).size();
                     let right_size = engine.domain(right).size();
                     left_size.cmp(&right_size).then_with(|| {
-                        variable_index(order, left).cmp(&variable_index(order, right))
+                        // Stable: earlier in `order` wins on ties.
+                        variable_index(order, right).cmp(&variable_index(order, left))
                     })
                 })
             }
@@ -840,6 +841,33 @@ impl DepthFirstSearch {
                         .then_with(|| engine.domain(left).size().cmp(&engine.domain(right).size()))
                         .then_with(|| {
                             variable_index(order, left).cmp(&variable_index(order, right))
+                        })
+                })
+            }
+            crate::config::VariableOrdering::SmallestMin => {
+                candidates.into_iter().min_by(|&left, &right| {
+                    domain_min_key(engine, left)
+                        .cmp(&domain_min_key(engine, right))
+                        .then_with(|| {
+                            variable_index(order, left).cmp(&variable_index(order, right))
+                        })
+                })
+            }
+            crate::config::VariableOrdering::LargestMax => {
+                candidates.into_iter().max_by(|&left, &right| {
+                    domain_max_key(engine, left)
+                        .cmp(&domain_max_key(engine, right))
+                        .then_with(|| {
+                            variable_index(order, right).cmp(&variable_index(order, left))
+                        })
+                })
+            }
+            crate::config::VariableOrdering::MaxRegret => {
+                candidates.into_iter().max_by(|&left, &right| {
+                    max_regret_score(engine, left)
+                        .cmp(&max_regret_score(engine, right))
+                        .then_with(|| {
+                            variable_index(order, right).cmp(&variable_index(order, left))
                         })
                 })
             }
@@ -971,6 +999,38 @@ fn weighted_score(engine: &Engine, var: VariableId, weight: Option<u32>) -> u64 
     let size = engine.domain(var).size() as u64;
     let weight = weight.unwrap_or(1).max(1) as u64;
     size.saturating_mul(1_000) / weight
+}
+
+fn domain_min_key(engine: &Engine, var: VariableId) -> i32 {
+    engine
+        .int_domain(var)
+        .and_then(|domain| domain.min())
+        .unwrap_or(i32::MAX)
+}
+
+fn domain_max_key(engine: &Engine, var: VariableId) -> i32 {
+    engine
+        .int_domain(var)
+        .and_then(|domain| domain.max())
+        .unwrap_or(i32::MIN)
+}
+
+fn max_regret_score(engine: &Engine, var: VariableId) -> i32 {
+    let Some(domain) = engine.int_domain(var) else {
+        return 0;
+    };
+    let Some(min) = domain.min() else {
+        return 0;
+    };
+    let Some(max) = domain.max() else {
+        return 0;
+    };
+    for value in (min + 1)..=max {
+        if domain.contains(value) {
+            return value - min;
+        }
+    }
+    0
 }
 
 fn order_middle(values: &mut [i32], min: i32, max: i32) {
@@ -1311,5 +1371,57 @@ mod tests {
         // Mean of bounds is 3.0; 2 and 4 are equidistant — prefer the smaller.
         assert_eq!(values[0], 2);
         assert_eq!(values[1], 4);
+    }
+
+    #[test]
+    fn max_regret_and_bound_selectors_pick_expected_variable() {
+        use propaga_domains::{HybridDomain, IntervalDomain};
+
+        let mut engine = Engine::new();
+        let low = engine.new_variable(IntervalDomain::new(1, 3));
+        let high = engine.new_variable(IntervalDomain::new(10, 12));
+        let gappy = engine.new_variable(
+            HybridDomain::new(0, 5)
+                .remove(1)
+                .remove(2)
+                .remove(3)
+                .remove(4),
+        );
+
+        assert_eq!(max_regret_score(&engine, low), 1);
+        assert_eq!(max_regret_score(&engine, gappy), 5);
+
+        let search = DepthFirstSearch::with_config(
+            vec![low, high, gappy],
+            SearchConfig {
+                variable_ordering: VariableOrdering::MaxRegret,
+                learning: false,
+                restart_policy: RestartPolicy::None,
+                ..SearchConfig::default()
+            },
+        );
+        assert_eq!(search.select_variable(&engine), Some(gappy));
+
+        let search = DepthFirstSearch::with_config(
+            vec![low, high],
+            SearchConfig {
+                variable_ordering: VariableOrdering::SmallestMin,
+                learning: false,
+                restart_policy: RestartPolicy::None,
+                ..SearchConfig::default()
+            },
+        );
+        assert_eq!(search.select_variable(&engine), Some(low));
+
+        let search = DepthFirstSearch::with_config(
+            vec![low, high],
+            SearchConfig {
+                variable_ordering: VariableOrdering::LargestMax,
+                learning: false,
+                restart_policy: RestartPolicy::None,
+                ..SearchConfig::default()
+            },
+        );
+        assert_eq!(search.select_variable(&engine), Some(high));
     }
 }

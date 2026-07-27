@@ -171,7 +171,7 @@ FlatZinc search annotations are applied when solving with `propaga solve`. CLI f
 | `--var-ordering` | `*_search` variable selection | Same aliases as FlatZinc (`first_fail`, `smallest`, `activity`, …) |
 | `--value-ordering` | `*_search` value selection | Same aliases as FlatZinc (`indomain_min`, `split`, `interval`, …) |
 | `--restarts` | `restart_*` policy | |
-Supported variable selectors: `input_order`, `first_fail` / `most_constrained`, `smallest`, `largest`, `occurrence`, `degree`, `anti_first_fail` / `least_constrained`, `activity` / `vsids`.
+Supported variable selectors: `input_order`, `first_fail` / `most_constrained`, `anti_first_fail` / `least_constrained` (largest domain), `smallest` / `largest` (by domain min/max), `max_regret`, `dom_w_deg` / `occurrence` / `degree` (W-DEG approximation), `activity` / `vsids`.
 
 Supported value selectors: `indomain_min`, `indomain_max`, `indomain_middle`, `indomain_split`, `indomain_reverse_split`, `indomain_median`, `indomain_random` (deterministic shuffle), `indomain_interval` (first contiguous component, else split).
 

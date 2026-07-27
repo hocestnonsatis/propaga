@@ -148,10 +148,10 @@ impl ValueOrdering {
 /// Variable ordering strategy during branch selection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum VariableOrdering {
-    /// Minimum remaining values (default).
+    /// Minimum remaining values / first-fail (default).
     #[default]
     Mrv,
-    /// Domain size over minimum, tie-break by index.
+    /// Prefer variables with the largest domain (anti-first-fail).
     Dom,
     /// Domain size divided by conflict weight (W-DEG style).
     DomWdeg,
@@ -159,6 +159,12 @@ pub enum VariableOrdering {
     InputOrder,
     /// Activity-based ordering (VSIDS-style): prefer variables involved in recent conflicts.
     Activity,
+    /// Prefer the variable whose current domain minimum is smallest.
+    SmallestMin,
+    /// Prefer the variable whose current domain maximum is largest.
+    LargestMax,
+    /// Prefer the variable with the largest gap between its two smallest domain values.
+    MaxRegret,
 }
 
 impl VariableOrdering {
@@ -167,11 +173,15 @@ impl VariableOrdering {
     pub fn parse(value: &str) -> Option<Self> {
         match value.to_ascii_lowercase().as_str() {
             "mrv" | "size" | "first_fail" | "most_constrained" => Some(Self::Mrv),
-            "dom" | "anti_first_fail" | "least_constrained" | "smallest" | "occurrence"
-            | "degree" => Some(Self::Dom),
-            "dom-wdeg" | "wdeg" | "domwdeg" | "largest" => Some(Self::DomWdeg),
+            "dom" | "anti_first_fail" | "least_constrained" => Some(Self::Dom),
+            "dom-wdeg" | "wdeg" | "domwdeg" | "dom_w_deg" | "occurrence" | "degree" => {
+                Some(Self::DomWdeg)
+            }
             "input" | "input-order" | "input_order" => Some(Self::InputOrder),
             "activity" | "vsids" => Some(Self::Activity),
+            "smallest" => Some(Self::SmallestMin),
+            "largest" => Some(Self::LargestMax),
+            "max_regret" | "max-regret" => Some(Self::MaxRegret),
             _ => None,
         }
     }
@@ -306,10 +316,26 @@ mod tests {
         );
         assert_eq!(
             VariableOrdering::parse("smallest"),
-            Some(VariableOrdering::Dom)
+            Some(VariableOrdering::SmallestMin)
+        );
+        assert_eq!(
+            VariableOrdering::parse("largest"),
+            Some(VariableOrdering::LargestMax)
         );
         assert_eq!(
             VariableOrdering::parse("occurrence"),
+            Some(VariableOrdering::DomWdeg)
+        );
+        assert_eq!(
+            VariableOrdering::parse("dom_w_deg"),
+            Some(VariableOrdering::DomWdeg)
+        );
+        assert_eq!(
+            VariableOrdering::parse("max_regret"),
+            Some(VariableOrdering::MaxRegret)
+        );
+        assert_eq!(
+            VariableOrdering::parse("anti_first_fail"),
             Some(VariableOrdering::Dom)
         );
     }
