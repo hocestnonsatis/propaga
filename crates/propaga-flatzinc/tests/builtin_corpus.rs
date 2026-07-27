@@ -93,6 +93,7 @@ fn stdlib_corpus_lists_expected_models() {
         "seq_search",
         "set_eq_reif",
         "set_search_ann",
+        "set_search_max_ann",
     ];
     for name in expected {
         let mzn = dir.join(format!("{name}.mzn"));
@@ -115,6 +116,7 @@ fn search_annotation_fixtures_are_satisfiable() {
         "reverse_split_ann",
         "median_luby_ann",
         "max_regret_ann",
+        "set_search_max_ann",
     ] {
         let source = fs::read_to_string(bundled_fzn_path(name)).expect("read fzn");
         let mut instance = compile(parse(&source).expect("parse")).expect("compile");

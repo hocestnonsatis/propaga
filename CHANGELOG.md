@@ -87,6 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FloatDomain::ceil` / `floor` / `round` drop integer images whose preimages are emptied by holes (endpoint-only cases); wide spans still use a hole-free bound fallback.
 - FlatZinc / CLI `indomain_middle` value ordering (domain value closest to the mean of current bounds); stdlib corpus fixture `indomain_middle_ann`.
 - FlatZinc / CLI variable selectors: true `smallest` / `largest` / `max_regret`, `anti_first_fail` as largest-domain, `dom_w_deg` (plus `occurrence`/`degree` ≈ W-DEG); corpus fixture `max_regret_ann`.
+- `set_search` value selectors choose which undecided element to branch on and whether to try membership in/out first; `float_search` reverse-split tries the upper half first; corpus fixture `set_search_max_ann`.
 
 ### Fixed
 

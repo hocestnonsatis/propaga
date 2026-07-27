@@ -97,6 +97,7 @@ Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships t
 - `FloatDomain` ceil/floor/round drop hole-emptied integer images (endpoint cases)
 - FlatZinc `indomain_middle` value ordering + corpus fixture
 - Correct `smallest`/`largest`/`max_regret`/`anti_first_fail`/`dom_w_deg` var selectors
+- `set_search` respects value selectors for element + in/out order; float reverse-split side order
 
 ## Shipped in v1.0.0
 

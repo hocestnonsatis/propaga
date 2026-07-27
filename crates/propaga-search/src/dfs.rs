@@ -332,49 +332,34 @@ impl DepthFirstSearch {
         if undecided.is_empty() {
             return self.search(engine);
         }
-        let value = undecided[0];
-
-        self.record_branch();
-        let level = engine.trail_mark();
-        match engine.force_set_in(var, value) {
-            Ok(PropagationStatus::Failure) => {
-                let jumped = self.handle_failure(engine, level);
-                if jumped {
-                    return None;
+        let ordering = self.active_value_ordering(engine);
+        let value = choose_set_branch_element(&undecided, var, ordering);
+        for force_in in set_membership_branch_order(ordering) {
+            self.record_branch();
+            let level = engine.trail_mark();
+            let status = if force_in {
+                engine.force_set_in(var, value)
+            } else {
+                engine.force_set_out(var, value)
+            };
+            match status {
+                Ok(PropagationStatus::Failure) => {
+                    let jumped = self.handle_failure(engine, level);
+                    if jumped {
+                        return None;
+                    }
                 }
-            }
-            Ok(_) => {
-                if let Some(solution) = self.search(engine) {
-                    return Some(solution);
+                Ok(_) => {
+                    if let Some(solution) = self.search(engine) {
+                        return Some(solution);
+                    }
+                    self.stats.record_backtrack();
+                    engine.trail_backtrack(level);
                 }
-                self.stats.record_backtrack();
-                engine.trail_backtrack(level);
-            }
-            Err(_) => {
-                self.stats.record_backtrack();
-                engine.trail_backtrack(level);
-            }
-        }
-
-        self.record_branch();
-        let level = engine.trail_mark();
-        match engine.force_set_out(var, value) {
-            Ok(PropagationStatus::Failure) => {
-                let jumped = self.handle_failure(engine, level);
-                if jumped {
-                    return None;
+                Err(_) => {
+                    self.stats.record_backtrack();
+                    engine.trail_backtrack(level);
                 }
-            }
-            Ok(_) => {
-                if let Some(solution) = self.search(engine) {
-                    return Some(solution);
-                }
-                self.stats.record_backtrack();
-                engine.trail_backtrack(level);
-            }
-            Err(_) => {
-                self.stats.record_backtrack();
-                engine.trail_backtrack(level);
             }
         }
 
@@ -523,8 +508,9 @@ impl DepthFirstSearch {
         if undecided.is_empty() {
             return self.collect_each(engine, on_solution);
         }
-        let value = undecided[0];
-        for force_in in [true, false] {
+        let ordering = self.active_value_ordering(engine);
+        let value = choose_set_branch_element(&undecided, var, ordering);
+        for force_in in set_membership_branch_order(ordering) {
             self.record_branch();
             let level = engine.trail_mark();
             let status = if force_in {
@@ -621,7 +607,7 @@ impl DepthFirstSearch {
         lo: f64,
         hi: f64,
     ) -> [(FloatBranchSide, f64); 2] {
-        if let Some(hole) = self.best_interior_float_hole(engine, var, lo, hi) {
+        let cuts = if let Some(hole) = self.best_interior_float_hole(engine, var, lo, hi) {
             [
                 (FloatBranchSide::Above, next_float_down(hole)),
                 (FloatBranchSide::Below, next_float_up(hole)),
@@ -629,6 +615,11 @@ impl DepthFirstSearch {
         } else {
             let mid = lo + (hi - lo) / 2.0;
             [(FloatBranchSide::Above, mid), (FloatBranchSide::Below, mid)]
+        };
+        match self.active_value_ordering(engine) {
+            crate::config::ValueOrdering::Descending
+            | crate::config::ValueOrdering::ReverseSplit => [cuts[1], cuts[0]],
+            _ => cuts,
         }
     }
 
@@ -776,6 +767,12 @@ impl DepthFirstSearch {
         }
     }
 
+    fn active_value_ordering(&self, engine: &Engine) -> crate::config::ValueOrdering {
+        self.active_search_phase(engine)
+            .map(|phase| phase.value_ordering)
+            .unwrap_or(self.config.value_ordering)
+    }
+
     fn select_variable(&self, engine: &Engine) -> Option<VariableId> {
         if let Some(phase) = self.active_search_phase(engine) {
             return self.select_variable_among(engine, &phase.variables, phase.variable_ordering);
@@ -886,10 +883,7 @@ impl DepthFirstSearch {
             }
         }
 
-        let value_ordering = self
-            .active_search_phase(engine)
-            .map(|phase| phase.value_ordering)
-            .unwrap_or(self.config.value_ordering);
+        let value_ordering = self.active_value_ordering(engine);
 
         match value_ordering {
             crate::config::ValueOrdering::Ascending => {}
@@ -977,6 +971,47 @@ impl DepthFirstSearch {
                 Some((var, value))
             })
             .collect()
+    }
+}
+
+fn choose_set_branch_element(
+    undecided: &[i32],
+    var: VariableId,
+    ordering: crate::config::ValueOrdering,
+) -> i32 {
+    debug_assert!(!undecided.is_empty());
+    match ordering {
+        crate::config::ValueOrdering::Descending | crate::config::ValueOrdering::ReverseSplit => {
+            undecided
+                .iter()
+                .copied()
+                .max()
+                .expect("undecided non-empty")
+        }
+        crate::config::ValueOrdering::Random => {
+            let mut values = undecided.to_vec();
+            shuffle_values_deterministic(&mut values, var);
+            values[0]
+        }
+        crate::config::ValueOrdering::Median | crate::config::ValueOrdering::Middle => {
+            let mut values = undecided.to_vec();
+            values.sort_unstable();
+            values[values.len() / 2]
+        }
+        _ => undecided
+            .iter()
+            .copied()
+            .min()
+            .expect("undecided non-empty"),
+    }
+}
+
+fn set_membership_branch_order(ordering: crate::config::ValueOrdering) -> [bool; 2] {
+    match ordering {
+        crate::config::ValueOrdering::Descending | crate::config::ValueOrdering::ReverseSplit => {
+            [false, true]
+        }
+        _ => [true, false],
     }
 }
 
@@ -1362,6 +1397,33 @@ mod tests {
         );
         assert!(search.solve(&mut engine).is_none());
         assert!(search.stats().timed_out);
+    }
+
+    #[test]
+    fn set_branch_element_follows_value_ordering() {
+        let mut engine = Engine::new();
+        let var = engine.new_variable(IntervalDomain::new(0, 0));
+        let undecided = [1, 2, 5];
+        assert_eq!(
+            choose_set_branch_element(&undecided, var, ValueOrdering::Ascending),
+            1
+        );
+        assert_eq!(
+            choose_set_branch_element(&undecided, var, ValueOrdering::Descending),
+            5
+        );
+        assert_eq!(
+            choose_set_branch_element(&undecided, var, ValueOrdering::Median),
+            2
+        );
+        assert_eq!(
+            set_membership_branch_order(ValueOrdering::Ascending),
+            [true, false]
+        );
+        assert_eq!(
+            set_membership_branch_order(ValueOrdering::Descending),
+            [false, true]
+        );
     }
 
     #[test]
