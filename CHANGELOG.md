@@ -108,6 +108,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - When a float domain reaches `float_search` precision, DFS assigns lower/upper/midpoint according to the active value ordering (`indomain_min` / `indomain_max` / split-style).
 - Float `indomain_interval` splits at the leftmost interior hole (first contiguous component) instead of the hole nearest the midpoint.
 - `float_min` / `float_max` `sync_equal` keeps pre-tighten holes when bound sync would drop them (parity with `float_eq`); handwritten `float_min_sync_hole.fzn` + CI smoke.
+- Float domain `size()` for MRV / anti-first-fail uses coarse width buckets (plus holes) instead of a constant `2` for every unfixed float.
 
 ### Fixed
 

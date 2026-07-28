@@ -73,15 +73,7 @@ impl AnyDomain {
         match self {
             Self::Int(domain) => domain.size(),
             Self::Set(domain) => domain.size(),
-            Self::Float(domain) => {
-                if domain.is_empty() {
-                    0
-                } else if domain.is_fixed() {
-                    1
-                } else {
-                    2
-                }
-            }
+            Self::Float(domain) => domain.size(),
         }
     }
 }

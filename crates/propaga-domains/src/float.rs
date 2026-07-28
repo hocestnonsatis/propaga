@@ -101,6 +101,45 @@ impl FloatDomain {
         !self.is_empty() && (self.max - self.min).abs() < f64::EPSILON && !self.is_hole(self.min)
     }
 
+    /// Approximate cardinality for variable-ordering heuristics (MRV / anti-first-fail).
+    ///
+    /// Continuous floats are not countable; this uses coarse width buckets (plus a
+    /// small hole bonus) so narrower domains look smaller than wider ones without
+    /// dwarfing integer domain sizes.
+    #[must_use]
+    pub fn size(&self) -> usize {
+        if self.is_empty() {
+            return 0;
+        }
+        if self.is_fixed() {
+            return 1;
+        }
+        let width = self.max - self.min;
+        if !width.is_finite() || width < 0.0 {
+            return 1_000_000;
+        }
+        let bucket: usize = if width <= 1e-12 {
+            2
+        } else if width <= 1e-9 {
+            3
+        } else if width <= 1e-6 {
+            4
+        } else if width <= 1e-3 {
+            5
+        } else if width <= 1.0 {
+            6
+        } else if width <= 10.0 {
+            7
+        } else if width <= 100.0 {
+            8
+        } else if width <= 1e6 {
+            9
+        } else {
+            10
+        };
+        bucket.saturating_add(self.holes.len().min(5))
+    }
+
     /// Returns the lower bound.
     #[must_use]
     pub const fn lower_bound(&self) -> f64 {
@@ -742,6 +781,18 @@ mod tests {
         assert!(domain.contains(0.5));
         assert!(!domain.contains(1.0));
         assert_eq!(domain.holes(), &[1.0]);
+    }
+
+    #[test]
+    fn size_grows_with_width_for_mrv() {
+        let narrow = FloatDomain::new(0.0, 1e-6);
+        let mid = FloatDomain::new(0.0, 1.0);
+        let wide = FloatDomain::new(0.0, 50.0);
+        assert!(narrow.size() >= 2);
+        assert!(mid.size() > narrow.size());
+        assert!(wide.size() > mid.size());
+        assert_eq!(FloatDomain::fix(1.0).size(), 1);
+        assert_eq!(FloatDomain::new(1.0, 0.0).size(), 0);
     }
 
     #[test]

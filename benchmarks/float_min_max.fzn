@@ -9,4 +9,4 @@ constraint float_min(a, b, m);
 constraint float_max(a, b, M);
 constraint float_le(m, one);
 constraint float_le(two_half, M);
-solve satisfy;
+solve :: float_search([a, b, m, M], 0.5, input_order, indomain_split, complete) satisfy;
