@@ -109,7 +109,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `float_lin_eq` | Affine hole sharing when exactly two variables remain free |
 | `float_abs` / `sqrt` / `ln` / `exp` | Preserve or safely project; `abs` reverse-projects holes `h > 0` to both `±h` (incl. domains straddling zero); fixed images reverse-project when locally invertible |
 | `float_min` / `float_max` | Result holes reverse-project onto an operand when the other side cannot realize that value as the min/max |
-| `float_sin` / `float_cos` | Project (and reverse-project) only on locally monotonic intervals |
+| `float_sin` / `float_cos` | Project (and reverse-project) holes only on locally monotonic intervals; fixed images reverse-project onto the unique preimage when one exists |
 | `float_ceil` / `float_floor` / `float_round` | Drop integer images whose preimages are emptied by holes (typically endpoint-only); constant domains collapse to fixed; fixed integer images reverse-project onto the input; integer output holes reverse-project when the preimage is a singleton; spans above 10 000 integers keep hole-free bounds |
 | `array_*_float_element` | Share holes when index is fixed; project holes absent from every remaining candidate |
 

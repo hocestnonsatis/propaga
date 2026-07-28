@@ -513,6 +513,14 @@ impl Propagator for FloatUnaryPropagator {
                         changed |= ext.exclude_float_point(self.watched[0], preimage);
                     }
                 }
+                if let Some(y) = fixed_float_image(&output_snap) {
+                    if let Some(x) =
+                        unique_sin_preimage(y, input_dom.lower_bound(), input_dom.upper_bound())
+                    {
+                        changed |= ext.tighten_float_below(self.watched[0], x);
+                        changed |= ext.tighten_float_above(self.watched[0], x);
+                    }
+                }
             }
             FloatUnaryOp::Cos => {
                 for hole in &reverse_holes {
@@ -520,6 +528,14 @@ impl Propagator for FloatUnaryPropagator {
                         unique_cos_preimage(*hole, input_dom.lower_bound(), input_dom.upper_bound())
                     {
                         changed |= ext.exclude_float_point(self.watched[0], preimage);
+                    }
+                }
+                if let Some(y) = fixed_float_image(&output_snap) {
+                    if let Some(x) =
+                        unique_cos_preimage(y, input_dom.lower_bound(), input_dom.upper_bound())
+                    {
+                        changed |= ext.tighten_float_below(self.watched[0], x);
+                        changed |= ext.tighten_float_above(self.watched[0], x);
                     }
                 }
             }
@@ -865,6 +881,38 @@ mod tests {
         engine.add_propagator(Box::new(FloatUnaryPropagator::new(x, y, FloatUnaryOp::Sin)));
         assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
         assert!(!engine.domain(y).as_float().unwrap().contains(0.5_f64.sin()));
+    }
+
+    #[test]
+    fn float_sin_reverse_projects_fixed_image_on_monotonic_domain() {
+        let mut engine = Engine::new();
+        let target = std::f64::consts::FRAC_PI_4;
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(
+            0.0,
+            std::f64::consts::FRAC_PI_2,
+        )));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::fix(target.sin())));
+        engine.add_propagator(Box::new(FloatUnaryPropagator::new(x, y, FloatUnaryOp::Sin)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let domain = engine.domain(x).as_float().unwrap();
+        assert!((domain.lower_bound() - target).abs() < 1e-9);
+        assert!((domain.upper_bound() - target).abs() < 1e-9);
+    }
+
+    #[test]
+    fn float_cos_reverse_projects_fixed_image_on_monotonic_domain() {
+        let mut engine = Engine::new();
+        let target = std::f64::consts::FRAC_PI_4;
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(
+            0.0,
+            std::f64::consts::FRAC_PI_2,
+        )));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::fix(target.cos())));
+        engine.add_propagator(Box::new(FloatUnaryPropagator::new(x, y, FloatUnaryOp::Cos)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let domain = engine.domain(x).as_float().unwrap();
+        assert!((domain.lower_bound() - target).abs() < 1e-9);
+        assert!((domain.upper_bound() - target).abs() < 1e-9);
     }
 
     #[test]
