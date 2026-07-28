@@ -696,31 +696,40 @@ impl DepthFirstSearch {
         self.stats.record_backtrack();
         self.stats.record_conflict();
 
-        // Nogood/clause propagators are int-literal based; skip learning on set/float conflicts.
-        if self.config.learning
-            && let Some(conflict) = engine.last_conflict()
-            && matches!(
+        if let Some(conflict) = engine.last_conflict() {
+            let is_int = matches!(
                 engine.domain(conflict.variable).kind(),
                 propaga_domains::DomainKind::Int
-            )
-        {
-            self.bump_weights(&conflict.explanation.unique_branch_literals());
-            self.bump_activities(&conflict.explanation.unique_branch_literals());
-            let nogood = ConflictAnalyzer::analyze(&conflict.explanation, conflict.variable);
-            let branch_order: Vec<NogoodLiteral> = conflict.explanation.unique_branch_literals();
-            let learned = self.nogoods.learn(nogood.clone());
-            if learned {
-                engine.add_propagator(Box::new(NogoodPropagator::new(nogood.literals().to_vec())));
-                self.stats.record_nogood();
-            }
-            if self.config.clause_learning && self.clauses.learn_from_nogood(&nogood) {
-                engine.add_propagator(Box::new(ClausePropagator::new(nogood.literals().to_vec())));
-            }
-            if learned && let Some(learned_nogood) = self.nogoods.last() {
-                let backjump = ConflictAnalyzer::backjump_level(learned_nogood, &branch_order);
-                let target = backjump.min(level);
-                engine.trail_backtrack(target);
-                return target < level;
+            );
+            // Nogood/clause learning is int-literal based, but activity / WDEG still
+            // benefit from float and set wipeouts.
+            if !is_int {
+                self.bump_variable_weight(conflict.variable);
+                self.bump_variable_activity(conflict.variable);
+            } else if self.config.learning {
+                self.bump_weights(&conflict.explanation.unique_branch_literals());
+                self.bump_activities(&conflict.explanation.unique_branch_literals());
+                let nogood = ConflictAnalyzer::analyze(&conflict.explanation, conflict.variable);
+                let branch_order: Vec<NogoodLiteral> =
+                    conflict.explanation.unique_branch_literals();
+                let learned = self.nogoods.learn(nogood.clone());
+                if learned {
+                    engine.add_propagator(Box::new(NogoodPropagator::new(
+                        nogood.literals().to_vec(),
+                    )));
+                    self.stats.record_nogood();
+                }
+                if self.config.clause_learning && self.clauses.learn_from_nogood(&nogood) {
+                    engine.add_propagator(Box::new(ClausePropagator::new(
+                        nogood.literals().to_vec(),
+                    )));
+                }
+                if learned && let Some(learned_nogood) = self.nogoods.last() {
+                    let backjump = ConflictAnalyzer::backjump_level(learned_nogood, &branch_order);
+                    let target = backjump.min(level);
+                    engine.trail_backtrack(target);
+                    return target < level;
+                }
             }
         }
 
@@ -786,6 +795,16 @@ impl DepthFirstSearch {
         }
     }
 
+    fn bump_variable_weight(&mut self, var: VariableId) {
+        if !matches!(
+            self.config.variable_ordering,
+            crate::config::VariableOrdering::DomWdeg
+        ) {
+            return;
+        }
+        *self.weights.entry(var).or_insert(1) += 1;
+    }
+
     fn bump_activities(&mut self, literals: &[NogoodLiteral]) {
         if !matches!(
             self.config.variable_ordering,
@@ -797,6 +816,17 @@ impl DepthFirstSearch {
             let entry = self.activities.entry(literal.variable).or_insert(1);
             *entry = entry.saturating_add(1);
         }
+    }
+
+    fn bump_variable_activity(&mut self, var: VariableId) {
+        if !matches!(
+            self.config.variable_ordering,
+            crate::config::VariableOrdering::Activity
+        ) {
+            return;
+        }
+        let entry = self.activities.entry(var).or_insert(1);
+        *entry = entry.saturating_add(1);
     }
 
     fn active_value_ordering(&self, engine: &Engine) -> crate::config::ValueOrdering {
@@ -1795,5 +1825,41 @@ mod tests {
             },
         );
         assert_eq!(search.select_variable(&engine), Some(many_undecided));
+    }
+
+    #[test]
+    fn float_wipeout_bumps_activity_for_vsids() {
+        use propaga_domains::{AnyDomain, FloatDomain};
+        use propaga_propagators::FloatNePropagator;
+
+        let mut engine = Engine::new();
+        let cold = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 1.0)));
+        let hot = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 1.0)));
+        let zero = engine.new_variable(AnyDomain::Float(FloatDomain::fix(0.0)));
+        engine.add_propagator(Box::new(FloatNePropagator::new(cold, zero)));
+        engine.propagate_all().unwrap();
+
+        let mut search = DepthFirstSearch::with_config(
+            vec![cold, hot],
+            SearchConfig {
+                learning: false,
+                restart_policy: RestartPolicy::None,
+                variable_ordering: VariableOrdering::Activity,
+                ..SearchConfig::default()
+            },
+        );
+        // Equal activity: later decision var wins the Activity tie-break.
+        assert_eq!(search.select_variable(&engine), Some(hot));
+
+        let level = engine.trail_mark();
+        assert!(matches!(
+            engine.fix_float(cold, 0.0),
+            Ok(PropagationStatus::Failure) | Err(_)
+        ));
+        assert!(engine.last_conflict().is_some());
+        let _ = search.handle_failure(&mut engine, level);
+
+        // Float wipeout on `cold` raises its activity above `hot`.
+        assert_eq!(search.select_variable(&engine), Some(cold));
     }
 }

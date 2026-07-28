@@ -112,6 +112,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Variable selectors `smallest` / `largest` / `max_regret` use float bounds (scaled keys / width proxy) instead of ignoring non-int domains.
 - The same selectors also use set cardinality (`card_min` / `card_max`) and undecided membership count for `max_regret`.
 - `float_le` shares holes when ≤ collapses both sides to the same fixed value; `float_ne` treats singleton overlap excluded by a hole as already separated.
+- DFS bumps VSIDS activity and WDEG weights on float/set wipeouts (nogood learning remains int-only).
 
 ### Fixed
 
