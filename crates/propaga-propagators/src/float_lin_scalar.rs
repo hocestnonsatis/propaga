@@ -201,8 +201,8 @@ impl Propagator for ReifiedFloatLinearLePropagator {
             _ => {}
         }
 
-        let min_total = min_sum(ctx, &self.coeffs, &vars);
-        let max_total = max_sum(ctx, &self.coeffs, &vars);
+        let min_total = min_sum_admissible(ctx, &self.coeffs, &vars);
+        let max_total = max_sum_admissible(ctx, &self.coeffs, &vars);
         if max_total <= self.rhs {
             changed |= tighten_reif(ctx, self.reif, 1);
         } else if min_total > self.rhs {
@@ -279,8 +279,8 @@ impl Propagator for ReifiedFloatLinearEqPropagator {
             _ => {}
         }
 
-        let min_total = min_sum(ctx, &self.coeffs, &vars);
-        let max_total = max_sum(ctx, &self.coeffs, &vars);
+        let min_total = min_sum_admissible(ctx, &self.coeffs, &vars);
+        let max_total = max_sum_admissible(ctx, &self.coeffs, &vars);
         if (min_total - self.rhs).abs() < f64::EPSILON
             && (max_total - self.rhs).abs() < f64::EPSILON
         {
@@ -359,8 +359,8 @@ impl Propagator for ReifiedFloatLinearGePropagator {
             _ => {}
         }
 
-        let min_total = min_sum(ctx, &self.coeffs, &vars);
-        let max_total = max_sum(ctx, &self.coeffs, &vars);
+        let min_total = min_sum_admissible(ctx, &self.coeffs, &vars);
+        let max_total = max_sum_admissible(ctx, &self.coeffs, &vars);
         if min_total >= self.rhs {
             changed |= tighten_reif(ctx, self.reif, 1);
         } else if max_total < self.rhs {
@@ -413,6 +413,64 @@ fn next_down(value: f64) -> f64 {
     }
 }
 
+fn min_admissible(domain: &FloatDomainSnapshot) -> Option<f64> {
+    if domain.is_empty() {
+        return None;
+    }
+    let mut v = domain.min;
+    loop {
+        if domain.contains(v) {
+            return Some(v);
+        }
+        if v >= domain.max {
+            break;
+        }
+        let next = next_up(v);
+        if next <= v || next > domain.max {
+            break;
+        }
+        v = next;
+    }
+    None
+}
+
+fn max_admissible(domain: &FloatDomainSnapshot) -> Option<f64> {
+    if domain.is_empty() {
+        return None;
+    }
+    let mut v = domain.max;
+    loop {
+        if domain.contains(v) {
+            return Some(v);
+        }
+        if v <= domain.min {
+            break;
+        }
+        let prev = next_down(v);
+        if prev >= v || prev < domain.min {
+            break;
+        }
+        v = prev;
+    }
+    None
+}
+
+fn min_admissible_term(coeff: f64, domain: &FloatDomainSnapshot) -> f64 {
+    if coeff >= 0.0 {
+        coeff * min_admissible(domain).unwrap_or(f64::INFINITY)
+    } else {
+        coeff * max_admissible(domain).unwrap_or(f64::NEG_INFINITY)
+    }
+}
+
+fn max_admissible_term(coeff: f64, domain: &FloatDomainSnapshot) -> f64 {
+    if coeff >= 0.0 {
+        coeff * max_admissible(domain).unwrap_or(f64::NEG_INFINITY)
+    } else {
+        coeff * min_admissible(domain).unwrap_or(f64::INFINITY)
+    }
+}
+
 fn min_term(coeff: f64, domain: &FloatDomainSnapshot) -> f64 {
     if coeff >= 0.0 {
         coeff * domain.min
@@ -462,6 +520,22 @@ fn max_sum_domains(coeffs: &[f64], domains: &[FloatDomainSnapshot]) -> f64 {
         .sum()
 }
 
+fn min_sum_admissible_domains(coeffs: &[f64], domains: &[FloatDomainSnapshot]) -> f64 {
+    coeffs
+        .iter()
+        .zip(domains)
+        .map(|(&coeff, domain)| min_admissible_term(coeff, domain))
+        .sum()
+}
+
+fn max_sum_admissible_domains(coeffs: &[f64], domains: &[FloatDomainSnapshot]) -> f64 {
+    coeffs
+        .iter()
+        .zip(domains)
+        .map(|(&coeff, domain)| max_admissible_term(coeff, domain))
+        .sum()
+}
+
 fn min_sum_excluding_domains(coeffs: &[f64], domains: &[FloatDomainSnapshot], skip: usize) -> f64 {
     coeffs
         .iter()
@@ -482,15 +556,23 @@ fn max_sum_excluding_domains(coeffs: &[f64], domains: &[FloatDomainSnapshot], sk
         .sum()
 }
 
-fn min_sum(ctx: &mut dyn PropagationContext, coeffs: &[f64], vars: &[VariableId]) -> f64 {
+fn min_sum_admissible(
+    ctx: &mut dyn PropagationContext,
+    coeffs: &[f64],
+    vars: &[VariableId],
+) -> f64 {
     snapshot_domains(ctx, vars)
-        .map(|domains| min_sum_domains(coeffs, &domains))
+        .map(|domains| min_sum_admissible_domains(coeffs, &domains))
         .unwrap_or(f64::INFINITY)
 }
 
-fn max_sum(ctx: &mut dyn PropagationContext, coeffs: &[f64], vars: &[VariableId]) -> f64 {
+fn max_sum_admissible(
+    ctx: &mut dyn PropagationContext,
+    coeffs: &[f64],
+    vars: &[VariableId],
+) -> f64 {
     snapshot_domains(ctx, vars)
-        .map(|domains| max_sum_domains(coeffs, &domains))
+        .map(|domains| max_sum_admissible_domains(coeffs, &domains))
         .unwrap_or(f64::NEG_INFINITY)
 }
 
@@ -848,5 +930,20 @@ mod tests {
         assert_ne!(status, PropagationStatus::Failure);
         assert!(engine.domain(x).as_float().unwrap().lower_bound() <= 4.0);
         assert!(engine.domain(y).as_float().unwrap().upper_bound() >= 0.0);
+    }
+
+    #[test]
+    fn reified_float_lin_le_infers_false_when_hull_min_is_hole() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.35, 2.0).exclude(0.35)));
+        let reif = engine.new_variable(HybridDomain::new(0, 1));
+        engine.add_propagator(Box::new(ReifiedFloatLinearLePropagator::new(
+            vec![1.0],
+            vec![x],
+            0.35,
+            reif,
+        )));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert_eq!(engine.hybrid_domain(reif).fixed_value(), Some(0));
     }
 }
