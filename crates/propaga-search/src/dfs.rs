@@ -1095,35 +1095,75 @@ fn weighted_score(engine: &Engine, var: VariableId, weight: Option<u32>) -> u64 
 }
 
 fn domain_min_key(engine: &Engine, var: VariableId) -> i32 {
-    engine
-        .int_domain(var)
-        .and_then(|domain| domain.min())
-        .unwrap_or(i32::MAX)
+    if let Some(domain) = engine.int_domain(var) {
+        return domain.min().unwrap_or(i32::MAX);
+    }
+    if let Some(float) = engine.domain(var).as_float() {
+        if float.is_empty() {
+            return i32::MAX;
+        }
+        return float_bound_key(float.lower_bound());
+    }
+    i32::MAX
 }
 
 fn domain_max_key(engine: &Engine, var: VariableId) -> i32 {
-    engine
-        .int_domain(var)
-        .and_then(|domain| domain.max())
-        .unwrap_or(i32::MIN)
+    if let Some(domain) = engine.int_domain(var) {
+        return domain.max().unwrap_or(i32::MIN);
+    }
+    if let Some(float) = engine.domain(var).as_float() {
+        if float.is_empty() {
+            return i32::MIN;
+        }
+        return float_bound_key(float.upper_bound());
+    }
+    i32::MIN
 }
 
 fn max_regret_score(engine: &Engine, var: VariableId) -> i32 {
-    let Some(domain) = engine.int_domain(var) else {
-        return 0;
-    };
-    let Some(min) = domain.min() else {
-        return 0;
-    };
-    let Some(max) = domain.max() else {
-        return 0;
-    };
-    for value in (min + 1)..=max {
-        if domain.contains(value) {
-            return value - min;
+    if let Some(domain) = engine.int_domain(var) {
+        let Some(min) = domain.min() else {
+            return 0;
+        };
+        let Some(max) = domain.max() else {
+            return 0;
+        };
+        for value in (min + 1)..=max {
+            if domain.contains(value) {
+                return value - min;
+            }
         }
+        return 0;
+    }
+    if let Some(float) = engine.domain(var).as_float() {
+        if float.is_empty() || float.is_fixed() {
+            return 0;
+        }
+        // Continuous proxy: distance from lower to upper bound in the same key space.
+        return float_bound_key(float.upper_bound())
+            .saturating_sub(float_bound_key(float.lower_bound()))
+            .max(0);
     }
     0
+}
+
+/// Maps a float bound to an ordered `i32` key for variable selectors.
+fn float_bound_key(value: f64) -> i32 {
+    if !value.is_finite() {
+        return if value.is_sign_negative() {
+            i32::MIN
+        } else {
+            i32::MAX
+        };
+    }
+    let scaled = (value * 1_000.0).round();
+    if scaled >= f64::from(i32::MAX) {
+        i32::MAX
+    } else if scaled <= f64::from(i32::MIN) {
+        i32::MIN
+    } else {
+        scaled as i32
+    }
 }
 
 fn order_middle(values: &mut [i32], min: i32, max: i32) {
@@ -1635,5 +1675,52 @@ mod tests {
             },
         );
         assert_eq!(search.select_variable(&engine), Some(high));
+    }
+
+    #[test]
+    fn float_bound_selectors_use_float_bounds() {
+        use propaga_domains::{AnyDomain, FloatDomain};
+
+        let mut engine = Engine::new();
+        let low = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 1.0)));
+        let high = engine.new_variable(AnyDomain::Float(FloatDomain::new(10.0, 12.0)));
+        let wide = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 100.0)));
+
+        assert!(domain_min_key(&engine, low) < domain_min_key(&engine, high));
+        assert!(domain_max_key(&engine, high) > domain_max_key(&engine, low));
+        assert!(max_regret_score(&engine, wide) > max_regret_score(&engine, low));
+
+        let search = DepthFirstSearch::with_config(
+            vec![low, high],
+            SearchConfig {
+                variable_ordering: VariableOrdering::SmallestMin,
+                learning: false,
+                restart_policy: RestartPolicy::None,
+                ..SearchConfig::default()
+            },
+        );
+        assert_eq!(search.select_variable(&engine), Some(low));
+
+        let search = DepthFirstSearch::with_config(
+            vec![low, high],
+            SearchConfig {
+                variable_ordering: VariableOrdering::LargestMax,
+                learning: false,
+                restart_policy: RestartPolicy::None,
+                ..SearchConfig::default()
+            },
+        );
+        assert_eq!(search.select_variable(&engine), Some(high));
+
+        let search = DepthFirstSearch::with_config(
+            vec![low, wide],
+            SearchConfig {
+                variable_ordering: VariableOrdering::MaxRegret,
+                learning: false,
+                restart_policy: RestartPolicy::None,
+                ..SearchConfig::default()
+            },
+        );
+        assert_eq!(search.select_variable(&engine), Some(wide));
     }
 }
