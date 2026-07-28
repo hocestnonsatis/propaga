@@ -1104,6 +1104,13 @@ fn domain_min_key(engine: &Engine, var: VariableId) -> i32 {
         }
         return float_bound_key(float.lower_bound());
     }
+    if let Some(set) = engine.domain(var).as_set() {
+        if set.is_empty() {
+            return i32::MAX;
+        }
+        // Prefer sets with smaller minimum cardinality under `smallest`.
+        return i32::try_from(set.card_min()).unwrap_or(i32::MAX);
+    }
     i32::MAX
 }
 
@@ -1116,6 +1123,13 @@ fn domain_max_key(engine: &Engine, var: VariableId) -> i32 {
             return i32::MIN;
         }
         return float_bound_key(float.upper_bound());
+    }
+    if let Some(set) = engine.domain(var).as_set() {
+        if set.is_empty() {
+            return i32::MIN;
+        }
+        // Prefer sets with larger maximum cardinality under `largest`.
+        return i32::try_from(set.card_max()).unwrap_or(i32::MAX);
     }
     i32::MIN
 }
@@ -1143,6 +1157,13 @@ fn max_regret_score(engine: &Engine, var: VariableId) -> i32 {
         return float_bound_key(float.upper_bound())
             .saturating_sub(float_bound_key(float.lower_bound()))
             .max(0);
+    }
+    if let Some(set) = engine.domain(var).as_set() {
+        if set.is_empty() || set.is_fixed() {
+            return 0;
+        }
+        // Proxy: how many membership decisions remain (LUB \ GLB).
+        return i32::try_from(set.undecided().len()).unwrap_or(i32::MAX);
     }
     0
 }
@@ -1722,5 +1743,57 @@ mod tests {
             },
         );
         assert_eq!(search.select_variable(&engine), Some(wide));
+    }
+
+    #[test]
+    fn set_bound_selectors_use_cardinality() {
+        use propaga_domains::{AnyDomain, SetIntervalDomain};
+
+        let mut engine = Engine::new();
+        let small = engine.new_variable(AnyDomain::Set(
+            SetIntervalDomain::universe(1..=3).with_cardinality(0, 1),
+        ));
+        let large = engine.new_variable(AnyDomain::Set(
+            SetIntervalDomain::universe(1..=3).with_cardinality(2, 3),
+        ));
+        let many_undecided =
+            engine.new_variable(AnyDomain::Set(SetIntervalDomain::universe(1..=5)));
+
+        assert!(domain_min_key(&engine, small) < domain_min_key(&engine, large));
+        assert!(domain_max_key(&engine, large) > domain_max_key(&engine, small));
+        assert!(max_regret_score(&engine, many_undecided) > max_regret_score(&engine, small));
+
+        let search = DepthFirstSearch::with_config(
+            vec![small, large],
+            SearchConfig {
+                variable_ordering: VariableOrdering::SmallestMin,
+                learning: false,
+                restart_policy: RestartPolicy::None,
+                ..SearchConfig::default()
+            },
+        );
+        assert_eq!(search.select_variable(&engine), Some(small));
+
+        let search = DepthFirstSearch::with_config(
+            vec![small, large],
+            SearchConfig {
+                variable_ordering: VariableOrdering::LargestMax,
+                learning: false,
+                restart_policy: RestartPolicy::None,
+                ..SearchConfig::default()
+            },
+        );
+        assert_eq!(search.select_variable(&engine), Some(large));
+
+        let search = DepthFirstSearch::with_config(
+            vec![small, many_undecided],
+            SearchConfig {
+                variable_ordering: VariableOrdering::MaxRegret,
+                learning: false,
+                restart_policy: RestartPolicy::None,
+                ..SearchConfig::default()
+            },
+        );
+        assert_eq!(search.select_variable(&engine), Some(many_undecided));
     }
 }
