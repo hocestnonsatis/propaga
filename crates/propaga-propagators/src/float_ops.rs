@@ -775,6 +775,8 @@ impl Propagator for Int2FloatPropagator {
 }
 
 const MAX_INT2FLOAT_HOLE_SCAN: i64 = 10_000;
+/// End-window size when the float span is too wide for a full int↔float hole scan.
+const MAX_INT2FLOAT_END_SCAN: i64 = 1_000;
 
 fn sync_int2float_holes(
     ctx: &mut dyn PropagationContext,
@@ -793,6 +795,36 @@ fn sync_int2float_holes(
     };
 
     let mut changed = false;
+
+    // Explicit float holes are sparse: always map near-integer ones onto the int
+    // domain, even when the int span is too wide for a full scan.
+    let mut remove_from_int: Vec<i32> = Vec::new();
+    for &hole in &float.holes {
+        if let Some(n) = near_integer(hole)
+            && (f64::from(i32::MIN)..=f64::from(i32::MAX)).contains(&n)
+        {
+            let value = n as i32;
+            if value >= imin && value <= imax && int_domain.contains(value) {
+                remove_from_int.push(value);
+            }
+        }
+    }
+    // Cheap endpoint check: bound ints with no float image.
+    for endpoint in [imin, imax] {
+        if int_domain.contains(endpoint) && !float.contains(f64::from(endpoint)) {
+            remove_from_int.push(endpoint);
+        }
+    }
+    remove_from_int.sort_unstable();
+    remove_from_int.dedup();
+    for value in remove_from_int {
+        changed |= ctx.remove_value(int_var, value);
+    }
+
+    let int_domain = ctx.domain(int_var);
+    let (Some(imin), Some(imax)) = (int_domain.min(), int_domain.max()) else {
+        return changed;
+    };
     if i64::from(imax) - i64::from(imin) <= MAX_INT2FLOAT_HOLE_SCAN {
         let forbidden: Vec<i32> = (imin..=imax)
             .filter(|&value| int_domain.contains(value) && !float.contains(f64::from(value)))
@@ -810,14 +842,36 @@ fn sync_int2float_holes(
     };
     let flo = float_after.min.ceil() as i32;
     let fhi = float_after.max.floor() as i32;
-    if i64::from(fhi) - i64::from(flo) > MAX_INT2FLOAT_HOLE_SCAN {
+    if flo > fhi {
         return changed;
     }
-    let int_after = ctx.domain(int_var);
-    let missing: Vec<f64> = (flo..=fhi)
-        .filter(|&value| !int_after.contains(value))
-        .map(f64::from)
-        .collect();
+    let span = i64::from(fhi) - i64::from(flo);
+    let missing: Vec<f64> = {
+        let int_after = ctx.domain(int_var);
+        if span <= MAX_INT2FLOAT_HOLE_SCAN {
+            (flo..=fhi)
+                .filter(|&value| !int_after.contains(value))
+                .map(f64::from)
+                .collect()
+        } else {
+            // Wide float span: still punch holes for missing ints near each endpoint.
+            let lo_hi = flo.saturating_add(MAX_INT2FLOAT_END_SCAN as i32);
+            let hi_lo = fhi.saturating_sub(MAX_INT2FLOAT_END_SCAN as i32);
+            let mut missing = Vec::new();
+            for value in flo..=lo_hi.min(fhi) {
+                if !int_after.contains(value) {
+                    missing.push(f64::from(value));
+                }
+            }
+            let start = hi_lo.max(flo).max(lo_hi.saturating_add(1));
+            for value in start..=fhi {
+                if !int_after.contains(value) {
+                    missing.push(f64::from(value));
+                }
+            }
+            missing
+        }
+    };
     let Some(ext) = ctx.as_extended() else {
         return changed;
     };
@@ -857,6 +911,32 @@ mod tests {
         assert!(!engine.hybrid_domain(i).contains(2));
         assert!(engine.hybrid_domain(i).contains(1));
         assert!(engine.hybrid_domain(i).contains(3));
+    }
+
+    #[test]
+    fn int2float_maps_float_holes_even_on_wide_int_span() {
+        let mut engine = Engine::new();
+        // Span exceeds MAX_INT2FLOAT_HOLE_SCAN; explicit hole must still remove 5.
+        let i = engine.new_variable(IntervalDomain::new(0, 20_000));
+        let f = engine.new_variable(AnyDomain::Float(
+            FloatDomain::new(0.0, 20_000.0).exclude(5.0),
+        ));
+        engine.add_propagator(Box::new(Int2FloatPropagator::new(i, f)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(!engine.hybrid_domain(i).contains(5));
+        assert!(engine.hybrid_domain(i).contains(0));
+        assert!(engine.hybrid_domain(i).contains(20_000));
+    }
+
+    #[test]
+    fn int2float_punches_endpoint_float_holes_on_wide_span() {
+        let mut engine = Engine::new();
+        // Wide float span: missing int at the upper endpoint still punches a float hole.
+        let i = engine.new_variable(IntervalDomain::new(0, 19_999));
+        let f = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 20_000.0)));
+        engine.add_propagator(Box::new(Int2FloatPropagator::new(i, f)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(!engine.domain(f).as_float().unwrap().contains(20_000.0));
     }
 
     #[test]
