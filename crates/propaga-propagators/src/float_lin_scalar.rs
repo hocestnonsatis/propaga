@@ -807,6 +807,19 @@ mod tests {
     }
 
     #[test]
+    fn float_lin_eq_fails_when_forced_value_is_a_hole() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0).exclude(2.0)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::fix(3.0)));
+        engine.add_propagator(Box::new(FloatLinearEqPropagator::new(
+            vec![1.0, 1.0],
+            vec![x, y],
+            5.0,
+        )));
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
+
+    #[test]
     fn reified_float_eq_false_uses_ne_not_both_bounds() {
         let mut engine = Engine::new();
         let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 4.0)));

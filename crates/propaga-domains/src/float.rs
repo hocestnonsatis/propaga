@@ -43,18 +43,49 @@ impl FloatDomain {
         if min > max {
             return Self::new(1.0, 0.0);
         }
-        let mut holes: Vec<f64> = holes
-            .into_iter()
-            .filter(|hole| *hole > min && *hole < max)
-            .collect();
-        holes.sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
-        holes.dedup_by(|left, right| (*left - *right).abs() <= f64::EPSILON);
-        if (max - min).abs() <= f64::EPSILON
-            && holes.iter().any(|hole| (*hole - min).abs() <= f64::EPSILON)
-        {
-            return Self::new(1.0, 0.0);
+        let mut min = min;
+        let mut max = max;
+        let mut pending = holes;
+        loop {
+            if min > max {
+                return Self::new(1.0, 0.0);
+            }
+            let mut advanced = false;
+            let mut interior = Vec::new();
+            for hole in pending.drain(..) {
+                if !hole.is_finite() {
+                    continue;
+                }
+                if (hole - min).abs() <= f64::EPSILON {
+                    min = next_up(min);
+                    advanced = true;
+                } else if (hole - max).abs() <= f64::EPSILON {
+                    max = next_down(max);
+                    advanced = true;
+                } else if hole > min && hole < max {
+                    interior.push(hole);
+                }
+            }
+            if !advanced {
+                interior.sort_by(|left, right| {
+                    left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal)
+                });
+                interior.dedup_by(|left, right| (*left - *right).abs() <= f64::EPSILON);
+                if (max - min).abs() <= f64::EPSILON
+                    && interior
+                        .iter()
+                        .any(|hole| (*hole - min).abs() <= f64::EPSILON)
+                {
+                    return Self::new(1.0, 0.0);
+                }
+                return Self {
+                    min,
+                    max,
+                    holes: interior,
+                };
+            }
+            pending = interior;
         }
-        Self { min, max, holes }
     }
 
     /// Returns `true` when the domain is empty.
@@ -696,6 +727,21 @@ mod tests {
         let domain = FloatDomain::new(1.0, 2.0).exclude(1.0);
         assert!(domain.lower_bound() > 1.0);
         assert!(domain.holes().is_empty());
+    }
+
+    #[test]
+    fn remove_below_skips_hole_at_new_lower_bound() {
+        let domain = FloatDomain::new(0.0, 5.0).exclude(2.0);
+        let tightened = domain.remove_below(2.0);
+        assert!(!tightened.contains(2.0));
+        assert!(tightened.lower_bound() > 2.0);
+    }
+
+    #[test]
+    fn pin_to_interior_hole_empties_domain() {
+        let domain = FloatDomain::new(0.0, 5.0).exclude(2.0);
+        let pinned = domain.remove_below(2.0).remove_above(2.0);
+        assert!(pinned.is_empty());
     }
 
     #[test]

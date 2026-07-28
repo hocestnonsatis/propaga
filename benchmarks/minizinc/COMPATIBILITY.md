@@ -99,7 +99,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 
 ### Float domain holes
 
-`FloatDomain` stores an inclusive `[min, max]` plus a finite set of excluded IEEE points (**holes**). Holes arise from `float_ne`, assignment blocking (`encode_forbidden_float` / Pareto), and propagators that project exclusions.
+`FloatDomain` stores an inclusive `[min, max]` plus a finite set of excluded IEEE points (**holes**). Holes arise from `float_ne`, assignment blocking (`encode_forbidden_float` / Pareto), and propagators that project exclusions. Bound tightening that lands on a hole advances past it (pinning a domain to a hole empties it).
 
 | Situation | Hole behavior |
 |-----------|---------------|
