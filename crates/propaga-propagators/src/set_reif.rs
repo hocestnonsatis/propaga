@@ -168,27 +168,39 @@ fn break_last_equalizer(
     if !is_fixed_set(&fixed) || sets_definitely_ne(&fixed, &other) {
         return Ok(false);
     }
-    if other.lub != fixed.glb {
-        return Ok(false);
+    if other.lub == fixed.glb {
+        let undecided: Vec<i32> = fixed
+            .glb
+            .iter()
+            .copied()
+            .filter(|v| !other.glb.contains(v))
+            .collect();
+        if undecided.len() != 1 || other.card_max < fixed.glb.len() {
+            return Ok(false);
+        }
+        let last = undecided[0];
+        let mut changed = ext.force_set_out(other_id, last);
+        let new_card_max = fixed.glb.len().saturating_sub(1);
+        if let Some(other) = ext.set_domain(other_id)
+            && other.card_max > new_card_max
+        {
+            changed |= ext.tighten_set_cardinality(other_id, other.card_min, new_card_max);
+        }
+        return Ok(changed);
     }
-    let undecided: Vec<i32> = fixed
-        .glb
-        .iter()
-        .copied()
-        .filter(|v| !other.glb.contains(v))
-        .collect();
-    if undecided.len() != 1 || other.card_max < fixed.glb.len() {
-        return Ok(false);
+
+    if other.glb == fixed.glb {
+        let outsiders: Vec<i32> = other
+            .lub
+            .iter()
+            .copied()
+            .filter(|v| !fixed.glb.contains(v))
+            .collect();
+        if outsiders.len() == 1 {
+            return Ok(ext.force_set_in(other_id, outsiders[0]));
+        }
     }
-    let last = undecided[0];
-    let mut changed = ext.force_set_out(other_id, last);
-    let new_card_max = fixed.glb.len().saturating_sub(1);
-    if let Some(other) = ext.set_domain(other_id)
-        && other.card_max > new_card_max
-    {
-        changed |= ext.tighten_set_cardinality(other_id, other.card_min, new_card_max);
-    }
-    Ok(changed)
+    Ok(false)
 }
 
 /// Propagates `reif <=> subset ⊆ superset`.
@@ -548,6 +560,25 @@ mod tests {
         let bdom = engine.domain(b).as_set().unwrap();
         assert!(!bdom.lub().contains(&2));
         assert_eq!(bdom.card_max(), 1);
+    }
+
+    #[test]
+    fn eq_reif_false_forces_unique_outside_witness() {
+        let mut engine = Engine::new();
+        let left = SetIntervalDomain::universe(1..=1)
+            .with_cardinality(1, 1)
+            .force_in(1)
+            .unwrap();
+        let right = SetIntervalDomain::universe(1..=2)
+            .with_cardinality(1, 2)
+            .force_in(1)
+            .unwrap();
+        let a = engine.new_variable(AnyDomain::Set(left));
+        let b = engine.new_variable(AnyDomain::Set(right));
+        let reif = engine.new_variable(IntervalDomain::fix(0));
+        engine.add_propagator(Box::new(SetEqReifPropagator::new(a, b, reif)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(engine.domain(b).as_set().unwrap().glb().contains(&2));
     }
 
     #[test]
