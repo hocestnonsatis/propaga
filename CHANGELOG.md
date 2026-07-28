@@ -117,6 +117,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Float phase saving: when `phase_saving` is on, precision fixes reuse the last successful float assignment if it remains in-domain.
 - `float_abs` with a fixed nonnegative image forces the unique remaining preimage when the opposite sign is a hole; handwritten `float_abs_unique.fzn` + CI smoke.
 - `ceil`/`floor`/`round` reverse-project unfixed output integer bounds onto the input (not only fixed images / singleton holes).
+- `float_eq_reif` infers false when the only overlapping IEEE point is a hole on either side (`FloatNe` parity).
 
 ### Fixed
 

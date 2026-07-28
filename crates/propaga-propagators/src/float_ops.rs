@@ -51,8 +51,9 @@ impl Propagator for FloatEqReifPropagator {
             && let (Some(left), Some(right)) =
                 (ext.float_domain(left_id), ext.float_domain(right_id))
         {
-            let left_fixed = (left.min - left.max).abs() <= f64::EPSILON;
-            let right_fixed = (right.min - right.max).abs() <= f64::EPSILON;
+            let left_fixed = (left.min - left.max).abs() <= f64::EPSILON && left.contains(left.min);
+            let right_fixed =
+                (right.min - right.max).abs() <= f64::EPSILON && right.contains(right.min);
             if left_fixed && right_fixed {
                 if (left.min - right.min).abs() <= f64::EPSILON {
                     changed |= tighten_reif(ctx, reif_id, 1);
@@ -61,6 +62,15 @@ impl Propagator for FloatEqReifPropagator {
                 }
             } else if left.max < right.min || right.max < left.min {
                 changed |= tighten_reif(ctx, reif_id, 0);
+            } else {
+                // Only overlapping IEEE point is excluded on either side ⇒ equality impossible.
+                let overlap_lo = left.min.max(right.min);
+                let overlap_hi = left.max.min(right.max);
+                if (overlap_hi - overlap_lo).abs() <= f64::EPSILON
+                    && (!left.contains(overlap_lo) || !right.contains(overlap_lo))
+                {
+                    changed |= tighten_reif(ctx, reif_id, 0);
+                }
             }
         }
 
@@ -1223,6 +1233,18 @@ mod tests {
         let mut engine = Engine::new();
         let left = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 1.0)));
         let right = engine.new_variable(AnyDomain::Float(FloatDomain::new(2.0, 3.0)));
+        let reif = engine.new_variable(HybridDomain::new(0, 1));
+        engine.add_propagator(Box::new(FloatEqReifPropagator::new(left, right, reif)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert_eq!(engine.hybrid_domain(reif).fixed_value(), Some(0));
+    }
+
+    #[test]
+    fn float_eq_reif_infers_false_when_singleton_overlap_is_a_hole() {
+        let mut engine = Engine::new();
+        // Overlap is only {1.0}, excluded on left ⇒ equality impossible.
+        let left = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 1.0).exclude(1.0)));
+        let right = engine.new_variable(AnyDomain::Float(FloatDomain::new(1.0, 2.0)));
         let reif = engine.new_variable(HybridDomain::new(0, 1));
         engine.add_propagator(Box::new(FloatEqReifPropagator::new(left, right, reif)));
         assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
