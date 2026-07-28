@@ -296,8 +296,19 @@ impl Propagator for FloatBinaryPropagator {
             let c_snap = ext
                 .float_domain(self.watched[2])
                 .unwrap_or_else(|| c.clone());
+            // Prefer holes recorded before bound sync: tightening can move a hole to an
+            // endpoint and drop it from the snapshot while it remains semantically forbidden.
+            let mut reverse_holes = c.holes.clone();
+            for hole in &c_snap.holes {
+                if !reverse_holes
+                    .iter()
+                    .any(|existing| (*existing - hole).abs() <= f64::EPSILON)
+                {
+                    reverse_holes.push(*hole);
+                }
+            }
             let c_interval =
-                FloatDomain::from_bounds_with_holes(c_snap.min, c_snap.max, &c_snap.holes);
+                FloatDomain::from_bounds_with_holes(c_snap.min, c_snap.max, &reverse_holes);
             let a_from_c = c_interval.plus(&(-b_dom.clone()));
             changed |= ext.tighten_float_below(self.watched[0], a_from_c.lower_bound());
             changed |= ext.tighten_float_above(self.watched[0], a_from_c.upper_bound());
@@ -322,9 +333,18 @@ impl Propagator for FloatBinaryPropagator {
             let a_snap = ext
                 .float_domain(self.watched[0])
                 .unwrap_or_else(|| a.clone());
+            let mut reverse_holes = c.holes.clone();
+            for hole in &c_snap.holes {
+                if !reverse_holes
+                    .iter()
+                    .any(|existing| (*existing - hole).abs() <= f64::EPSILON)
+                {
+                    reverse_holes.push(*hole);
+                }
+            }
             // c = a / b  ⇒  a = c * b and b = a / c (when 0 ∉ Dom(c))
             let a_from_cb =
-                FloatDomain::from_bounds_with_holes(c_snap.min, c_snap.max, &c_snap.holes).times(
+                FloatDomain::from_bounds_with_holes(c_snap.min, c_snap.max, &reverse_holes).times(
                     &FloatDomain::from_bounds_with_holes(b_snap.min, b_snap.max, &b_snap.holes),
                 );
             if a_from_cb.lower_bound().is_finite() {
@@ -336,7 +356,7 @@ impl Propagator for FloatBinaryPropagator {
             }
             let b_from_ac =
                 FloatDomain::from_bounds_with_holes(a_snap.min, a_snap.max, &a_snap.holes).divide(
-                    &FloatDomain::from_bounds_with_holes(c_snap.min, c_snap.max, &c_snap.holes),
+                    &FloatDomain::from_bounds_with_holes(c_snap.min, c_snap.max, &reverse_holes),
                 );
             if b_from_ac.lower_bound().is_finite() {
                 changed |= ext.tighten_float_below(self.watched[1], b_from_ac.lower_bound());
@@ -883,6 +903,22 @@ mod tests {
         )));
         assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
         assert!(!engine.domain(c).as_float().unwrap().contains(4.0));
+    }
+
+    #[test]
+    fn float_plus_reverse_projects_result_hole_when_addend_is_fixed() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0)));
+        let b = engine.new_variable(AnyDomain::Float(FloatDomain::fix(1.0)));
+        let c = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0).exclude(3.0)));
+        engine.add_propagator(Box::new(FloatBinaryPropagator::new(
+            a,
+            b,
+            c,
+            FloatBinaryOp::Plus,
+        )));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(!engine.domain(a).as_float().unwrap().contains(2.0));
     }
 
     #[test]

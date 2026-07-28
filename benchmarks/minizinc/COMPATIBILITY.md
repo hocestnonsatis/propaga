@@ -105,7 +105,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 |-----------|---------------|
 | `float_eq` | Holes are shared both ways inside the common interval |
 | `float_ne` / unit `float_lin_ne` | Forbidden point excluded (endpoint shrink or interior hole) |
-| `float_plus` / `float_times` / `float_div` | Holes map through affine / fixed-operand images; `float_div` reverse-projects `a = c·b` and `b = a/c` (when `0 ∉ Dom(c)`), including divisor-hole images when the dividend is fixed |
+| `float_plus` / `float_times` / `float_div` | Holes map through affine / fixed-operand images; `float_div` reverse-projects `a = c·b` and `b = a/c` (when `0 ∉ Dom(c)`), including divisor-hole images when the dividend is fixed; reverse projection prefers pre-tighten result holes |
 | `float_lin_eq` | Affine hole sharing when exactly two nonzero-coeff variables remain free (unfixed zero-coeff terms ignored) |
 | `float_abs` / `sqrt` / `ln` / `exp` | Preserve or safely project; `abs` reverse-projects holes `h > 0` to both `±h` (incl. domains straddling zero); fixed images reverse-project when locally invertible |
 | `float_min` / `float_max` | Result holes reverse-project onto an operand when the other side cannot realize that value as the min/max; forward image also drops a hole when one operand forbids it and the other lies entirely above (min) / below (max) that hole |

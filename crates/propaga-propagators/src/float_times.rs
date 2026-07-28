@@ -49,9 +49,19 @@ impl Propagator for FloatTimesPropagator {
         let a_snap = ext
             .float_domain(self.watched[0])
             .unwrap_or_else(|| a.clone());
+        // Prefer holes recorded before bound sync on the product.
+        let mut reverse_holes = c.holes.clone();
+        for hole in &c_snap.holes {
+            if !reverse_holes
+                .iter()
+                .any(|existing| (*existing - hole).abs() <= f64::EPSILON)
+            {
+                reverse_holes.push(*hole);
+            }
+        }
 
         let a_from_c =
-            FloatDomain::from_bounds_with_holes(c_snap.min, c_snap.max, &c_snap.holes).divide(
+            FloatDomain::from_bounds_with_holes(c_snap.min, c_snap.max, &reverse_holes).divide(
                 &FloatDomain::from_bounds_with_holes(b_snap.min, b_snap.max, &b_snap.holes),
             );
         if a_from_c.lower_bound().is_finite() {
@@ -63,7 +73,7 @@ impl Propagator for FloatTimesPropagator {
         }
 
         let b_from_c =
-            FloatDomain::from_bounds_with_holes(c_snap.min, c_snap.max, &c_snap.holes).divide(
+            FloatDomain::from_bounds_with_holes(c_snap.min, c_snap.max, &reverse_holes).divide(
                 &FloatDomain::from_bounds_with_holes(a_snap.min, a_snap.max, &a_snap.holes),
             );
         if b_from_c.lower_bound().is_finite() {
@@ -122,6 +132,17 @@ mod tests {
         engine.add_propagator(Box::new(FloatTimesPropagator::new(a, b, c)));
         assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
         assert!(!engine.domain(c).as_float().unwrap().contains(2.0));
+    }
+
+    #[test]
+    fn reverse_projects_product_hole_when_factor_is_fixed() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0)));
+        let b = engine.new_variable(AnyDomain::Float(FloatDomain::fix(2.0)));
+        let c = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 10.0).exclude(4.0)));
+        engine.add_propagator(Box::new(FloatTimesPropagator::new(a, b, c)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(!engine.domain(a).as_float().unwrap().contains(2.0));
     }
 
     #[test]

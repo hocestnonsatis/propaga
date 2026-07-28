@@ -101,6 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Float `array_element` treats a singleton bound-overlap that lands on a hole as disjoint (index prune); handwritten `array_float_element_prune.fzn` + CI smoke.
 - `float_min` / `float_max` forward images drop a hole when one operand forbids it and the other lies entirely above (min) / below (max) that hole; handwritten `float_max_hole.fzn` + CI smoke.
 - `float_lin_eq` affine hole sharing ignores unfixed zero-coeff terms so two free nonzero-coeff variables still link; handwritten `float_lin_eq_zero_coeff.fzn` + CI smoke.
+- `float_plus` / `float_div` / `float_times` reverse-project using pre-tighten result holes (same pattern as unary); handwritten `float_cos_fixed.fzn` + CI smoke.
 
 ### Fixed
 
