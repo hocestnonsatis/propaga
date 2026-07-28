@@ -377,7 +377,7 @@ impl DepthFirstSearch {
         if width <= precision {
             self.record_branch();
             let level = engine.trail_mark();
-            let value = float.lower_bound() + width / 2.0;
+            let value = self.float_precision_assignment(engine, &float);
             match engine.fix_float(var, value) {
                 Ok(PropagationStatus::Failure) => {
                     let jumped = self.handle_failure(engine, level);
@@ -558,7 +558,7 @@ impl DepthFirstSearch {
         if width <= precision {
             self.record_branch();
             let level = engine.trail_mark();
-            let value = float.lower_bound() + width / 2.0;
+            let value = self.float_precision_assignment(engine, &float);
             if let Ok(PropagationStatus::Failure) = engine.fix_float(var, value) {
                 let _ = self.handle_failure(engine, level);
             } else {
@@ -782,6 +782,25 @@ impl DepthFirstSearch {
             .and_then(|phase| phase.float_precision)
             .unwrap_or(self.config.float_precision)
             .max(f64::EPSILON)
+    }
+
+    /// Picks a representative value once a float domain is within precision.
+    ///
+    /// Prefer lower/upper endpoints for min/max-style orderings; otherwise use the midpoint.
+    fn float_precision_assignment(
+        &self,
+        engine: &Engine,
+        float: &propaga_domains::FloatDomain,
+    ) -> f64 {
+        let lo = float.lower_bound();
+        let hi = float.upper_bound();
+        let mid = lo + (hi - lo) / 2.0;
+        match self.active_value_ordering(engine) {
+            crate::config::ValueOrdering::Ascending => lo,
+            crate::config::ValueOrdering::Descending
+            | crate::config::ValueOrdering::ReverseSplit => hi,
+            _ => mid,
+        }
     }
 
     fn select_variable(&self, engine: &Engine) -> Option<VariableId> {
@@ -1203,6 +1222,47 @@ mod tests {
             AssignmentValue::Float(value) => {
                 assert!(*value >= 0.0 && *value <= 10.0);
             }
+            other => panic!("expected float assignment, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn float_precision_assignment_respects_value_ordering() {
+        use propaga_domains::{AnyDomain, FloatDomain};
+
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 1.0)));
+        let mut ascending = DepthFirstSearch::with_config(
+            vec![x],
+            SearchConfig {
+                learning: false,
+                restart_policy: RestartPolicy::None,
+                float_precision: 1.0,
+                value_ordering: ValueOrdering::Ascending,
+                ..SearchConfig::default()
+            },
+        );
+        let solution = ascending.solve(&mut engine).expect("SAT");
+        match &solution[0].1 {
+            AssignmentValue::Float(value) => assert!((*value - 0.0).abs() < f64::EPSILON),
+            other => panic!("expected float assignment, got {other:?}"),
+        }
+
+        let mut engine = Engine::new();
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 1.0)));
+        let mut descending = DepthFirstSearch::with_config(
+            vec![y],
+            SearchConfig {
+                learning: false,
+                restart_policy: RestartPolicy::None,
+                float_precision: 1.0,
+                value_ordering: ValueOrdering::Descending,
+                ..SearchConfig::default()
+            },
+        );
+        let solution = descending.solve(&mut engine).expect("SAT");
+        match &solution[0].1 {
+            AssignmentValue::Float(value) => assert!((*value - 1.0).abs() < f64::EPSILON),
             other => panic!("expected float assignment, got {other:?}"),
         }
     }
