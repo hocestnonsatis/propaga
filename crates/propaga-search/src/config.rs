@@ -188,7 +188,7 @@ impl VariableOrdering {
 }
 
 /// One phase of a sequenced search (`seq_search` group).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SearchPhase {
     /// Decision variables belonging to this phase.
     pub variables: Vec<VariableId>,
@@ -196,6 +196,11 @@ pub struct SearchPhase {
     pub variable_ordering: VariableOrdering,
     /// Value ordering used while this phase is active.
     pub value_ordering: ValueOrdering,
+    /// Optional float precision from a nested `float_search` in this phase.
+    ///
+    /// When set, DFS uses it while this phase is active instead of
+    /// [`SearchConfig::float_precision`].
+    pub float_precision: Option<f64>,
 }
 
 impl SearchPhase {
@@ -210,7 +215,15 @@ impl SearchPhase {
             variables: variables.into(),
             variable_ordering,
             value_ordering,
+            float_precision: None,
         }
+    }
+
+    /// Sets the float domain width treated as fixed for this phase.
+    #[must_use]
+    pub fn with_float_precision(mut self, precision: f64) -> Self {
+        self.float_precision = Some(precision);
+        self
     }
 }
 

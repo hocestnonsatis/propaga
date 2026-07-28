@@ -104,6 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `float_plus` / `float_div` / `float_times` reverse-project using pre-tighten result holes (same pattern as unary); handwritten `float_cos_fixed.fzn` + CI smoke.
 - `float_eq` shares pre-tighten holes so a hole that bound sync would drop at a new endpoint is still mirrored onto the other side.
 - FlatZinc `float_search` precision is applied during DFS: floats whose domain width is at most the precision are fixed (midpoint); handwritten `float_search_precision.fzn` + CI smoke.
+- Nested `float_search` precision inside `seq_search` is kept per phase (and lifts a global fallback when standalone `float_search` is absent); handwritten `seq_float_search_precision.fzn` + CI smoke.
 
 ### Fixed
 

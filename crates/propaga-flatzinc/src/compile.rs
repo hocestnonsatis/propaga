@@ -393,9 +393,15 @@ fn compile_search_config(
         None => RestartPolicy::default(),
     };
 
-    let float_precision = match annotations.float_precision.as_ref() {
-        Some(text) => Some(parse_float_search_precision(text)?),
-        None => None,
+    let float_precision = if let Some(text) = annotations.float_precision.as_ref() {
+        Some(parse_float_search_precision(text)?)
+    } else if let Some(seq) = annotations.seq_search.as_ref() {
+        seq.iter()
+            .find_map(|search| search.float_precision.as_ref())
+            .map(|text| parse_float_search_precision(text))
+            .transpose()?
+    } else {
+        None
     };
 
     Ok(Some(AnnotationSearchConfig {
@@ -433,11 +439,17 @@ fn compile_search_phases(
                 "seq_search nested annotation has no variables".to_string(),
             ));
         }
-        phases.push(SearchPhase::new(
-            vars,
-            map_var_choice(&search.var_choice)?,
-            map_value_choice(&search.value_choice)?,
-        ));
+        phases.push({
+            let mut phase = SearchPhase::new(
+                vars,
+                map_var_choice(&search.var_choice)?,
+                map_value_choice(&search.value_choice)?,
+            );
+            if let Some(text) = search.float_precision.as_ref() {
+                phase.float_precision = Some(parse_float_search_precision(text)?);
+            }
+            phase
+        });
     }
     Ok(phases)
 }
@@ -3663,6 +3675,24 @@ mod tests {
         assert_eq!(
             instance.search_phases[1].value_ordering,
             ValueOrdering::Descending
+        );
+    }
+
+    #[test]
+    fn compiles_seq_search_nested_float_precision() {
+        let source = r#"
+            var 1..2: x;
+            var 0.0..5.0: y;
+            solve :: seq_search([int_search([x], input_order, indomain_min, complete), float_search([y], 1.0, input_order, indomain_split, complete)]) satisfy;
+        "#;
+        let program = parse(source).unwrap();
+        let instance = compile(program).unwrap();
+        assert_eq!(instance.search_phases.len(), 2);
+        assert_eq!(instance.search_phases[0].float_precision, None);
+        assert_eq!(instance.search_phases[1].float_precision, Some(1.0));
+        assert_eq!(
+            instance.annotation_search.and_then(|c| c.float_precision),
+            Some(1.0)
         );
     }
 

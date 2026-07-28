@@ -1,0 +1,8 @@
+% Nested float_search precision inside seq_search must stop splitting early.
+var 1..2: x;
+var 0.0..10.0: y;
+constraint int_eq(x, 1);
+solve :: seq_search([
+  int_search([x], input_order, indomain_min, complete),
+  float_search([y], 1.0, input_order, indomain_split, complete)
+]) satisfy;

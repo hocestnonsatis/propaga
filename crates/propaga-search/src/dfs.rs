@@ -373,7 +373,7 @@ impl DepthFirstSearch {
         }
 
         let width = float.upper_bound() - float.lower_bound();
-        let precision = self.config.float_precision.max(f64::EPSILON);
+        let precision = self.active_float_precision(engine);
         if width <= precision {
             self.record_branch();
             let level = engine.trail_mark();
@@ -554,7 +554,7 @@ impl DepthFirstSearch {
             return self.collect_each(engine, on_solution);
         }
         let width = float.upper_bound() - float.lower_bound();
-        let precision = self.config.float_precision.max(f64::EPSILON);
+        let precision = self.active_float_precision(engine);
         if width <= precision {
             self.record_branch();
             let level = engine.trail_mark();
@@ -775,6 +775,13 @@ impl DepthFirstSearch {
         self.active_search_phase(engine)
             .map(|phase| phase.value_ordering)
             .unwrap_or(self.config.value_ordering)
+    }
+
+    fn active_float_precision(&self, engine: &Engine) -> f64 {
+        self.active_search_phase(engine)
+            .and_then(|phase| phase.float_precision)
+            .unwrap_or(self.config.float_precision)
+            .max(f64::EPSILON)
     }
 
     fn select_variable(&self, engine: &Engine) -> Option<VariableId> {
@@ -1169,6 +1176,35 @@ mod tests {
         // Without phases, MRV would prefer `late` (smaller domain). Phases keep `early` first.
         let selected = search.select_variable(&engine);
         assert_eq!(selected, Some(early));
+    }
+
+    #[test]
+    fn search_phase_float_precision_overrides_config() {
+        use propaga_domains::{AnyDomain, FloatDomain};
+
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 10.0)));
+        let mut search = DepthFirstSearch::with_config(
+            vec![x],
+            SearchConfig {
+                learning: false,
+                restart_policy: RestartPolicy::None,
+                // Without phase precision this would recurse deeply.
+                float_precision: f64::EPSILON,
+                ..SearchConfig::default()
+            },
+        )
+        .with_search_phases(vec![
+            SearchPhase::new(vec![x], VariableOrdering::InputOrder, ValueOrdering::Split)
+                .with_float_precision(1.0),
+        ]);
+        let solution = search.solve(&mut engine).expect("SAT");
+        match &solution[0].1 {
+            AssignmentValue::Float(value) => {
+                assert!(*value >= 0.0 && *value <= 10.0);
+            }
+            other => panic!("expected float assignment, got {other:?}"),
+        }
     }
 
     #[test]
