@@ -95,6 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `float_abs` reverse-projects result holes `h > 0` to both `±h` on the input (including domains that straddle zero); fixed nonnegative images tighten to the abs preimage hull.
 - `float_div` reverse-projects via `a = c·b` and `b = a/c` (when `0 ∉ Dom(c)`); `FloatDomain::divide` maps divisor holes when the dividend is fixed; handwritten `float_div.fzn` + CI smoke.
 - `float_sin` / `float_cos` reverse-project a fixed image onto the unique preimage when the input domain is locally monotonic; handwritten `float_sin_fixed.fzn` + CI smoke.
+- `int2float` keeps discrete holes aligned both ways (missing ints punch float holes; float holes remove ints); handwritten `int2float.fzn` + CI smoke.
 
 ### Fixed
 

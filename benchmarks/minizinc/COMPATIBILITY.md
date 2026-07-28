@@ -54,7 +54,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `int_lin_*_reif` | Supported | Reified linear scalar |
 | `int_plus`, `int_abs`, `int_times`, `int_div`, `int_mod` | Supported | Bound-consistent arithmetic (`int_plus` via linear; `bool_not` via `a+b=1`) |
 | `int_min`, `int_max`, `int_pow`, `int_pow_fixed` | Supported | Bound-consistent min/max; `int_pow_fixed` multiply chain; `int_pow` exponent case-split + element (table fallback) |
-| `int2float` | Supported | Channeling propagator |
+| `int2float` | Supported | Channeling propagator; keeps integer holes and float IEEE holes aligned (bounded scan) |
 | `min` / `max` (generic) | Supported | Dispatches to `int_*` or `float_*` by domain |
 | `element`, `array_int_element`, `array_var_int_element` | Supported | Element; 1-based / `_nonshifted` 0-based; prunes indices disjoint from value |
 | `array_int_maximum`, `array_int_minimum` | Supported | Binary `int_min`/`int_max` fold |

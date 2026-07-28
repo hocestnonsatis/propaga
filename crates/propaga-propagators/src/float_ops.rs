@@ -653,6 +653,21 @@ impl Propagator for Int2FloatPropagator {
         } else if float.is_empty() {
             return PropagationStatus::Failure;
         }
+
+        // Keep discrete holes aligned: int values without a float image, and float
+        // integer points without a matching int value (bounded scan for large spans).
+        changed |= sync_int2float_holes(ctx, self.watched[0], self.watched[1]);
+
+        if ctx.domain(self.watched[0]).is_empty() {
+            return PropagationStatus::Failure;
+        }
+        if ctx
+            .as_extended()
+            .and_then(|ext| ext.float_domain(self.watched[1]))
+            .is_none_or(|d| d.is_empty())
+        {
+            return PropagationStatus::Failure;
+        }
         if changed {
             PropagationStatus::OkChanged
         } else {
@@ -661,11 +676,90 @@ impl Propagator for Int2FloatPropagator {
     }
 }
 
+const MAX_INT2FLOAT_HOLE_SCAN: i64 = 10_000;
+
+fn sync_int2float_holes(
+    ctx: &mut dyn PropagationContext,
+    int_var: VariableId,
+    float_var: VariableId,
+) -> bool {
+    let Some(float) = ctx
+        .as_extended()
+        .and_then(|ext| ext.float_domain(float_var))
+    else {
+        return false;
+    };
+    let int_domain = ctx.domain(int_var);
+    let (Some(imin), Some(imax)) = (int_domain.min(), int_domain.max()) else {
+        return false;
+    };
+
+    let mut changed = false;
+    if i64::from(imax) - i64::from(imin) <= MAX_INT2FLOAT_HOLE_SCAN {
+        let forbidden: Vec<i32> = (imin..=imax)
+            .filter(|&value| int_domain.contains(value) && !float.contains(f64::from(value)))
+            .collect();
+        for value in forbidden {
+            changed |= ctx.remove_value(int_var, value);
+        }
+    }
+
+    let Some(float_after) = ctx
+        .as_extended()
+        .and_then(|ext| ext.float_domain(float_var))
+    else {
+        return changed;
+    };
+    let flo = float_after.min.ceil() as i32;
+    let fhi = float_after.max.floor() as i32;
+    if i64::from(fhi) - i64::from(flo) > MAX_INT2FLOAT_HOLE_SCAN {
+        return changed;
+    }
+    let int_after = ctx.domain(int_var);
+    let missing: Vec<f64> = (flo..=fhi)
+        .filter(|&value| !int_after.contains(value))
+        .map(f64::from)
+        .collect();
+    let Some(ext) = ctx.as_extended() else {
+        return changed;
+    };
+    for hole in missing {
+        changed |= ext.exclude_float_point(float_var, hole);
+    }
+    changed
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use propaga_domains::{AnyDomain, HybridDomain};
+    use propaga_core::DomainView;
+    use propaga_domains::{AnyDomain, HybridDomain, IntervalDomain};
     use propaga_engine::Engine;
+
+    #[test]
+    fn int2float_punches_float_holes_for_missing_integers() {
+        let mut engine = Engine::new();
+        let i = engine.new_variable(IntervalDomain::new(1, 3).remove(2));
+        let f = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0)));
+        engine.add_propagator(Box::new(Int2FloatPropagator::new(i, f)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let domain = engine.domain(f).as_float().unwrap();
+        assert!(!domain.contains(2.0));
+        assert!((domain.lower_bound() - 1.0).abs() < 1e-9);
+        assert!((domain.upper_bound() - 3.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn int2float_removes_int_values_forbidden_by_float_holes() {
+        let mut engine = Engine::new();
+        let i = engine.new_variable(IntervalDomain::new(1, 3));
+        let f = engine.new_variable(AnyDomain::Float(FloatDomain::new(1.0, 3.0).exclude(2.0)));
+        engine.add_propagator(Box::new(Int2FloatPropagator::new(i, f)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(!engine.hybrid_domain(i).contains(2));
+        assert!(engine.hybrid_domain(i).contains(1));
+        assert!(engine.hybrid_domain(i).contains(3));
+    }
 
     #[test]
     fn float_floor_reverse_projects_fixed_image() {
