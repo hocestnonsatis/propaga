@@ -133,6 +133,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Float `indomain_interval` now keeps preferring the leftmost component when precision assignment stops branching.
 - `set_subset_reif(reif=0)` can now force a unique outside witness into the subset when ¬⊆ needs one.
 - `set_eq_reif(reif=0)` can now force a unique outsider into the other set when that is the only remaining witness for `!=`.
+- `set_subset_reif(reif=0)` also forces a unique blocker out of the superset when that is the only remaining ¬⊆ witness.
 
 ### Fixed
 

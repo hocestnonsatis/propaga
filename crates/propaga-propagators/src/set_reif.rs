@@ -344,6 +344,15 @@ impl Propagator for SetSubsetReifPropagator {
                 if required_outsiders > 0 && outsiders.len() == 1 {
                     changed |= ext.force_set_in(subset_id, outsiders[0]);
                 }
+                let blockers: Vec<i32> = subset
+                    .glb
+                    .iter()
+                    .copied()
+                    .filter(|value| !superset.glb.contains(value) && superset.lub.contains(value))
+                    .collect();
+                if blockers.len() == 1 {
+                    changed |= ext.force_set_out(superset_id, blockers[0]);
+                }
             }
         }
 
@@ -697,6 +706,27 @@ mod tests {
         assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
         let dom = engine.domain(sub).as_set().unwrap();
         assert!(dom.glb().contains(&2));
+    }
+
+    #[test]
+    fn subset_reif_false_forces_unique_blocker_out_of_superset() {
+        let mut engine = Engine::new();
+        let subset = SetIntervalDomain::universe(1..=3)
+            .with_cardinality(2, 3)
+            .force_in(1)
+            .unwrap()
+            .force_in(2)
+            .unwrap();
+        let superset = SetIntervalDomain::universe(1..=3)
+            .with_cardinality(0, 3)
+            .force_in(1)
+            .unwrap();
+        let sub = engine.new_variable(AnyDomain::Set(subset));
+        let sup = engine.new_variable(AnyDomain::Set(superset));
+        let reif = engine.new_variable(IntervalDomain::fix(0));
+        engine.add_propagator(Box::new(SetSubsetReifPropagator::new(sub, sup, reif)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(!engine.domain(sup).as_set().unwrap().lub().contains(&2));
     }
 
     #[test]
