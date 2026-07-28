@@ -876,7 +876,7 @@ impl DepthFirstSearch {
         let hi = float.upper_bound();
         let mid = lo + (hi - lo) / 2.0;
         let preferred = match self.active_value_ordering(engine) {
-            crate::config::ValueOrdering::Ascending => lo,
+            crate::config::ValueOrdering::Ascending | crate::config::ValueOrdering::Interval => lo,
             crate::config::ValueOrdering::Descending
             | crate::config::ValueOrdering::ReverseSplit => hi,
             _ => mid,
@@ -922,7 +922,7 @@ impl DepthFirstSearch {
             right = next;
         }
         match self.active_value_ordering(engine) {
-            crate::config::ValueOrdering::Ascending => hi,
+            crate::config::ValueOrdering::Ascending | crate::config::ValueOrdering::Interval => hi,
             crate::config::ValueOrdering::Descending
             | crate::config::ValueOrdering::ReverseSplit => lo,
             _ => lo,
@@ -1477,6 +1477,29 @@ mod tests {
                 assert!(*value >= 0.0 && *value <= 1.0);
                 assert!((*value - 0.5).abs() > f64::EPSILON);
             }
+            other => panic!("expected float assignment, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn float_interval_precision_assignment_prefers_leftmost_component() {
+        use propaga_domains::{AnyDomain, FloatDomain};
+
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 3.0).exclude(0.5)));
+        let mut search = DepthFirstSearch::with_config(
+            vec![x],
+            SearchConfig {
+                learning: false,
+                restart_policy: RestartPolicy::None,
+                float_precision: 4.0,
+                value_ordering: ValueOrdering::Interval,
+                ..SearchConfig::default()
+            },
+        );
+        let solution = search.solve(&mut engine).expect("SAT");
+        match &solution[0].1 {
+            AssignmentValue::Float(value) => assert!((*value - 0.0).abs() < f64::EPSILON),
             other => panic!("expected float assignment, got {other:?}"),
         }
     }
