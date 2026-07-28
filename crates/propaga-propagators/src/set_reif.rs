@@ -152,7 +152,16 @@ impl Propagator for SetSubsetReifPropagator {
 
         let mut changed = false;
 
-        let violated = subset.glb.iter().any(|v| !superset.lub.contains(v));
+        let sub_card_min = subset.card_min.max(subset.glb.len());
+        let sup_card_max = superset.card_max.min(superset.lub.len());
+        let forced_outside_sub = superset
+            .glb
+            .iter()
+            .filter(|value| !subset.lub.contains(value))
+            .count();
+        // A ⊆ B ⇒ |B| ≥ |A| + |glb(B)\lub(A)|
+        let violated = subset.glb.iter().any(|v| !superset.lub.contains(v))
+            || sub_card_min.saturating_add(forced_outside_sub) > sup_card_max;
         let definitely_subset = subset.lub.iter().all(|v| superset.glb.contains(v));
 
         if violated {
@@ -160,6 +169,9 @@ impl Propagator for SetSubsetReifPropagator {
         }
         if definitely_subset {
             changed |= tighten_reif(ctx, reif_id, 1);
+        }
+        if ctx.domain(reif_id).is_empty() {
+            return PropagationStatus::Failure;
         }
 
         if ctx.fixed_value(reif_id) == Some(1)
@@ -454,6 +466,36 @@ mod tests {
         let reif = engine.new_variable(IntervalDomain::new(0, 1));
         engine.add_propagator(Box::new(SetSubsetReifPropagator::new(sub, sup, reif)));
         engine.propagate_all().unwrap();
+        assert_eq!(engine.hybrid_domain(reif).fixed_value(), Some(0));
+    }
+
+    #[test]
+    fn subset_disjoint_cardinality_forces_reif_false() {
+        let mut engine = Engine::new();
+        let subset = SetIntervalDomain::universe(1..=4).with_cardinality(3, 4);
+        let superset = SetIntervalDomain::universe(1..=4).with_cardinality(0, 2);
+        let sub = engine.new_variable(AnyDomain::Set(subset));
+        let sup = engine.new_variable(AnyDomain::Set(superset));
+        let reif = engine.new_variable(IntervalDomain::new(0, 1));
+        engine.add_propagator(Box::new(SetSubsetReifPropagator::new(sub, sup, reif)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert_eq!(engine.hybrid_domain(reif).fixed_value(), Some(0));
+    }
+
+    #[test]
+    fn subset_card_plus_forced_outside_forces_reif_false() {
+        let mut engine = Engine::new();
+        // |A|≥2 and B forces 4∉lub(A) with |B|≤2 ⇒ |B| ≥ |A|+1 is impossible.
+        let subset = SetIntervalDomain::universe(1..=3).with_cardinality(2, 2);
+        let superset = SetIntervalDomain::universe(1..=4)
+            .with_cardinality(0, 2)
+            .force_in(4)
+            .unwrap();
+        let sub = engine.new_variable(AnyDomain::Set(subset));
+        let sup = engine.new_variable(AnyDomain::Set(superset));
+        let reif = engine.new_variable(IntervalDomain::new(0, 1));
+        engine.add_propagator(Box::new(SetSubsetReifPropagator::new(sub, sup, reif)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
         assert_eq!(engine.hybrid_domain(reif).fixed_value(), Some(0));
     }
 
