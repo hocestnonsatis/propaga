@@ -71,6 +71,24 @@ impl Propagator for SetLtPropagator {
             return PropagationStatus::Failure;
         }
 
+        // Fixed subset and superset must grow by exactly one LUB candidate ⇒ force it in.
+        if let (Some(sub), Some(sup)) = (ext.set_domain(sub_id), ext.set_domain(sup_id)) {
+            if sub.glb.len() == sub.lub.len()
+                && sup.card_min == sub.glb.len() + 1
+                && sup.card_max == sub.glb.len() + 1
+            {
+                let extra: Vec<i32> = sup
+                    .lub
+                    .iter()
+                    .copied()
+                    .filter(|value| !sub.glb.contains(value))
+                    .collect();
+                if extra.len() == 1 {
+                    changed |= ext.force_set_in(sup_id, extra[0]);
+                }
+            }
+        }
+
         let sub_after = ext.set_domain(sub_id);
         let sup_after = ext.set_domain(sup_id);
         if sub_after.as_ref().is_none_or(|d| d.is_empty())
@@ -140,5 +158,24 @@ mod tests {
         engine.add_propagator(Box::new(SetLtPropagator::new(sub, sup)));
         engine.propagate_all().unwrap();
         assert!(engine.domain(sub).as_set().unwrap().card_max() <= 1);
+    }
+
+    #[test]
+    fn forces_singleton_extra_into_superset_when_subset_fixed() {
+        let mut engine = Engine::new();
+        let subset = SetIntervalDomain::universe(1..=3)
+            .with_cardinality(1, 1)
+            .force_in(1)
+            .unwrap();
+        let superset = SetIntervalDomain::universe(1..=2)
+            .with_cardinality(2, 2)
+            .force_in(1)
+            .unwrap();
+        let sub = engine.new_variable(AnyDomain::Set(subset));
+        let sup = engine.new_variable(AnyDomain::Set(superset));
+        engine.add_propagator(Box::new(SetSubsetPropagator::new(sub, sup)));
+        engine.add_propagator(Box::new(SetLtPropagator::new(sub, sup)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(engine.domain(sup).as_set().unwrap().glb().contains(&2));
     }
 }

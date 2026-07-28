@@ -122,6 +122,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `set_eq_reif` / `set_ne` treat disjoint cardinality bounds as definite inequality.
 - `set_subset_reif` forces reif=false when ⊆ is card-impossible (`|A| + |glb(B)\lub(A)| > |B|`).
 - `set_in_reif=false` prunes GLB members from the value domain (mirrors `reif=true` LUB pruning).
+- `set_lt` forces the sole extra superset element when the subset is fixed and `|B| = |A| + 1` with one LUB candidate left.
 
 ### Fixed
 
