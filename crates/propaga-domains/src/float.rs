@@ -410,6 +410,17 @@ impl FloatDomain {
                 holes.push(hole);
             }
         }
+        // If one side forbids `h` and the other lies entirely above `h`, min ≠ h.
+        for &hole in &self.holes {
+            if hole > min && hole < max && other.lower_bound() > hole {
+                holes.push(hole);
+            }
+        }
+        for &hole in &other.holes {
+            if hole > min && hole < max && self.lower_bound() > hole {
+                holes.push(hole);
+            }
+        }
         Self::from_parts(min, max, holes)
     }
 
@@ -424,6 +435,17 @@ impl FloatDomain {
         let mut holes = Vec::new();
         for &hole in self.holes.iter().chain(other.holes.iter()) {
             if hole > min && hole < max && !self.contains(hole) && !other.contains(hole) {
+                holes.push(hole);
+            }
+        }
+        // If one side forbids `h` and the other lies entirely below `h`, max ≠ h.
+        for &hole in &self.holes {
+            if hole > min && hole < max && other.upper_bound() < hole {
+                holes.push(hole);
+            }
+        }
+        for &hole in &other.holes {
+            if hole > min && hole < max && self.upper_bound() < hole {
                 holes.push(hole);
             }
         }
@@ -774,6 +796,22 @@ mod tests {
         let abs = domain.abs();
         assert!(!abs.contains(2.0));
         assert_eq!(abs.holes(), &[2.0]);
+    }
+
+    #[test]
+    fn min_with_projects_hole_when_other_side_lies_above() {
+        let a = FloatDomain::new(0.0, 5.0).exclude(2.0);
+        let b = FloatDomain::new(2.5, 4.0);
+        let image = a.min_with(&b);
+        assert!(!image.contains(2.0));
+    }
+
+    #[test]
+    fn max_with_projects_hole_when_other_side_lies_below() {
+        let a = FloatDomain::new(0.0, 5.0).exclude(2.0);
+        let b = FloatDomain::new(0.0, 1.5);
+        let image = a.max_with(&b);
+        assert!(!image.contains(2.0));
     }
 
     #[test]

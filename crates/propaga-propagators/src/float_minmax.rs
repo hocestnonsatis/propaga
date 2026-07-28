@@ -256,4 +256,20 @@ mod tests {
         engine.propagate_all().unwrap();
         assert!(!engine.domain(a).as_float().unwrap().contains(2.0));
     }
+
+    #[test]
+    fn min_forward_projects_operand_hole_when_other_side_lies_above() {
+        let mut engine = Engine::new();
+        let a = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0).exclude(2.0)));
+        let b = engine.new_variable(AnyDomain::Float(FloatDomain::new(2.5, 4.0)));
+        let c = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0)));
+        engine.add_propagator(Box::new(FloatMinMaxPropagator::new(
+            a,
+            b,
+            c,
+            FloatMinMaxOp::Min,
+        )));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(!engine.domain(c).as_float().unwrap().contains(2.0));
+    }
 }

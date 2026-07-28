@@ -1,0 +1,10 @@
+% float_max reverse-projects a result hole when the other operand dominates.
+var 0.0..5.0: a;
+var 0.0..2.0: b;
+var 0.0..5.0: c;
+var 2.0..2.0: two;
+var 2.5..2.5: lb;
+constraint float_ne(c, two);
+constraint float_max(a, b, c);
+constraint float_le(lb, a);
+solve satisfy;

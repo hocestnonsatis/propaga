@@ -99,6 +99,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ceil` / `floor` / `round` wide spans (>10 000 integers) still shrink hole-emptied image endpoints via bounded end scans (interior remains hole-free).
 - `FloatDomain` bound tightening that lands on a hole advances past it (pinning to a hole empties the domain); handwritten `float_lin_eq_hole.fzn` (expected UNSAT).
 - Float `array_element` treats a singleton bound-overlap that lands on a hole as disjoint (index prune); handwritten `array_float_element_prune.fzn` + CI smoke.
+- `float_min` / `float_max` forward images drop a hole when one operand forbids it and the other lies entirely above (min) / below (max) that hole; handwritten `float_max_hole.fzn` + CI smoke.
 
 ### Fixed
 
