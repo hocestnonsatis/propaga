@@ -604,6 +604,9 @@ impl DepthFirstSearch {
     ///
     /// When a registered or domain hole lies strictly inside `(lo, hi)`, splits as
     /// `x <= next_down(hole)` and `x >= next_up(hole)`. Otherwise bisects at the midpoint.
+    ///
+    /// [`ValueOrdering::Interval`] prefers the leftmost interior hole (first contiguous
+    /// component); other orderings prefer the hole nearest the midpoint.
     fn float_branch_cuts(
         &self,
         engine: &Engine,
@@ -611,7 +614,14 @@ impl DepthFirstSearch {
         lo: f64,
         hi: f64,
     ) -> [(FloatBranchSide, f64); 2] {
-        let cuts = if let Some(hole) = self.best_interior_float_hole(engine, var, lo, hi) {
+        let ordering = self.active_value_ordering(engine);
+        let hole = match ordering {
+            crate::config::ValueOrdering::Interval => {
+                self.first_interior_float_hole(engine, var, lo, hi)
+            }
+            _ => self.best_interior_float_hole(engine, var, lo, hi),
+        };
+        let cuts = if let Some(hole) = hole {
             [
                 (FloatBranchSide::Above, next_float_down(hole)),
                 (FloatBranchSide::Below, next_float_up(hole)),
@@ -620,21 +630,14 @@ impl DepthFirstSearch {
             let mid = lo + (hi - lo) / 2.0;
             [(FloatBranchSide::Above, mid), (FloatBranchSide::Below, mid)]
         };
-        match self.active_value_ordering(engine) {
+        match ordering {
             crate::config::ValueOrdering::Descending
             | crate::config::ValueOrdering::ReverseSplit => [cuts[1], cuts[0]],
             _ => cuts,
         }
     }
 
-    fn best_interior_float_hole(
-        &self,
-        engine: &Engine,
-        var: VariableId,
-        lo: f64,
-        hi: f64,
-    ) -> Option<f64> {
-        let mid = lo + (hi - lo) / 2.0;
+    fn interior_float_holes(&self, engine: &Engine, var: VariableId, lo: f64, hi: f64) -> Vec<f64> {
         let mut candidates: Vec<f64> = self
             .float_holes
             .get(&var)
@@ -655,13 +658,38 @@ impl DepthFirstSearch {
         candidates
             .sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
         candidates.dedup_by(|left, right| (*left - *right).abs() <= f64::EPSILON);
-        candidates.into_iter().min_by(|left, right| {
-            let left_dist = (left - mid).abs();
-            let right_dist = (right - mid).abs();
-            left_dist
-                .partial_cmp(&right_dist)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
+        candidates
+    }
+
+    fn first_interior_float_hole(
+        &self,
+        engine: &Engine,
+        var: VariableId,
+        lo: f64,
+        hi: f64,
+    ) -> Option<f64> {
+        self.interior_float_holes(engine, var, lo, hi)
+            .into_iter()
+            .next()
+    }
+
+    fn best_interior_float_hole(
+        &self,
+        engine: &Engine,
+        var: VariableId,
+        lo: f64,
+        hi: f64,
+    ) -> Option<f64> {
+        let mid = lo + (hi - lo) / 2.0;
+        self.interior_float_holes(engine, var, lo, hi)
+            .into_iter()
+            .min_by(|left, right| {
+                let left_dist = (left - mid).abs();
+                let right_dist = (right - mid).abs();
+                left_dist
+                    .partial_cmp(&right_dist)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
     }
 
     fn handle_failure(&mut self, engine: &mut Engine, level: usize) -> bool {
@@ -1332,6 +1360,28 @@ mod tests {
         let cuts = search.float_branch_cuts(&engine, y, 0.0, 2.0);
         assert_eq!(cuts[0], (FloatBranchSide::Above, next_float_down(1.0)));
         assert_eq!(cuts[1], (FloatBranchSide::Below, next_float_up(1.0)));
+    }
+
+    #[test]
+    fn float_interval_ordering_prefers_leftmost_hole() {
+        use propaga_domains::{AnyDomain, FloatDomain};
+
+        let mut engine = Engine::new();
+        let y = engine.new_variable(AnyDomain::Float(
+            FloatDomain::new(0.0, 10.0).exclude(2.0).exclude(8.0),
+        ));
+        let search = DepthFirstSearch::with_config(
+            vec![y],
+            SearchConfig {
+                learning: false,
+                restart_policy: RestartPolicy::None,
+                value_ordering: ValueOrdering::Interval,
+                ..SearchConfig::default()
+            },
+        );
+        let cuts = search.float_branch_cuts(&engine, y, 0.0, 10.0);
+        assert_eq!(cuts[0], (FloatBranchSide::Above, next_float_down(2.0)));
+        assert_eq!(cuts[1], (FloatBranchSide::Below, next_float_up(2.0)));
     }
 
     #[test]

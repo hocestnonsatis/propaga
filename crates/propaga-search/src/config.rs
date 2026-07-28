@@ -121,6 +121,8 @@ pub enum ValueOrdering {
     /// Deterministic pseudo-random order (stable for a given variable/domain).
     Random,
     /// Prefer values in the first contiguous domain interval; otherwise behave like [`Split`].
+    ///
+    /// For floats, splits at the leftmost interior hole when present.
     Interval,
 }
 

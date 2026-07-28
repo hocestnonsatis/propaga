@@ -106,6 +106,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FlatZinc `float_search` precision is applied during DFS: floats whose domain width is at most the precision are fixed (value from the active ordering: min/max endpoints or midpoint); handwritten `float_search_precision.fzn` + CI smoke.
 - Nested `float_search` precision inside `seq_search` is kept per phase (and lifts a global fallback when standalone `float_search` is absent); handwritten `seq_float_search_precision.fzn` + CI smoke.
 - When a float domain reaches `float_search` precision, DFS assigns lower/upper/midpoint according to the active value ordering (`indomain_min` / `indomain_max` / split-style).
+- Float `indomain_interval` splits at the leftmost interior hole (first contiguous component) instead of the hole nearest the midpoint.
 
 ### Fixed
 
