@@ -234,12 +234,13 @@ impl Propagator for FloatLtReifPropagator {
                 if lt_impossible(&left, &right) {
                     return PropagationStatus::Failure;
                 }
-                changed |= ext.tighten_float_above(left_id, next_down(right.max));
-                let left_max = ext
+                let max_r = max_admissible(&right).unwrap_or(right.max);
+                changed |= ext.tighten_float_above(left_id, next_down(max_r));
+                let left_min = ext
                     .float_domain(left_id)
-                    .map(|domain| domain.max)
-                    .unwrap_or(left.max);
-                changed |= ext.tighten_float_below(right_id, next_up(left_max));
+                    .and_then(|domain| min_admissible(&domain))
+                    .unwrap_or(left.min);
+                changed |= ext.tighten_float_below(right_id, next_up(left_min));
             }
             Some(0) => {
                 let mut ge = FloatLePropagator::new(right_id, left_id);
@@ -1552,6 +1553,18 @@ mod tests {
         engine.add_propagator(Box::new(FloatLtReifPropagator::new(left, right, reif)));
         assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
         assert_eq!(engine.hybrid_domain(reif).fixed_value(), Some(1));
+    }
+
+    #[test]
+    fn float_lt_reif_true_keeps_supported_right_values() {
+        let mut engine = Engine::new();
+        let left = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 2.0)));
+        let right = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 3.0)));
+        let reif = engine.new_variable(HybridDomain::fix(1));
+        engine.add_propagator(Box::new(FloatLtReifPropagator::new(left, right, reif)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let domain = engine.domain(right).as_float().unwrap();
+        assert!(domain.contains(1.0));
     }
 
     #[test]
