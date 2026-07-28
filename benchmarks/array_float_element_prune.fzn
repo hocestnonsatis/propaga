@@ -1,0 +1,9 @@
+% Float element prunes an index whose only overlap with value is a hole.
+array [1..2] of var 0.0..4.0: xs;
+var 1..2: i;
+var 2.0..4.0: v;
+var 2.0..2.0: two;
+constraint float_ne(xs[1], two);
+constraint float_le(xs[1], two);
+constraint array_var_float_element(xs, i, v);
+solve satisfy;

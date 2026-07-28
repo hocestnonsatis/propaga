@@ -98,6 +98,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `int2float` keeps discrete holes aligned both ways (missing ints punch float holes; float holes remove ints); handwritten `int2float.fzn` + CI smoke.
 - `ceil` / `floor` / `round` wide spans (>10 000 integers) still shrink hole-emptied image endpoints via bounded end scans (interior remains hole-free).
 - `FloatDomain` bound tightening that lands on a hole advances past it (pinning to a hole empties the domain); handwritten `float_lin_eq_hole.fzn` (expected UNSAT).
+- Float `array_element` treats a singleton bound-overlap that lands on a hole as disjoint (index prune); handwritten `array_float_element_prune.fzn` + CI smoke.
 
 ### Fixed
 

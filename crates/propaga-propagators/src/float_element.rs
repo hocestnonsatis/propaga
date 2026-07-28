@@ -125,6 +125,12 @@ fn domains_overlap(left: &FloatDomainSnapshot, right: &FloatDomainSnapshot) -> b
     if left.max < right.min || right.max < left.min {
         return false;
     }
+    let lo = left.min.max(right.min);
+    let hi = left.max.min(right.max);
+    // Singleton intersection: must be admissible in both domains (holes count).
+    if (hi - lo).abs() <= f64::EPSILON {
+        return left.contains(lo) && right.contains(lo);
+    }
     if left.is_fixed() && !right.contains(left.min) {
         return false;
     }
@@ -302,5 +308,25 @@ mod tests {
         )));
         assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
         assert_eq!(engine.hybrid_domain(index).fixed_value(), Some(1));
+    }
+
+    #[test]
+    fn removes_index_when_singleton_overlap_is_a_hole() {
+        use propaga_core::DomainView;
+
+        let mut engine = Engine::new();
+        let index = engine.new_variable(IntervalDomain::new(0, 1));
+        // Overlap with value is only {2}, which is a hole on a0.
+        let a0 = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 2.0).exclude(2.0)));
+        let a1 = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 4.0)));
+        let value = engine.new_variable(AnyDomain::Float(FloatDomain::new(2.0, 4.0)));
+        engine.add_propagator(Box::new(FloatElementPropagator::new(
+            index,
+            vec![a0, a1],
+            value,
+        )));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(!engine.hybrid_domain(index).contains(0));
+        assert!(engine.hybrid_domain(index).contains(1));
     }
 }

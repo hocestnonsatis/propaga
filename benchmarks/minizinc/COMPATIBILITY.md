@@ -111,7 +111,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `float_min` / `float_max` | Result holes reverse-project onto an operand when the other side cannot realize that value as the min/max |
 | `float_sin` / `float_cos` | Project (and reverse-project) holes only on locally monotonic intervals; fixed images reverse-project onto the unique preimage when one exists |
 | `float_ceil` / `float_floor` / `float_round` | Drop integer images whose preimages are emptied by holes (typically endpoint-only); constant domains collapse to fixed; fixed integer images reverse-project onto the input; integer output holes reverse-project when the preimage is a singleton; spans above 10 000 integers still shrink hole-emptied endpoints (bounded end scans) but keep a hole-free interior |
-| `array_*_float_element` | Share holes when index is fixed; project holes absent from every remaining candidate |
+| `array_*_float_element` | Share holes when index is fixed; project holes absent from every remaining candidate; prune indices whose only bound-overlap with the value is a forbidden hole |
 
 Holes are **sound over-approximations**: dropping a hole never removes a feasible real, but keeping every hole through non-injective maps is not always possible.
 
