@@ -97,6 +97,26 @@ impl Propagator for SetEqReifPropagator {
             }
         }
 
+        if ctx.fixed_value(reif_id) == Some(0)
+            && let Some(ext) = ctx.as_extended()
+        {
+            changed |= match break_last_equalizer(ext, left_id, right_id) {
+                Ok(changed) => changed,
+                Err(status) => return status,
+            };
+            changed |= match break_last_equalizer(ext, right_id, left_id) {
+                Ok(changed) => changed,
+                Err(status) => return status,
+            };
+            let (Some(left), Some(right)) = (ext.set_domain(left_id), ext.set_domain(right_id))
+            else {
+                return PropagationStatus::Failure;
+            };
+            if left.is_empty() || right.is_empty() || sets_definitely_equal(&left, &right) {
+                return PropagationStatus::Failure;
+            }
+        }
+
         if changed {
             PropagationStatus::OkChanged
         } else {
@@ -114,6 +134,61 @@ fn tighten_reif(ctx: &mut dyn PropagationContext, reif: VariableId, value: i32) 
         changed = true;
     }
     changed
+}
+
+fn is_fixed_set(set: &propaga_core::SetDomainSnapshot) -> bool {
+    set.glb.len() == set.lub.len()
+}
+
+fn sets_definitely_equal(
+    left: &propaga_core::SetDomainSnapshot,
+    right: &propaga_core::SetDomainSnapshot,
+) -> bool {
+    is_fixed_set(left) && is_fixed_set(right) && left.glb == right.glb
+}
+
+fn sets_definitely_ne(
+    left: &propaga_core::SetDomainSnapshot,
+    right: &propaga_core::SetDomainSnapshot,
+) -> bool {
+    left.glb.iter().any(|v| !right.lub.contains(v))
+        || right.glb.iter().any(|v| !left.lub.contains(v))
+        || left.card_max < right.card_min
+        || right.card_max < left.card_min
+}
+
+fn break_last_equalizer(
+    ext: &mut dyn propaga_core::ExtendedPropagationContext,
+    fixed_id: VariableId,
+    other_id: VariableId,
+) -> Result<bool, PropagationStatus> {
+    let (Some(fixed), Some(other)) = (ext.set_domain(fixed_id), ext.set_domain(other_id)) else {
+        return Err(PropagationStatus::Failure);
+    };
+    if !is_fixed_set(&fixed) || sets_definitely_ne(&fixed, &other) {
+        return Ok(false);
+    }
+    if other.lub != fixed.glb {
+        return Ok(false);
+    }
+    let undecided: Vec<i32> = fixed
+        .glb
+        .iter()
+        .copied()
+        .filter(|v| !other.glb.contains(v))
+        .collect();
+    if undecided.len() != 1 || other.card_max < fixed.glb.len() {
+        return Ok(false);
+    }
+    let last = undecided[0];
+    let mut changed = ext.force_set_out(other_id, last);
+    let new_card_max = fixed.glb.len().saturating_sub(1);
+    if let Some(other) = ext.set_domain(other_id)
+        && other.card_max > new_card_max
+    {
+        changed |= ext.tighten_set_cardinality(other_id, other.card_min, new_card_max);
+    }
+    Ok(changed)
 }
 
 /// Propagates `reif <=> subset ⊆ superset`.
@@ -422,6 +497,29 @@ mod tests {
         engine.add_propagator(Box::new(SetEqReifPropagator::new(a, b, reif)));
         assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
         assert_eq!(engine.hybrid_domain(reif).fixed_value(), Some(0));
+    }
+
+    #[test]
+    fn eq_reif_false_breaks_last_equalizer() {
+        let mut engine = Engine::new();
+        let left = SetIntervalDomain::universe(1..=2)
+            .with_cardinality(2, 2)
+            .force_in(1)
+            .unwrap()
+            .force_in(2)
+            .unwrap();
+        let right = SetIntervalDomain::universe(1..=2)
+            .with_cardinality(1, 2)
+            .force_in(1)
+            .unwrap();
+        let a = engine.new_variable(AnyDomain::Set(left));
+        let b = engine.new_variable(AnyDomain::Set(right));
+        let reif = engine.new_variable(IntervalDomain::fix(0));
+        engine.add_propagator(Box::new(SetEqReifPropagator::new(a, b, reif)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let bdom = engine.domain(b).as_set().unwrap();
+        assert!(!bdom.lub().contains(&2));
+        assert_eq!(bdom.card_max(), 1);
     }
 
     #[test]
