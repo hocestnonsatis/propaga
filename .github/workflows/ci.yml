@@ -41,6 +41,7 @@ jobs:
       - run: cargo run -p propaga-cli -- solve --file benchmarks/array_set_vars.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/array_set_element.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/array_float_element.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/array_float_element_prune.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/array_bool_element.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/array_float_vars.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/array_var_bool_element.fzn --quiet
