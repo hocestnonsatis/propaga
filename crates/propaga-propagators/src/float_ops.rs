@@ -184,16 +184,59 @@ fn next_down(value: f64) -> f64 {
     }
 }
 
-fn fixed_integer_image(snap: &propaga_core::FloatDomainSnapshot) -> Option<f64> {
-    if !snap.is_fixed() {
-        return None;
-    }
-    near_integer(snap.min)
-}
-
 fn near_integer(value: f64) -> Option<f64> {
     let n = value.round();
     ((value - n).abs() <= 1e-9).then_some(n)
+}
+
+/// Scan limit when walking integer images of ceil/floor/round outputs.
+const MAX_INTEGER_IMAGE_SCAN: i64 = 10_000;
+
+/// Least integer still admissible in `snap` (bounded end scan).
+fn least_admissible_integer(snap: &propaga_core::FloatDomainSnapshot) -> Option<f64> {
+    if snap.is_empty() {
+        return None;
+    }
+    let mut k = snap.min.ceil();
+    let end = snap.max.floor();
+    let mut scanned = 0_i64;
+    while k <= end + 1e-9 && scanned <= MAX_INTEGER_IMAGE_SCAN {
+        if snap.contains(k) {
+            return Some(k);
+        }
+        k += 1.0;
+        scanned += 1;
+    }
+    None
+}
+
+/// Greatest integer still admissible in `snap` (bounded end scan).
+fn greatest_admissible_integer(snap: &propaga_core::FloatDomainSnapshot) -> Option<f64> {
+    if snap.is_empty() {
+        return None;
+    }
+    let mut m = snap.max.floor();
+    let start = snap.min.ceil();
+    let mut scanned = 0_i64;
+    while m >= start - 1e-9 && scanned <= MAX_INTEGER_IMAGE_SCAN {
+        if snap.contains(m) {
+            return Some(m);
+        }
+        m -= 1.0;
+        scanned += 1;
+    }
+    None
+}
+
+fn reverse_integer_image_domain(
+    output_snap: &propaga_core::FloatDomainSnapshot,
+    reverse_holes: &[f64],
+) -> propaga_core::FloatDomainSnapshot {
+    propaga_core::FloatDomainSnapshot {
+        min: output_snap.min,
+        max: output_snap.max,
+        holes: reverse_holes.to_vec(),
+    }
 }
 
 fn exclude_singleton_preimage(
@@ -572,10 +615,14 @@ impl Propagator for FloatUnaryPropagator {
                 }
             }
             FloatUnaryOp::Floor => {
-                if let Some(n) = fixed_integer_image(&output_snap) {
-                    // floor⁻¹(n) = [n, n+1)
-                    changed |= ext.tighten_float_below(self.watched[0], n);
-                    changed |= ext.tighten_float_above(self.watched[0], next_down(n + 1.0));
+                // floor(x) ∈ Dom(y) ⇒ x ∈ [least, greatest+1); also covers fixed images.
+                let image = reverse_integer_image_domain(&output_snap, &reverse_holes);
+                if let (Some(k), Some(m)) = (
+                    least_admissible_integer(&image),
+                    greatest_admissible_integer(&image),
+                ) {
+                    changed |= ext.tighten_float_below(self.watched[0], k);
+                    changed |= ext.tighten_float_above(self.watched[0], next_down(m + 1.0));
                 }
                 for hole in &reverse_holes {
                     if let Some(n) = near_integer(*hole) {
@@ -590,10 +637,14 @@ impl Propagator for FloatUnaryPropagator {
                 }
             }
             FloatUnaryOp::Ceil => {
-                if let Some(n) = fixed_integer_image(&output_snap) {
-                    // ceil⁻¹(n) = (n-1, n]
-                    changed |= ext.tighten_float_below(self.watched[0], next_up(n - 1.0));
-                    changed |= ext.tighten_float_above(self.watched[0], n);
+                // ceil(x) ∈ Dom(y) ⇒ x ∈ (least-1, greatest]; also covers fixed images.
+                let image = reverse_integer_image_domain(&output_snap, &reverse_holes);
+                if let (Some(k), Some(m)) = (
+                    least_admissible_integer(&image),
+                    greatest_admissible_integer(&image),
+                ) {
+                    changed |= ext.tighten_float_below(self.watched[0], next_up(k - 1.0));
+                    changed |= ext.tighten_float_above(self.watched[0], m);
                 }
                 for hole in &reverse_holes {
                     if let Some(n) = near_integer(*hole) {
@@ -608,9 +659,14 @@ impl Propagator for FloatUnaryPropagator {
                 }
             }
             FloatUnaryOp::Round => {
-                if let Some(n) = fixed_integer_image(&output_snap) {
-                    // Rust round is half-away-from-zero.
-                    let (lo, hi) = round_preimage_bounds(n);
+                // round(x) ∈ Dom(y) ⇒ x between extreme half-away-from-zero preimages.
+                let image = reverse_integer_image_domain(&output_snap, &reverse_holes);
+                if let (Some(k), Some(m)) = (
+                    least_admissible_integer(&image),
+                    greatest_admissible_integer(&image),
+                ) {
+                    let (lo, _) = round_preimage_bounds(k);
+                    let (_, hi) = round_preimage_bounds(m);
                     changed |= ext.tighten_float_below(self.watched[0], lo);
                     changed |= ext.tighten_float_above(self.watched[0], hi);
                 }
@@ -823,6 +879,73 @@ mod tests {
         let domain = engine.domain(x).as_float().unwrap();
         assert!(domain.lower_bound() > 1.0);
         assert!((domain.upper_bound() - 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn float_ceil_reverse_projects_unfixed_output_bounds() {
+        let mut engine = Engine::new();
+        // ceil(x) ∈ [3, 4] ⇒ x > 2 and x ≤ 4.
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(1.5, 3.5)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::new(3.0, 4.0)));
+        engine.add_propagator(Box::new(FloatUnaryPropagator::new(
+            x,
+            y,
+            FloatUnaryOp::Ceil,
+        )));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let domain = engine.domain(x).as_float().unwrap();
+        assert!(domain.lower_bound() > 2.0);
+        assert!((domain.upper_bound() - 3.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn float_floor_reverse_projects_unfixed_output_bounds() {
+        let mut engine = Engine::new();
+        // floor(x) ∈ [1, 2] ⇒ x ≥ 1 and x < 3.
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(1.5, 3.5)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::new(1.0, 2.0)));
+        engine.add_propagator(Box::new(FloatUnaryPropagator::new(
+            x,
+            y,
+            FloatUnaryOp::Floor,
+        )));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let domain = engine.domain(x).as_float().unwrap();
+        assert!((domain.lower_bound() - 1.5).abs() < 1e-9);
+        assert!(domain.upper_bound() < 3.0);
+    }
+
+    #[test]
+    fn float_ceil_reverse_projects_bounds_after_image_hole() {
+        let mut engine = Engine::new();
+        // y ∈ [2, 4] \ {2} forces least image 3 ⇒ x > 2.
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(1.5, 3.5)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::new(2.0, 4.0).exclude(2.0)));
+        engine.add_propagator(Box::new(FloatUnaryPropagator::new(
+            x,
+            y,
+            FloatUnaryOp::Ceil,
+        )));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let domain = engine.domain(x).as_float().unwrap();
+        assert!(domain.lower_bound() > 2.0);
+    }
+
+    #[test]
+    fn float_round_reverse_projects_unfixed_output_bounds() {
+        let mut engine = Engine::new();
+        // round(x) ∈ [1, 2] ⇒ x ≥ 0.5 and x < 2.5.
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 3.0)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::new(1.0, 2.0)));
+        engine.add_propagator(Box::new(FloatUnaryPropagator::new(
+            x,
+            y,
+            FloatUnaryOp::Round,
+        )));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let domain = engine.domain(x).as_float().unwrap();
+        assert!((domain.lower_bound() - 0.5).abs() < 1e-9);
+        assert!(domain.upper_bound() < 2.5);
     }
 
     #[test]
