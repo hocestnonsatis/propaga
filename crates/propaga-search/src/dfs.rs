@@ -925,7 +925,8 @@ impl DepthFirstSearch {
                         .cmp(&right_activity)
                         .then_with(|| engine.domain(left).size().cmp(&engine.domain(right).size()))
                         .then_with(|| {
-                            variable_index(order, left).cmp(&variable_index(order, right))
+                            // Stable: earlier in `order` wins on ties (same as Dom).
+                            variable_index(order, right).cmp(&variable_index(order, left))
                         })
                 })
             }
@@ -1828,6 +1829,25 @@ mod tests {
     }
 
     #[test]
+    fn activity_tie_break_prefers_earlier_variable() {
+        use propaga_domains::{AnyDomain, FloatDomain};
+
+        let mut engine = Engine::new();
+        let early = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 1.0)));
+        let late = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 1.0)));
+        let search = DepthFirstSearch::with_config(
+            vec![early, late],
+            SearchConfig {
+                learning: false,
+                restart_policy: RestartPolicy::None,
+                variable_ordering: VariableOrdering::Activity,
+                ..SearchConfig::default()
+            },
+        );
+        assert_eq!(search.select_variable(&engine), Some(early));
+    }
+
+    #[test]
     fn float_wipeout_bumps_activity_for_vsids() {
         use propaga_domains::{AnyDomain, FloatDomain};
         use propaga_propagators::FloatNePropagator;
@@ -1836,7 +1856,7 @@ mod tests {
         let cold = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 1.0)));
         let hot = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 1.0)));
         let zero = engine.new_variable(AnyDomain::Float(FloatDomain::fix(0.0)));
-        engine.add_propagator(Box::new(FloatNePropagator::new(cold, zero)));
+        engine.add_propagator(Box::new(FloatNePropagator::new(hot, zero)));
         engine.propagate_all().unwrap();
 
         let mut search = DepthFirstSearch::with_config(
@@ -1848,18 +1868,18 @@ mod tests {
                 ..SearchConfig::default()
             },
         );
-        // Equal activity: later decision var wins the Activity tie-break.
-        assert_eq!(search.select_variable(&engine), Some(hot));
+        // Equal activity: earlier decision var wins the Activity tie-break.
+        assert_eq!(search.select_variable(&engine), Some(cold));
 
         let level = engine.trail_mark();
         assert!(matches!(
-            engine.fix_float(cold, 0.0),
+            engine.fix_float(hot, 0.0),
             Ok(PropagationStatus::Failure) | Err(_)
         ));
         assert!(engine.last_conflict().is_some());
         let _ = search.handle_failure(&mut engine, level);
 
-        // Float wipeout on `cold` raises its activity above `hot`.
-        assert_eq!(search.select_variable(&engine), Some(cold));
+        // Float wipeout on `hot` raises its activity above `cold`.
+        assert_eq!(search.select_variable(&engine), Some(hot));
     }
 }
