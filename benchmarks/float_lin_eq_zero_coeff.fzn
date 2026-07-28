@@ -1,0 +1,8 @@
+% float_lin_eq hole share still works with an unfixed zero-coeff dummy.
+var 0.0..5.0: x;
+var 0.0..5.0: y;
+var -10.0..10.0: z;
+var 2.0..2.0: two;
+constraint float_ne(x, two);
+constraint float_lin_eq([1.0, 1.0, 0.0], [x, y, z], 5.0);
+solve satisfy;

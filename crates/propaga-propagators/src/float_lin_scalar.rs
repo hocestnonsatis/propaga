@@ -676,7 +676,8 @@ fn propagate_float_eq(
     }
 }
 
-/// When all but two terms are fixed under equality, map holes through the affine link.
+/// When exactly two nonzero-coeff terms remain free under equality, map holes
+/// through the affine link (unfixed zero-coeff vars are ignored).
 fn project_float_lin_eq_holes(
     ctx: &mut dyn PropagationContext,
     coeffs: &[f64],
@@ -689,7 +690,7 @@ fn project_float_lin_eq_holes(
     let free: Vec<usize> = domains
         .iter()
         .enumerate()
-        .filter(|(_, domain)| !domain.is_fixed())
+        .filter(|(index, domain)| !domain.is_fixed() && coeffs[*index] != 0.0)
         .map(|(index, _)| index)
         .collect();
     if free.len() != 2 {
@@ -699,9 +700,6 @@ fn project_float_lin_eq_holes(
     let j = free[1];
     let ci = coeffs[i];
     let cj = coeffs[j];
-    if ci == 0.0 || cj == 0.0 {
-        return false;
-    }
     let fixed_sum: f64 = coeffs
         .iter()
         .zip(&domains)
@@ -800,6 +798,21 @@ mod tests {
         engine.add_propagator(Box::new(FloatLinearEqPropagator::new(
             vec![1.0, 1.0],
             vec![x, y],
+            5.0,
+        )));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(!engine.domain(y).as_float().unwrap().contains(3.0));
+    }
+
+    #[test]
+    fn float_lin_eq_shares_holes_ignoring_unfixed_zero_coeff() {
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0).exclude(2.0)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0)));
+        let z = engine.new_variable(AnyDomain::Float(FloatDomain::new(-10.0, 10.0)));
+        engine.add_propagator(Box::new(FloatLinearEqPropagator::new(
+            vec![1.0, 1.0, 0.0],
+            vec![x, y, z],
             5.0,
         )));
         assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);

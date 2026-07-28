@@ -89,7 +89,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `float_min`, `float_max` | Supported | Native interval min/max propagator |
 | `float_sqrt`, `float_sin`, `float_cos`, `float_ln`, `float_log2`, `float_exp` | Supported | Unary interval ops; hole-aware when locally invertible / monotonic; fixed `sqrt`/`ln`/`exp` images reverse-project; `float_log2` via `ln` / `ln(2)` |
 | `float_ceil`, `float_floor`, `float_round` | Supported | Unary interval ops; constant domains collapse to fixed |
-| `float_lin_eq`, `float_lin_le`, `float_lin_ge`, `float_lin_ne` | Supported | `FloatLinear*` (eq projects holes; ne excludes interior forcing points) |
+| `float_lin_eq`, `float_lin_le`, `float_lin_ge`, `float_lin_ne` | Supported | `FloatLinear*` (eq projects holes between two free nonzero-coeff terms; ne excludes interior forcing points) |
 | `float_lin_*_reif` | Supported | Reified float linear |
 | `float_*_reif` | Supported | Reified float comparisons |
 | `float_dom`, `float_in` | Supported | Interval union / membership decomposition |
@@ -106,7 +106,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `float_eq` | Holes are shared both ways inside the common interval |
 | `float_ne` / unit `float_lin_ne` | Forbidden point excluded (endpoint shrink or interior hole) |
 | `float_plus` / `float_times` / `float_div` | Holes map through affine / fixed-operand images; `float_div` reverse-projects `a = c·b` and `b = a/c` (when `0 ∉ Dom(c)`), including divisor-hole images when the dividend is fixed |
-| `float_lin_eq` | Affine hole sharing when exactly two variables remain free |
+| `float_lin_eq` | Affine hole sharing when exactly two nonzero-coeff variables remain free (unfixed zero-coeff terms ignored) |
 | `float_abs` / `sqrt` / `ln` / `exp` | Preserve or safely project; `abs` reverse-projects holes `h > 0` to both `±h` (incl. domains straddling zero); fixed images reverse-project when locally invertible |
 | `float_min` / `float_max` | Result holes reverse-project onto an operand when the other side cannot realize that value as the min/max; forward image also drops a hole when one operand forbids it and the other lies entirely above (min) / below (max) that hole |
 | `float_sin` / `float_cos` | Project (and reverse-project) holes only on locally monotonic intervals; fixed images reverse-project onto the unique preimage when one exists |
