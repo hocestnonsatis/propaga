@@ -348,6 +348,15 @@ impl Propagator for SetInReifPropagator {
                     changed |= ext.force_set_out(set_id, value);
                 }
             } else if let (Some(min), Some(max)) = (value_min, value_max) {
+                // ¬(x ∈ S) ⇒ drop values already forced into S.
+                for value in min..=max {
+                    if ctx.domain(value_id).contains(value) && set.glb.contains(&value) {
+                        changed |= ctx.remove_value(value_id, value);
+                    }
+                }
+                if ctx.domain(value_id).is_empty() {
+                    return PropagationStatus::Failure;
+                }
                 // Membership is inevitable when every remaining value is forced in the set.
                 let inevitable = (min..=max)
                     .all(|value| !ctx.domain(value_id).contains(value) || set.glb.contains(&value));
@@ -368,6 +377,7 @@ impl Propagator for SetInReifPropagator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use propaga_core::DomainView;
     use propaga_domains::{AnyDomain, IntervalDomain, SetIntervalDomain};
     use propaga_engine::Engine;
 
@@ -570,5 +580,22 @@ mod tests {
         engine.add_propagator(Box::new(SetInReifPropagator::new(value, set_var, reif)));
         engine.propagate_all().unwrap();
         assert!(!engine.domain(set_var).as_set().unwrap().lub().contains(&2));
+    }
+
+    #[test]
+    fn set_in_reif_false_prunes_glb_from_value() {
+        let mut engine = Engine::new();
+        let set = SetIntervalDomain::universe(1..=3)
+            .with_cardinality(1, 3)
+            .force_in(1)
+            .unwrap();
+        let value = engine.new_variable(IntervalDomain::new(1, 3));
+        let set_var = engine.new_variable(AnyDomain::Set(set));
+        let reif = engine.new_variable(IntervalDomain::fix(0));
+        engine.add_propagator(Box::new(SetInReifPropagator::new(value, set_var, reif)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(!engine.hybrid_domain(value).contains(1));
+        assert!(engine.hybrid_domain(value).contains(2));
+        assert!(engine.hybrid_domain(value).contains(3));
     }
 }

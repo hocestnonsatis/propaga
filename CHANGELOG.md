@@ -121,6 +121,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `int2float` always maps explicit float holes onto the int domain and punches endpoint float holes on wide spans.
 - `set_eq_reif` / `set_ne` treat disjoint cardinality bounds as definite inequality.
 - `set_subset_reif` forces reif=false when ⊆ is card-impossible (`|A| + |glb(B)\lub(A)| > |B|`).
+- `set_in_reif=false` prunes GLB members from the value domain (mirrors `reif=true` LUB pruning).
 
 ### Fixed
 
