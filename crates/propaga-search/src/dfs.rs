@@ -23,6 +23,8 @@ pub struct DepthFirstSearch {
     nodes_since_restart: u64,
     restart_index: u32,
     phases: HashMap<VariableId, i32>,
+    /// Last successful float precision assignment per variable (phase saving).
+    float_phases: HashMap<VariableId, f64>,
     weights: HashMap<VariableId, u32>,
     activities: HashMap<VariableId, u32>,
     pending_solution_restart: bool,
@@ -51,6 +53,7 @@ impl DepthFirstSearch {
             nodes_since_restart: 0,
             restart_index: 0,
             phases: HashMap::new(),
+            float_phases: HashMap::new(),
             weights: HashMap::new(),
             activities: HashMap::new(),
             pending_solution_restart: false,
@@ -377,7 +380,7 @@ impl DepthFirstSearch {
         if width <= precision {
             self.record_branch();
             let level = engine.trail_mark();
-            let value = self.float_precision_assignment(engine, &float);
+            let value = self.float_precision_assignment(engine, var, &float);
             match engine.fix_float(var, value) {
                 Ok(PropagationStatus::Failure) => {
                     let jumped = self.handle_failure(engine, level);
@@ -385,7 +388,10 @@ impl DepthFirstSearch {
                         return None;
                     }
                 }
-                Ok(_) => return self.search(engine),
+                Ok(_) => {
+                    self.record_float_phase(var, value);
+                    return self.search(engine);
+                }
                 Err(_) => {
                     self.stats.record_backtrack();
                     engine.trail_backtrack(level);
@@ -558,10 +564,11 @@ impl DepthFirstSearch {
         if width <= precision {
             self.record_branch();
             let level = engine.trail_mark();
-            let value = self.float_precision_assignment(engine, &float);
+            let value = self.float_precision_assignment(engine, var, &float);
             if let Ok(PropagationStatus::Failure) = engine.fix_float(var, value) {
                 let _ = self.handle_failure(engine, level);
             } else {
+                self.record_float_phase(var, value);
                 let cont = self.collect_each(engine, on_solution);
                 engine.trail_backtrack(level);
                 if !cont {
@@ -773,6 +780,12 @@ impl DepthFirstSearch {
         }
     }
 
+    fn record_float_phase(&mut self, var: VariableId, value: f64) {
+        if self.config.phase_saving {
+            self.float_phases.insert(var, value);
+        }
+    }
+
     fn is_pruned(&self, assignment: &[(VariableId, i32)]) -> bool {
         (self.config.learning && self.nogoods.is_violated(assignment))
             || (self.config.clause_learning && self.clauses.is_violated(assignment))
@@ -844,12 +857,21 @@ impl DepthFirstSearch {
 
     /// Picks a representative value once a float domain is within precision.
     ///
-    /// Prefer lower/upper endpoints for min/max-style orderings; otherwise use the midpoint.
+    /// With phase saving, reuse the last successful assignment when it remains
+    /// admissible. Otherwise prefer lower/upper endpoints for min/max-style
+    /// orderings; otherwise use the midpoint.
     fn float_precision_assignment(
         &self,
         engine: &Engine,
+        var: VariableId,
         float: &propaga_domains::FloatDomain,
     ) -> f64 {
+        if self.config.phase_saving
+            && let Some(&saved) = self.float_phases.get(&var)
+            && float.contains(saved)
+        {
+            return saved;
+        }
         let lo = float.lower_bound();
         let hi = float.upper_bound();
         let mid = lo + (hi - lo) / 2.0;
@@ -1593,6 +1615,29 @@ mod tests {
         );
         search.record_phase(a, 2);
         assert_eq!(search.ordered_values(&engine, a), vec![2, 1, 3]);
+    }
+
+    #[test]
+    fn float_phase_saving_prefers_last_precision_assignment() {
+        use propaga_domains::{AnyDomain, FloatDomain};
+
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 1.0)));
+        let mut search = DepthFirstSearch::with_config(
+            vec![x],
+            SearchConfig {
+                learning: false,
+                restart_policy: RestartPolicy::None,
+                phase_saving: true,
+                float_precision: 1.0,
+                value_ordering: ValueOrdering::Ascending,
+                ..SearchConfig::default()
+            },
+        );
+        search.record_float_phase(x, 0.75);
+        let float = engine.domain(x).as_float().unwrap().clone();
+        let value = search.float_precision_assignment(&engine, x, &float);
+        assert!((value - 0.75).abs() < f64::EPSILON);
     }
 
     #[test]

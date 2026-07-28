@@ -114,6 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `float_le` shares holes when ≤ collapses both sides to the same fixed value; `float_ne` treats singleton overlap excluded by a hole as already separated.
 - DFS bumps VSIDS activity and WDEG weights on float/set wipeouts (nogood learning remains int-only).
 - Activity (VSIDS) tie-breaks prefer the earlier decision variable, matching Dom / input-order stability.
+- Float phase saving: when `phase_saving` is on, precision fixes reuse the last successful float assignment if it remains in-domain.
 
 ### Fixed
 
