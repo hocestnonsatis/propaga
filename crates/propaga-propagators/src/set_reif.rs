@@ -39,9 +39,12 @@ impl Propagator for SetEqReifPropagator {
             && left.lub == right.lub
             && left.glb.len() == left.lub.len()
             && left.glb.len() == right.lub.len();
-        // Conflict only when a forced member is impossible in the other set.
+        // Conflict when a forced member is impossible in the other set, or when
+        // cardinality bounds are already disjoint.
         let definitely_ne = left.glb.iter().any(|v| !right.lub.contains(v))
-            || right.glb.iter().any(|v| !left.lub.contains(v));
+            || right.glb.iter().any(|v| !left.lub.contains(v))
+            || left.card_max < right.card_min
+            || right.card_max < left.card_min;
 
         if definitely_equal {
             changed |= tighten_reif(ctx, reif_id, 1);
@@ -383,6 +386,19 @@ mod tests {
         let reif = engine.new_variable(IntervalDomain::new(0, 1));
         engine.add_propagator(Box::new(SetEqReifPropagator::new(a, b, reif)));
         engine.propagate_all().unwrap();
+        assert_eq!(engine.hybrid_domain(reif).fixed_value(), Some(0));
+    }
+
+    #[test]
+    fn disjoint_cardinality_forces_reif_false() {
+        let mut engine = Engine::new();
+        let left = SetIntervalDomain::universe(1..=4).with_cardinality(0, 1);
+        let right = SetIntervalDomain::universe(1..=4).with_cardinality(2, 3);
+        let a = engine.new_variable(AnyDomain::Set(left));
+        let b = engine.new_variable(AnyDomain::Set(right));
+        let reif = engine.new_variable(IntervalDomain::new(0, 1));
+        engine.add_propagator(Box::new(SetEqReifPropagator::new(a, b, reif)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
         assert_eq!(engine.hybrid_domain(reif).fixed_value(), Some(0));
     }
 

@@ -29,6 +29,8 @@ fn definitely_equal(left: &SetDomainSnapshot, right: &SetDomainSnapshot) -> bool
 fn definitely_ne(left: &SetDomainSnapshot, right: &SetDomainSnapshot) -> bool {
     left.glb.iter().any(|v| !right.lub.contains(v))
         || right.glb.iter().any(|v| !left.lub.contains(v))
+        || left.card_max < right.card_min
+        || right.card_max < left.card_min
 }
 
 /// When `fixed` is a fixed set `S` and `other` can only equal `S` by taking one
@@ -190,5 +192,17 @@ mod tests {
         let b = engine.new_variable(AnyDomain::Set(right));
         engine.add_propagator(Box::new(SetNePropagator::new(a, b)));
         engine.propagate_all().unwrap();
+    }
+
+    #[test]
+    fn accepts_disjoint_cardinality() {
+        let mut engine = Engine::new();
+        let left = SetIntervalDomain::universe(1..=4).with_cardinality(0, 1);
+        let right = SetIntervalDomain::universe(1..=4).with_cardinality(2, 3);
+        let a = engine.new_variable(AnyDomain::Set(left));
+        let b = engine.new_variable(AnyDomain::Set(right));
+        engine.add_propagator(Box::new(SetNePropagator::new(a, b)));
+        let status = engine.propagate_all().unwrap();
+        assert!(!status.is_failure());
     }
 }
