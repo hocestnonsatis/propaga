@@ -149,13 +149,17 @@ impl Propagator for FloatLeReifPropagator {
                 if le_inevitable(&left, &right) {
                     return PropagationStatus::Failure;
                 }
-                // ¬(left ≤ right) ⇒ left > right.max and right < left.min
-                changed |= ext.tighten_float_below(left_id, next_up(right.max));
-                let left_min = ext
-                    .float_domain(left_id)
-                    .map(|domain| domain.min)
-                    .unwrap_or(left.min);
-                changed |= ext.tighten_float_above(right_id, next_down(left_min));
+                // ¬(left ≤ right) ⇒ left > right.
+                //
+                // For domain-consistency, prune only those values that cannot participate in
+                // any witness pair (l, r) with l > r.
+                //   - l ≤ min_admissible(right) cannot find r < l.
+                //   - r ≥ max_admissible(left) cannot find l > r.
+                let min_r = min_admissible(&right).unwrap_or(right.min);
+                changed |= ext.tighten_float_below(left_id, next_up(min_r));
+
+                let max_l = max_admissible(&left).unwrap_or(left.max);
+                changed |= ext.tighten_float_above(right_id, next_down(max_l));
             }
             _ => {}
         }
@@ -1472,6 +1476,27 @@ mod tests {
         assert!(!status.is_failure());
         let domain = engine.domain(left).as_float().unwrap();
         assert!(domain.lower_bound() > 1.0);
+    }
+
+    #[test]
+    fn float_le_reif_false_prunes_using_right_min_not_right_max() {
+        let mut engine = Engine::new();
+        let left = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 2.0)));
+        // Right's upper bound is 1.0 but 1.0 itself is a hole; strictness should not force
+        // left > 1.0 just because of the bound.
+        let right = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 1.0).exclude(1.0)));
+        let reif = engine.new_variable(HybridDomain::fix(0));
+        engine.add_propagator(Box::new(FloatLeReifPropagator::new(left, right, reif)));
+
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+
+        let left_dom = engine.domain(left).as_float().unwrap();
+        assert!(!left_dom.contains(0.0));
+        assert!(left_dom.contains(0.5));
+
+        let right_dom = engine.domain(right).as_float().unwrap();
+        assert!(right_dom.contains(0.2));
+        assert!(!right_dom.contains(1.0));
     }
 
     #[test]

@@ -136,6 +136,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `set_eq_reif(reif=0)` can now force a unique outsider into the other set when that is the only remaining witness for `!=`.
 - `set_subset_reif(reif=0)` also forces a unique blocker out of the superset when that is the only remaining ¬⊆ witness.
 - Float phase saving now reorders wide float branch cuts toward the saved side, not just final precision fixes.
+- `float_le_reif(reif=0)` now prunes using admissible endpoints instead of raw hull bounds, avoiding over-pruning against holed maxima.
 
 ### Fixed
 
