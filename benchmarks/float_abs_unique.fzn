@@ -1,0 +1,7 @@
+% abs fixed image forces the unique remaining preimage when the other sign is a hole.
+var -3.0..3.0: x;
+var 2.0..2.0: y;
+var 2.0..2.0: two;
+constraint float_ne(x, two);
+constraint float_abs(x, y);
+solve :: float_search([x], 0.5, input_order, indomain_split, complete) satisfy;

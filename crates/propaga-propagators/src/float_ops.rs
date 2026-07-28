@@ -476,10 +476,22 @@ impl Propagator for FloatUnaryPropagator {
                 if let Some(y) = fixed_float_image(&output_snap) {
                     if y >= 0.0 {
                         // abs⁻¹(y) = {-y, y}; tighten to the hull, then drop the opposite
-                        // sign when the input cannot reach it.
+                        // sign when the input cannot realize that preimage.
                         changed |= ext.tighten_float_below(self.watched[0], -y);
                         changed |= ext.tighten_float_above(self.watched[0], y);
-                        if input_dom.lower_bound() >= 0.0 {
+                        let input_after = ext
+                            .float_domain(self.watched[0])
+                            .map(|snap| {
+                                FloatDomain::from_bounds_with_holes(snap.min, snap.max, &snap.holes)
+                            })
+                            .unwrap_or_else(|| input_dom.clone());
+                        let pos_ok = y == 0.0 || input_after.contains(y);
+                        let neg_ok = y == 0.0 || input_after.contains(-y);
+                        if pos_ok && !neg_ok {
+                            changed |= ext.tighten_float_below(self.watched[0], y);
+                        } else if neg_ok && !pos_ok {
+                            changed |= ext.tighten_float_above(self.watched[0], -y);
+                        } else if input_dom.lower_bound() >= 0.0 {
                             changed |= ext.tighten_float_below(self.watched[0], y);
                         } else if input_dom.upper_bound() <= 0.0 {
                             changed |= ext.tighten_float_above(self.watched[0], -y);
@@ -1001,6 +1013,19 @@ mod tests {
         let domain = engine.domain(x).as_float().unwrap();
         assert!((domain.lower_bound() - 2.0).abs() < 1e-9);
         assert!((domain.upper_bound() - 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn float_abs_fixed_image_forces_unique_preimage_when_other_side_is_hole() {
+        let mut engine = Engine::new();
+        // y = 2 and x cannot be +2 ⇒ x must be -2.
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(-3.0, 3.0).exclude(2.0)));
+        let y = engine.new_variable(AnyDomain::Float(FloatDomain::fix(2.0)));
+        engine.add_propagator(Box::new(FloatUnaryPropagator::new(x, y, FloatUnaryOp::Abs)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let domain = engine.domain(x).as_float().unwrap();
+        assert!(domain.is_fixed());
+        assert!((domain.lower_bound() + 2.0).abs() < 1e-9);
     }
 
     #[test]
