@@ -875,11 +875,57 @@ impl DepthFirstSearch {
         let lo = float.lower_bound();
         let hi = float.upper_bound();
         let mid = lo + (hi - lo) / 2.0;
-        match self.active_value_ordering(engine) {
+        let preferred = match self.active_value_ordering(engine) {
             crate::config::ValueOrdering::Ascending => lo,
             crate::config::ValueOrdering::Descending
             | crate::config::ValueOrdering::ReverseSplit => hi,
             _ => mid,
+        };
+        if float.contains(preferred) {
+            return preferred;
+        }
+
+        let next_up = |value: f64| {
+            if value.is_infinite() && value.is_sign_positive() {
+                value
+            } else {
+                f64::from_bits(value.to_bits().saturating_add(1))
+            }
+        };
+        let next_down = |value: f64| {
+            if value.is_infinite() && value.is_sign_negative() {
+                value
+            } else {
+                f64::from_bits(value.to_bits().saturating_sub(1))
+            }
+        };
+        let mut left = preferred;
+        while left >= lo {
+            if float.contains(left) {
+                return left;
+            }
+            let next = next_down(left);
+            if next >= left {
+                break;
+            }
+            left = next;
+        }
+        let mut right = preferred;
+        while right <= hi {
+            if float.contains(right) {
+                return right;
+            }
+            let next = next_up(right);
+            if next <= right {
+                break;
+            }
+            right = next;
+        }
+        match self.active_value_ordering(engine) {
+            crate::config::ValueOrdering::Ascending => hi,
+            crate::config::ValueOrdering::Descending
+            | crate::config::ValueOrdering::ReverseSplit => lo,
+            _ => lo,
         }
     }
 
@@ -1405,6 +1451,32 @@ mod tests {
         let solution = descending.solve(&mut engine).expect("SAT");
         match &solution[0].1 {
             AssignmentValue::Float(value) => assert!((*value - 1.0).abs() < f64::EPSILON),
+            other => panic!("expected float assignment, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn float_precision_assignment_avoids_midpoint_hole() {
+        use propaga_domains::{AnyDomain, FloatDomain};
+
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 1.0).exclude(0.5)));
+        let mut search = DepthFirstSearch::with_config(
+            vec![x],
+            SearchConfig {
+                learning: false,
+                restart_policy: RestartPolicy::None,
+                float_precision: 1.0,
+                value_ordering: ValueOrdering::Split,
+                ..SearchConfig::default()
+            },
+        );
+        let solution = search.solve(&mut engine).expect("SAT");
+        match &solution[0].1 {
+            AssignmentValue::Float(value) => {
+                assert!(*value >= 0.0 && *value <= 1.0);
+                assert!((*value - 0.5).abs() > f64::EPSILON);
+            }
             other => panic!("expected float assignment, got {other:?}"),
         }
     }
