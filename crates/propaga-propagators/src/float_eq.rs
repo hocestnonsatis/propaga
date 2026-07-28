@@ -44,10 +44,30 @@ impl Propagator for FloatEqPropagator {
             return PropagationStatus::Failure;
         }
         // Equality shares excluded IEEE points inside the common interval.
+        // Prefer holes from before bound sync: tightening can move a hole to an
+        // endpoint and drop it from the post-sync snapshot.
+        let mut left_holes = left.holes.clone();
         for hole in &left_after.holes {
+            if !left_holes
+                .iter()
+                .any(|existing| (*existing - hole).abs() <= f64::EPSILON)
+            {
+                left_holes.push(*hole);
+            }
+        }
+        let mut right_holes = right.holes.clone();
+        for hole in &right_after.holes {
+            if !right_holes
+                .iter()
+                .any(|existing| (*existing - hole).abs() <= f64::EPSILON)
+            {
+                right_holes.push(*hole);
+            }
+        }
+        for hole in &left_holes {
             changed |= ext.exclude_float_point(self.watched[1], *hole);
         }
-        for hole in &right_after.holes {
+        for hole in &right_holes {
             changed |= ext.exclude_float_point(self.watched[0], *hole);
         }
         if ext
@@ -118,6 +138,17 @@ mod tests {
         assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
         assert!(!engine.domain(right).as_float().unwrap().contains(1.0));
         assert_eq!(engine.domain(right).as_float().unwrap().holes(), &[1.0]);
+    }
+
+    #[test]
+    fn shares_pre_tighten_hole_that_lands_on_new_bound() {
+        let mut engine = Engine::new();
+        let left = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0).exclude(3.0)));
+        let right = engine.new_variable(AnyDomain::Float(FloatDomain::new(3.0, 5.0)));
+        engine.add_propagator(Box::new(FloatEqPropagator::new(left, right)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(!engine.domain(right).as_float().unwrap().contains(3.0));
+        assert!(!engine.domain(left).as_float().unwrap().contains(3.0));
     }
 
     #[test]

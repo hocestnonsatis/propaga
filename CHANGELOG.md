@@ -102,6 +102,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `float_min` / `float_max` forward images drop a hole when one operand forbids it and the other lies entirely above (min) / below (max) that hole; handwritten `float_max_hole.fzn` + CI smoke.
 - `float_lin_eq` affine hole sharing ignores unfixed zero-coeff terms so two free nonzero-coeff variables still link; handwritten `float_lin_eq_zero_coeff.fzn` + CI smoke.
 - `float_plus` / `float_div` / `float_times` reverse-project using pre-tighten result holes (same pattern as unary); handwritten `float_cos_fixed.fzn` + CI smoke.
+- `float_eq` shares pre-tighten holes so a hole that bound sync would drop at a new endpoint is still mirrored onto the other side.
 
 ### Fixed
 

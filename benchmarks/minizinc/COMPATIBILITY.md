@@ -103,7 +103,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 
 | Situation | Hole behavior |
 |-----------|---------------|
-| `float_eq` | Holes are shared both ways inside the common interval |
+| `float_eq` | Holes are shared both ways inside the common interval (including pre-tighten holes that bound sync would drop at a new endpoint) |
 | `float_ne` / unit `float_lin_ne` | Forbidden point excluded (endpoint shrink or interior hole) |
 | `float_plus` / `float_times` / `float_div` | Holes map through affine / fixed-operand images; `float_div` reverse-projects `a = c·b` and `b = a/c` (when `0 ∉ Dom(c)`), including divisor-hole images when the dividend is fixed; reverse projection prefers pre-tighten result holes |
 | `float_lin_eq` | Affine hole sharing when exactly two nonzero-coeff variables remain free (unfixed zero-coeff terms ignored) |
