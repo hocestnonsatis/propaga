@@ -637,6 +637,22 @@ impl DepthFirstSearch {
             let mid = lo + (hi - lo) / 2.0;
             [(FloatBranchSide::Above, mid), (FloatBranchSide::Below, mid)]
         };
+        if self.config.phase_saving
+            && let Some(&saved) = self.float_phases.get(&var)
+            && saved >= lo
+            && saved <= hi
+        {
+            let contains_saved = |(side, bound): (FloatBranchSide, f64)| match side {
+                FloatBranchSide::Above => saved <= bound,
+                FloatBranchSide::Below => saved >= bound,
+            };
+            if contains_saved(cuts[1]) && !contains_saved(cuts[0]) {
+                return [cuts[1], cuts[0]];
+            }
+            if contains_saved(cuts[0]) && !contains_saved(cuts[1]) {
+                return cuts;
+            }
+        }
         match ordering {
             crate::config::ValueOrdering::Descending
             | crate::config::ValueOrdering::ReverseSplit => [cuts[1], cuts[0]],
@@ -1733,6 +1749,28 @@ mod tests {
         let float = engine.domain(x).as_float().unwrap().clone();
         let value = search.float_precision_assignment(&engine, x, &float);
         assert!((value - 0.75).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn float_phase_saving_reorders_branch_cuts_toward_saved_side() {
+        use propaga_domains::{AnyDomain, FloatDomain};
+
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 2.0)));
+        let mut search = DepthFirstSearch::with_config(
+            vec![x],
+            SearchConfig {
+                learning: false,
+                restart_policy: RestartPolicy::None,
+                phase_saving: true,
+                float_precision: f64::EPSILON,
+                ..SearchConfig::default()
+            },
+        );
+        search.record_float_phase(x, 1.75);
+        let cuts = search.float_branch_cuts(&engine, x, 0.0, 2.0);
+        assert_eq!(cuts[0], (FloatBranchSide::Below, 1.0));
+        assert_eq!(cuts[1], (FloatBranchSide::Above, 1.0));
     }
 
     #[test]
