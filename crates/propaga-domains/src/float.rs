@@ -477,11 +477,41 @@ impl FloatDomain {
                 Self::new(1.0, 0.0)
             };
         }
-        if !lo.is_finite() || !hi.is_finite() || (hi - lo) > MAX_INTEGER_IMAGE_SCAN as f64 {
+        if !lo.is_finite() || !hi.is_finite() {
             return Self::new(lo, hi);
         }
         let start = lo as i64;
         let end = hi as i64;
+        if end - start > MAX_INTEGER_IMAGE_SCAN {
+            // Wide span: still shrink hole-emptied endpoints (bounded end scans);
+            // interior stays a hole-free over-approximation.
+            let mut min = None;
+            for k in 0..=MAX_INTEGER_IMAGE_SCAN {
+                let n = (start + k) as f64;
+                if n > hi {
+                    break;
+                }
+                if feasible(n) {
+                    min = Some(n);
+                    break;
+                }
+            }
+            let mut max = None;
+            for k in 0..=MAX_INTEGER_IMAGE_SCAN {
+                let n = (end - k) as f64;
+                if n < lo {
+                    break;
+                }
+                if feasible(n) {
+                    max = Some(n);
+                    break;
+                }
+            }
+            return match (min, max) {
+                (Some(a), Some(b)) if a <= b => Self::new(a, b),
+                _ => Self::new(1.0, 0.0),
+            };
+        }
         let mut achievable = Vec::new();
         for k in start..=end {
             let n = k as f64;
@@ -511,7 +541,7 @@ impl FloatDomain {
     }
 }
 
-/// Cap for scanning integer images of ceil/floor/round (sound hole-free fallback beyond).
+/// Cap for scanning integer images of ceil/floor/round (wide spans use end-only scans).
 const MAX_INTEGER_IMAGE_SCAN: i64 = 10_000;
 
 /// Inclusive bounds for the preimage of `n` under `f64::round` (half away from zero).
@@ -749,6 +779,16 @@ mod tests {
         let image = domain.ceil();
         assert!(image.is_fixed());
         assert!((image.lower_bound() - 3.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn ceil_shrinks_wide_span_endpoint_emptied_by_hole() {
+        // Span exceeds the full-scan cap; endpoint-only image 2 is still dropped.
+        let domain = FloatDomain::new(2.0, 20_000.0).exclude(2.0);
+        let image = domain.ceil();
+        assert!((image.lower_bound() - 3.0).abs() < f64::EPSILON);
+        assert!((image.upper_bound() - 20_000.0).abs() < f64::EPSILON);
+        assert!(image.holes().is_empty());
     }
 
     #[test]
