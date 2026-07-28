@@ -311,6 +311,28 @@ impl Propagator for SetSubsetReifPropagator {
             if subset_fixed && subset.glb.iter().all(|v| superset.glb.contains(v)) {
                 return PropagationStatus::Failure;
             }
+            if let Some(ext) = ctx.as_extended() {
+                let subset = ext.set_domain(subset_id).unwrap_or(subset.clone());
+                let superset = ext.set_domain(superset_id).unwrap_or(superset.clone());
+                let inside_capacity = subset
+                    .lub
+                    .iter()
+                    .filter(|value| superset.lub.contains(value))
+                    .count();
+                let required_outsiders = subset
+                    .card_min
+                    .max(subset.glb.len())
+                    .saturating_sub(inside_capacity);
+                let outsiders: Vec<i32> = subset
+                    .lub
+                    .iter()
+                    .copied()
+                    .filter(|value| !superset.lub.contains(value))
+                    .collect();
+                if required_outsiders > 0 && outsiders.len() == 1 {
+                    changed |= ext.force_set_in(subset_id, outsiders[0]);
+                }
+            }
         }
 
         if changed {
@@ -627,6 +649,23 @@ mod tests {
         engine.add_propagator(Box::new(SetSubsetReifPropagator::new(sub, sup, reif)));
         assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
         assert_eq!(engine.hybrid_domain(reif).fixed_value(), Some(0));
+    }
+
+    #[test]
+    fn subset_reif_false_forces_unique_outside_witness() {
+        let mut engine = Engine::new();
+        let subset = SetIntervalDomain::universe(1..=2).with_cardinality(2, 2);
+        let superset = SetIntervalDomain::universe(1..=1)
+            .with_cardinality(1, 1)
+            .force_in(1)
+            .unwrap();
+        let sub = engine.new_variable(AnyDomain::Set(subset));
+        let sup = engine.new_variable(AnyDomain::Set(superset));
+        let reif = engine.new_variable(IntervalDomain::fix(0));
+        engine.add_propagator(Box::new(SetSubsetReifPropagator::new(sub, sup, reif)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let dom = engine.domain(sub).as_set().unwrap();
+        assert!(dom.glb().contains(&2));
     }
 
     #[test]

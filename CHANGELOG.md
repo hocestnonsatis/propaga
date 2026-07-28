@@ -131,6 +131,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `set_eq_reif(reif=0)` now breaks the last equalizer, matching native `set_ne` pruning strength.
 - `set_subset_reif` also detects when `|A|_min` exceeds the shared `lub(A) ∩ lub(B)` capacity.
 - Float `indomain_interval` now keeps preferring the leftmost component when precision assignment stops branching.
+- `set_subset_reif(reif=0)` can now force a unique outside witness into the subset when ¬⊆ needs one.
 
 ### Fixed
 
