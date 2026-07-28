@@ -127,13 +127,7 @@ pub fn float_le_reif(model: &mut Model, a: VariableId, b: VariableId, reif: Vari
 }
 
 pub fn float_lt_reif(model: &mut Model, a: VariableId, b: VariableId, reif: VariableId) {
-    let le_reif = model.int_var_aux(0, 1);
-    model.float_le_reif(a, b, le_reif);
-    let eq_reif = model.int_var_aux(0, 1);
-    model.float_eq_reif(a, b, eq_reif);
-    let not_eq = model.int_var_aux(0, 1);
-    crate::decompose::bool_not(model, eq_reif, not_eq);
-    crate::decompose::bool_and(model, le_reif, not_eq, reif);
+    model.float_lt_reif(a, b, reif);
 }
 
 pub fn float_ne_reif(model: &mut Model, a: VariableId, b: VariableId, reif: VariableId) {

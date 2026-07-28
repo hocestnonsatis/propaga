@@ -6,20 +6,20 @@ use propaga_propagators::{
     DiffnPropagator, DisjunctivePropagator, DisjunctiveTask, ElementPropagator, EqualityPropagator,
     FloatBinaryOp, FloatBinaryPropagator, FloatElementPropagator, FloatEqPropagator,
     FloatEqReifPropagator, FloatLePropagator, FloatLeReifPropagator, FloatLinearEqPropagator,
-    FloatLinearGePropagator, FloatLinearLePropagator, FloatLinearNePropagator, FloatMinMaxOp,
-    FloatMinMaxPropagator, FloatNePropagator, FloatTimesPropagator, FloatUnaryOp,
-    FloatUnaryPropagator, GlobalCardinalityPropagator, Int2FloatPropagator, IntAbsPropagator,
-    IntDivPropagator, IntMinMaxOp, IntMinMaxPropagator, IntModPropagator, IntTimesPropagator,
-    InversePropagator, LessEqualPropagator, LessThanPropagator, LinearEqPropagator,
-    LinearScalarGePropagator, LinearScalarLePropagator, NotEqualOffsetPropagator, RectangleSpec,
-    RegularPropagator, ReifiedEqualityPropagator, ReifiedFloatLinearEqPropagator,
-    ReifiedFloatLinearGePropagator, ReifiedFloatLinearLePropagator, ReifiedLessEqualPropagator,
-    ReifiedLessThanPropagator, ReifiedNotEqualPropagator, ReifiedScalarEqPropagator,
-    ReifiedScalarGePropagator, ReifiedScalarLePropagator, SetCardEqPropagator, SetCardPropagator,
-    SetDiffPropagator, SetEqPropagator, SetEqReifPropagator, SetInPropagator, SetInReifPropagator,
-    SetIntersectPropagator, SetLexOp, SetLexPropagator, SetLexReifPropagator, SetLtPropagator,
-    SetNePropagator, SetSubsetPropagator, SetSubsetReifPropagator, SetSymDiffPropagator,
-    SetUnionPropagator, TablePropagator, TaskSpec,
+    FloatLinearGePropagator, FloatLinearLePropagator, FloatLinearNePropagator,
+    FloatLtReifPropagator, FloatMinMaxOp, FloatMinMaxPropagator, FloatNePropagator,
+    FloatTimesPropagator, FloatUnaryOp, FloatUnaryPropagator, GlobalCardinalityPropagator,
+    Int2FloatPropagator, IntAbsPropagator, IntDivPropagator, IntMinMaxOp, IntMinMaxPropagator,
+    IntModPropagator, IntTimesPropagator, InversePropagator, LessEqualPropagator,
+    LessThanPropagator, LinearEqPropagator, LinearScalarGePropagator, LinearScalarLePropagator,
+    NotEqualOffsetPropagator, RectangleSpec, RegularPropagator, ReifiedEqualityPropagator,
+    ReifiedFloatLinearEqPropagator, ReifiedFloatLinearGePropagator, ReifiedFloatLinearLePropagator,
+    ReifiedLessEqualPropagator, ReifiedLessThanPropagator, ReifiedNotEqualPropagator,
+    ReifiedScalarEqPropagator, ReifiedScalarGePropagator, ReifiedScalarLePropagator,
+    SetCardEqPropagator, SetCardPropagator, SetDiffPropagator, SetEqPropagator,
+    SetEqReifPropagator, SetInPropagator, SetInReifPropagator, SetIntersectPropagator, SetLexOp,
+    SetLexPropagator, SetLexReifPropagator, SetLtPropagator, SetNePropagator, SetSubsetPropagator,
+    SetSubsetReifPropagator, SetSymDiffPropagator, SetUnionPropagator, TablePropagator, TaskSpec,
 };
 use propaga_search::{
     DepthFirstSearch, LexicographicOptimization, LexicographicResult, Objective,
@@ -355,6 +355,12 @@ impl Model {
     pub fn float_le_reif(&mut self, left: VariableId, right: VariableId, reif: VariableId) {
         self.engine
             .add_propagator(Box::new(FloatLeReifPropagator::new(left, right, reif)));
+    }
+
+    /// Posts `reif <=> left < right` for float variables.
+    pub fn float_lt_reif(&mut self, left: VariableId, right: VariableId, reif: VariableId) {
+        self.engine
+            .add_propagator(Box::new(FloatLtReifPropagator::new(left, right, reif)));
     }
 
     /// Posts `result = left ∪ right`.

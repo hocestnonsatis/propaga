@@ -80,7 +80,7 @@ pub use float_minmax::{FloatMinMaxOp, FloatMinMaxPropagator};
 pub use float_ne::FloatNePropagator;
 pub use float_ops::{
     FloatBinaryOp, FloatBinaryPropagator, FloatEqReifPropagator, FloatLeReifPropagator,
-    FloatUnaryOp, FloatUnaryPropagator, Int2FloatPropagator,
+    FloatLtReifPropagator, FloatUnaryOp, FloatUnaryPropagator, Int2FloatPropagator,
 };
 pub use float_times::FloatTimesPropagator;
 pub use forbidden_assignment::{

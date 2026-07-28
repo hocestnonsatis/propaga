@@ -127,6 +127,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reified float linear (`le`/`ge`/`eq`) entailment uses hole-aware admissible term sums.
 - `set_lex` with fixed right forces required left members when omitting them breaks `≤_lex` / `<_lex`.
 - DFS float precision fixes avoid midpoint holes by choosing an admissible representative before branching stops.
+- `float_lt_reif` is now native, so `reif = 0` prunes as `left >= right` instead of relying on a weaker decomposition.
 
 ### Fixed
 
