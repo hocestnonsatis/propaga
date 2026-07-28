@@ -49,10 +49,32 @@ fn sync_equal(
     changed |= ext.tighten_float_above(left, right_dom.upper_bound());
     changed |= ext.tighten_float_below(right, left_dom.lower_bound());
     changed |= ext.tighten_float_above(right, left_dom.upper_bound());
-    for hole in left_dom.holes() {
+    // Prefer holes from before bound sync: tightening can move a hole onto an
+    // endpoint and drop it from the post-sync snapshot.
+    let left_after = read_float(ext, left).unwrap_or_else(|| left_dom.clone());
+    let right_after = read_float(ext, right).unwrap_or_else(|| right_dom.clone());
+    let mut left_holes = left_dom.holes().to_vec();
+    for hole in left_after.holes() {
+        if !left_holes
+            .iter()
+            .any(|existing| (*existing - hole).abs() <= f64::EPSILON)
+        {
+            left_holes.push(*hole);
+        }
+    }
+    let mut right_holes = right_dom.holes().to_vec();
+    for hole in right_after.holes() {
+        if !right_holes
+            .iter()
+            .any(|existing| (*existing - hole).abs() <= f64::EPSILON)
+        {
+            right_holes.push(*hole);
+        }
+    }
+    for hole in &left_holes {
         changed |= ext.exclude_float_point(right, *hole);
     }
-    for hole in right_dom.holes() {
+    for hole in &right_holes {
         changed |= ext.exclude_float_point(left, *hole);
     }
     changed
@@ -271,5 +293,24 @@ mod tests {
         )));
         assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
         assert!(!engine.domain(c).as_float().unwrap().contains(2.0));
+    }
+
+    #[test]
+    fn min_sync_shares_pre_tighten_hole_on_new_bound() {
+        let mut engine = Engine::new();
+        // a dominates, so min(a,b)=b and sync_equal(b,c).
+        // Hole 3 on b lands on the new lower bound after syncing with c=[3,5].
+        let a = engine.new_variable(AnyDomain::Float(FloatDomain::new(5.0, 6.0)));
+        let b = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0).exclude(3.0)));
+        let c = engine.new_variable(AnyDomain::Float(FloatDomain::new(3.0, 5.0)));
+        engine.add_propagator(Box::new(FloatMinMaxPropagator::new(
+            a,
+            b,
+            c,
+            FloatMinMaxOp::Min,
+        )));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(!engine.domain(b).as_float().unwrap().contains(3.0));
+        assert!(!engine.domain(c).as_float().unwrap().contains(3.0));
     }
 }

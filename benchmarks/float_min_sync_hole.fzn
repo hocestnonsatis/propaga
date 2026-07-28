@@ -1,0 +1,8 @@
+% float_min sync_equal shares a pre-tighten hole when one operand dominates.
+var 5.0..6.0: a;
+var 0.0..5.0: b;
+var 3.0..5.0: c;
+var 3.0..3.0: three;
+constraint float_ne(b, three);
+constraint float_min(a, b, c);
+solve :: float_search([a, b, c], 1.0, input_order, indomain_split, complete) satisfy;
