@@ -139,6 +139,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `float_le_reif(reif=0)` now prunes using admissible endpoints instead of raw hull bounds, avoiding over-pruning against holed maxima.
 - Native `set_ne` now also forces a unique outsider into the other set when that is the only remaining witness for inequality.
 - `float_lt_reif(reif=1)` now prunes from admissible supports instead of raw hull maxima, preserving feasible right-side values.
+- `float_le` now tightens against admissible endpoints instead of raw hull bounds, strengthening native `≤` and `float_lt_reif(reif=0)` via `≥`.
 
 ### Fixed
 

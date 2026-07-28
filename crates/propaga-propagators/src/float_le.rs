@@ -1,4 +1,64 @@
-use propaga_core::{PropagationContext, PropagationStatus, Propagator, VariableId};
+use propaga_core::{
+    FloatDomainSnapshot, PropagationContext, PropagationStatus, Propagator, VariableId,
+};
+
+fn next_up(value: f64) -> f64 {
+    if value.is_infinite() && value.is_sign_positive() {
+        value
+    } else {
+        f64::from_bits(value.to_bits().saturating_add(1))
+    }
+}
+
+fn next_down(value: f64) -> f64 {
+    if value.is_infinite() && value.is_sign_negative() {
+        value
+    } else {
+        f64::from_bits(value.to_bits().saturating_sub(1))
+    }
+}
+
+fn min_admissible(snap: &FloatDomainSnapshot) -> Option<f64> {
+    if snap.is_empty() {
+        return None;
+    }
+    let mut v = snap.min;
+    loop {
+        if snap.contains(v) {
+            return Some(v);
+        }
+        if v >= snap.max {
+            break;
+        }
+        let next = next_up(v);
+        if next <= v || next > snap.max {
+            break;
+        }
+        v = next;
+    }
+    None
+}
+
+fn max_admissible(snap: &FloatDomainSnapshot) -> Option<f64> {
+    if snap.is_empty() {
+        return None;
+    }
+    let mut v = snap.max;
+    loop {
+        if snap.contains(v) {
+            return Some(v);
+        }
+        if v <= snap.min {
+            break;
+        }
+        let prev = next_down(v);
+        if prev >= v || prev < snap.min {
+            break;
+        }
+        v = prev;
+    }
+    None
+}
 
 #[derive(Clone, Debug)]
 pub struct FloatLePropagator {
@@ -30,8 +90,11 @@ impl Propagator for FloatLePropagator {
             return PropagationStatus::Failure;
         };
         let mut changed = false;
-        changed |= ext.tighten_float_above(self.watched[0], right.max);
-        changed |= ext.tighten_float_below(self.watched[1], left.min);
+        // left ≤ right: prune against admissible supports, not raw hull endpoints.
+        let max_r = max_admissible(&right).unwrap_or(right.max);
+        changed |= ext.tighten_float_above(self.watched[0], max_r);
+        let min_l = min_admissible(&left).unwrap_or(left.min);
+        changed |= ext.tighten_float_below(self.watched[1], min_l);
         let left_after = ext
             .float_domain(self.watched[0])
             .unwrap_or_else(|| left.clone());
@@ -168,6 +231,26 @@ mod tests {
         let right = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0)));
         engine.add_propagator(Box::new(FloatLePropagator::new(left, right)));
         assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn propagates_le_using_admissible_endpoints() {
+        let mut engine = Engine::new();
+        let left = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 10.0)));
+        let right =
+            engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 10.0).exclude(10.0)));
+        engine.add_propagator(Box::new(FloatLePropagator::new(left, right)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let left_domain = engine.domain(left).as_float().unwrap();
+        assert!(left_domain.upper_bound() < 10.0);
+
+        let mut engine = Engine::new();
+        let left = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 10.0).exclude(0.0)));
+        let right = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 10.0)));
+        engine.add_propagator(Box::new(FloatLePropagator::new(left, right)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let right_domain = engine.domain(right).as_float().unwrap();
+        assert!(right_domain.lower_bound() > 0.0);
     }
 
     #[test]
