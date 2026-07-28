@@ -132,6 +132,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `set_subset_reif` also detects when `|A|_min` exceeds the shared `lub(A) ∩ lub(B)` capacity.
 - Float `indomain_interval` now keeps preferring the leftmost component when precision assignment stops branching.
 - `set_subset_reif(reif=0)` can now force a unique outside witness into the subset when ¬⊆ needs one.
+- `float_eq_reif` can now infer `reif=1` when both sides are “pinched” to the same single admissible IEEE value by holes.
 - `set_eq_reif(reif=0)` can now force a unique outsider into the other set when that is the only remaining witness for `!=`.
 - `set_subset_reif(reif=0)` also forces a unique blocker out of the superset when that is the only remaining ¬⊆ witness.
 

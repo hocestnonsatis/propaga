@@ -70,6 +70,18 @@ impl Propagator for FloatEqReifPropagator {
                     && (!left.contains(overlap_lo) || !right.contains(overlap_lo))
                 {
                     changed |= tighten_reif(ctx, reif_id, 0);
+                } else if let (Some(l_lo), Some(l_hi), Some(r_lo), Some(r_hi)) = (
+                    min_admissible(&left),
+                    max_admissible(&left),
+                    min_admissible(&right),
+                    max_admissible(&right),
+                ) {
+                    if (l_hi - l_lo).abs() <= f64::EPSILON
+                        && (r_hi - r_lo).abs() <= f64::EPSILON
+                        && (l_lo - r_lo).abs() <= f64::EPSILON
+                    {
+                        changed |= tighten_reif(ctx, reif_id, 1);
+                    }
                 }
             }
         }
@@ -1550,5 +1562,22 @@ mod tests {
         engine.add_propagator(Box::new(FloatEqReifPropagator::new(left, right, reif)));
         assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
         assert_eq!(engine.hybrid_domain(reif).fixed_value(), Some(0));
+    }
+
+    #[test]
+    fn float_eq_reif_infers_true_when_both_sides_have_same_single_admissible_point() {
+        let mut engine = Engine::new();
+        // Use a large magnitude so adjacent IEEE points are farther than f64::EPSILON
+        // (FloatDomainSnapshot::contains uses an EPSILON-tolerance hole check).
+        let x = 1e20_f64;
+        let y = next_up(x);
+        // Both domains look like a wide interval [x, y], but y is a hole boundary.
+        // So the only admissible point is x on both sides.
+        let left = engine.new_variable(AnyDomain::Float(FloatDomain::new(x, y).exclude(y)));
+        let right = engine.new_variable(AnyDomain::Float(FloatDomain::new(x, y).exclude(y)));
+        let reif = engine.new_variable(HybridDomain::new(0, 1));
+        engine.add_propagator(Box::new(FloatEqReifPropagator::new(left, right, reif)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert_eq!(engine.hybrid_domain(reif).fixed_value(), Some(1));
     }
 }
