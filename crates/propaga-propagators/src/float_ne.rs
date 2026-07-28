@@ -54,8 +54,17 @@ impl Propagator for FloatNePropagator {
             };
         }
 
-        // Already separated by bounds (holes ignored — still sound).
+        // Already separated by bounds (sound even ignoring holes).
         if left.max < right.min || right.max < left.min {
+            return PropagationStatus::OkNoChange;
+        }
+
+        // Hole-aware separation when the only overlapping point is excluded on either side.
+        let overlap_lo = left.min.max(right.min);
+        let overlap_hi = left.max.min(right.max);
+        if (overlap_hi - overlap_lo).abs() <= f64::EPSILON
+            && (!left.contains(overlap_lo) || !right.contains(overlap_lo))
+        {
             return PropagationStatus::OkNoChange;
         }
 
@@ -138,6 +147,18 @@ mod tests {
         let mut engine = Engine::new();
         let left = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 2.0)));
         let right = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 2.0)));
+        engine.add_propagator(Box::new(FloatNePropagator::new(left, right)));
+        assert_eq!(
+            engine.propagate_all().unwrap(),
+            PropagationStatus::OkNoChange
+        );
+    }
+
+    #[test]
+    fn singleton_overlap_excluded_by_hole_is_already_separated() {
+        let mut engine = Engine::new();
+        let left = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 1.0).exclude(1.0)));
+        let right = engine.new_variable(AnyDomain::Float(FloatDomain::new(1.0, 2.0)));
         engine.add_propagator(Box::new(FloatNePropagator::new(left, right)));
         assert_eq!(
             engine.propagate_all().unwrap(),

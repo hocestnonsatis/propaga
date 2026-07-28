@@ -111,6 +111,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Float domain `size()` for MRV / anti-first-fail uses coarse width buckets (plus holes) instead of a constant `2` for every unfixed float.
 - Variable selectors `smallest` / `largest` / `max_regret` use float bounds (scaled keys / width proxy) instead of ignoring non-int domains.
 - The same selectors also use set cardinality (`card_min` / `card_max`) and undecided membership count for `max_regret`.
+- `float_le` shares holes when ≤ collapses both sides to the same fixed value; `float_ne` treats singleton overlap excluded by a hole as already separated.
 
 ### Fixed
 

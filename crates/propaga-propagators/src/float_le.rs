@@ -41,6 +41,48 @@ impl Propagator for FloatLePropagator {
         if left_after.is_empty() || right_after.is_empty() {
             return PropagationStatus::Failure;
         }
+
+        // When ≤ collapses both sides to the same fixed value, share holes like
+        // float_eq (including pre-tighten holes that landed on the new bound).
+        if left_after.is_fixed()
+            && right_after.is_fixed()
+            && (left_after.min - right_after.min).abs() <= f64::EPSILON
+        {
+            let mut left_holes = left.holes.clone();
+            for hole in &left_after.holes {
+                if !left_holes
+                    .iter()
+                    .any(|existing| (*existing - hole).abs() <= f64::EPSILON)
+                {
+                    left_holes.push(*hole);
+                }
+            }
+            let mut right_holes = right.holes.clone();
+            for hole in &right_after.holes {
+                if !right_holes
+                    .iter()
+                    .any(|existing| (*existing - hole).abs() <= f64::EPSILON)
+                {
+                    right_holes.push(*hole);
+                }
+            }
+            for hole in &left_holes {
+                changed |= ext.exclude_float_point(self.watched[1], *hole);
+            }
+            for hole in &right_holes {
+                changed |= ext.exclude_float_point(self.watched[0], *hole);
+            }
+            if ext
+                .float_domain(self.watched[0])
+                .is_some_and(|domain| domain.is_empty())
+                || ext
+                    .float_domain(self.watched[1])
+                    .is_some_and(|domain| domain.is_empty())
+            {
+                return PropagationStatus::Failure;
+            }
+        }
+
         if changed {
             PropagationStatus::OkChanged
         } else {
@@ -116,5 +158,27 @@ mod tests {
         let right = engine.new_variable(IntervalDomain::new(1, 10));
         engine.add_propagator(Box::new(FloatLePropagator::new(left, right)));
         assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn shares_holes_when_le_collapses_to_fixed_equality() {
+        let mut engine = Engine::new();
+        // a ≤ b with a ≥ 5 and b ≤ 5 forces a = b = 5; hole 5 on a must empty both.
+        let left = engine.new_variable(AnyDomain::Float(FloatDomain::new(5.0, 10.0).exclude(5.0)));
+        let right = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0)));
+        engine.add_propagator(Box::new(FloatLePropagator::new(left, right)));
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+    }
+
+    #[test]
+    fn dual_le_advances_past_shared_equality_hole() {
+        let mut engine = Engine::new();
+        let left = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 5.0).exclude(3.0)));
+        let right = engine.new_variable(AnyDomain::Float(FloatDomain::new(3.0, 5.0)));
+        engine.add_propagator(Box::new(FloatLePropagator::new(left, right)));
+        engine.add_propagator(Box::new(FloatLePropagator::new(right, left)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        assert!(!engine.domain(left).as_float().unwrap().contains(3.0));
+        assert!(!engine.domain(right).as_float().unwrap().contains(3.0));
     }
 }
