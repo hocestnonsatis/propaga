@@ -125,6 +125,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `set_lt` forces the sole extra superset element when the subset is fixed and `|B| = |A| + 1` with one LUB candidate left.
 - `float_le_reif` infers reif using hole-aware admissible endpoints (`min`/`max` admissible IEEE points).
 - Reified float linear (`le`/`ge`/`eq`) entailment uses hole-aware admissible term sums.
+- `set_lex` with fixed right forces required left members when omitting them breaks `≤_lex` / `<_lex`.
 
 ### Fixed
 

@@ -353,6 +353,17 @@ fn force_left_not_to_exceed(
             changed |= ext.force_set_out(left, value);
         }
     }
+    let Some(dom) = ext.set_domain(left) else {
+        return changed;
+    };
+    for &value in &dom.undecided() {
+        let without = without_value(&dom, value);
+        let feasible_without =
+            min_lex_set(&without).is_some_and(|min_left| relation_holds(&min_left, right, op));
+        if !feasible_without {
+            changed |= ext.force_set_in(left, value);
+        }
+    }
     changed
 }
 
@@ -571,5 +582,24 @@ mod tests {
         )));
         engine.propagate_all().unwrap();
         assert_eq!(engine.domain(reif).as_int().unwrap().fixed_value(), Some(0));
+    }
+
+    #[test]
+    fn fixed_right_forces_required_left_element_for_lex_le() {
+        let mut engine = Engine::new();
+        let left = engine.new_variable(AnyDomain::Set(
+            SetIntervalDomain::universe(1..=2).with_cardinality(1, 1),
+        ));
+        let right = engine.new_variable(AnyDomain::Set(
+            SetIntervalDomain::universe(1..=2)
+                .with_cardinality(1, 1)
+                .force_in(1)
+                .unwrap(),
+        ));
+        engine.add_propagator(Box::new(SetLexPropagator::new(left, right, SetLexOp::Le)));
+        assert_ne!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+        let dom = engine.domain(left).as_set().unwrap();
+        assert!(dom.glb().contains(&1));
+        assert!(!dom.lub().contains(&2));
     }
 }
