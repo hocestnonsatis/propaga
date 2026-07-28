@@ -95,6 +95,7 @@ impl GlobalOptions {
             variable_ordering: self.variable_ordering,
             phase_saving: self.phase_saving,
             time_limit: self.time_limit,
+            float_precision: f64::EPSILON,
         }
     }
 
@@ -119,6 +120,9 @@ impl GlobalOptions {
         }
         if !self.restarts_explicit && !self.all {
             config.restart_policy = annotation.restart_policy;
+        }
+        if let Some(precision) = annotation.float_precision {
+            config.float_precision = precision;
         }
         config
     }

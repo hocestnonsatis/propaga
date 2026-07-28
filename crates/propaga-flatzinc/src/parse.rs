@@ -746,6 +746,8 @@ pub struct SearchAnnotations {
     pub bool_search: Option<IntSearchAnnotation>,
     /// `float_search(...)` annotation, when present.
     pub float_search: Option<IntSearchAnnotation>,
+    /// Precision from `float_search` (domain width at which a float is treated as fixed).
+    pub float_precision: Option<String>,
     /// `set_search(...)` annotation, when present.
     pub set_search: Option<IntSearchAnnotation>,
     /// `seq_search([...])` ordered list of nested typed searches.
@@ -2998,7 +3000,9 @@ impl Parser {
                         "multiple float_search annotations".to_string(),
                     ));
                 }
-                annotations.float_search = Some(self.parse_float_search_annotation()?);
+                let (search, precision) = self.parse_float_search_annotation()?;
+                annotations.float_search = Some(search);
+                annotations.float_precision = Some(precision);
             }
             "seq_search" => {
                 if annotations.seq_search.is_some() {
@@ -3151,7 +3155,9 @@ impl Parser {
         })
     }
 
-    fn parse_float_search_annotation(&mut self) -> Result<IntSearchAnnotation, FlatZincError> {
+    fn parse_float_search_annotation(
+        &mut self,
+    ) -> Result<(IntSearchAnnotation, String), FlatZincError> {
         // float_search(vars, precision, var_choice, value_choice, complete)
         self.expect_symbol("(")?;
         let vars_expr = self.parse_expr()?;
@@ -3160,7 +3166,7 @@ impl Parser {
             other => vec![other],
         };
         self.expect_symbol(",")?;
-        let _precision = self.expect_float()?;
+        let precision = self.expect_float_text()?;
         self.expect_symbol(",")?;
         let var_choice = self.expect_ident_token()?;
         self.expect_symbol(",")?;
@@ -3176,12 +3182,15 @@ impl Parser {
             }
         };
         self.expect_symbol(")")?;
-        Ok(IntSearchAnnotation {
-            vars,
-            var_choice,
-            value_choice,
-            complete,
-        })
+        Ok((
+            IntSearchAnnotation {
+                vars,
+                var_choice,
+                value_choice,
+                complete,
+            },
+            precision,
+        ))
     }
 
     fn parse_seq_search_annotation(&mut self) -> Result<Vec<IntSearchAnnotation>, FlatZincError> {
@@ -3214,7 +3223,10 @@ impl Parser {
             "int_search" | "bool_search" | "set_search" => {
                 self.parse_typed_search_annotation(&name)
             }
-            "float_search" => self.parse_float_search_annotation(),
+            "float_search" => {
+                let (search, _precision) = self.parse_float_search_annotation()?;
+                Ok(search)
+            }
             other => Err(FlatZincError::Unsupported(format!(
                 "unsupported nested search annotation `{other}` in seq_search"
             ))),
@@ -3589,6 +3601,10 @@ mod tests {
         assert_eq!(float_search.vars.len(), 1);
         assert_eq!(float_search.var_choice, "input_order");
         assert_eq!(float_search.value_choice, "indomain_split");
+        assert_eq!(
+            program.solve.annotations.float_precision.as_deref(),
+            Some("0.001")
+        );
     }
 
     #[test]

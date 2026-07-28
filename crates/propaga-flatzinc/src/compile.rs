@@ -20,6 +20,8 @@ pub struct AnnotationSearchConfig {
     pub value_ordering: ValueOrdering,
     /// Restart policy from `restart_*`.
     pub restart_policy: RestartPolicy,
+    /// Float domain width at which search treats a variable as fixed (`float_search` precision).
+    pub float_precision: Option<f64>,
 }
 
 /// Objective specification extracted from a FlatZinc solve directive.
@@ -391,11 +393,29 @@ fn compile_search_config(
         None => RestartPolicy::default(),
     };
 
+    let float_precision = match annotations.float_precision.as_ref() {
+        Some(text) => Some(parse_float_search_precision(text)?),
+        None => None,
+    };
+
     Ok(Some(AnnotationSearchConfig {
         variable_ordering,
         value_ordering,
         restart_policy,
+        float_precision,
     }))
+}
+
+fn parse_float_search_precision(text: &str) -> Result<f64, FlatZincError> {
+    let parsed = text.parse::<f64>().map_err(|_| {
+        FlatZincError::Unsupported(format!("invalid float_search precision `{text}`"))
+    })?;
+    if !(parsed > 0.0) || !parsed.is_finite() {
+        return Err(FlatZincError::Unsupported(
+            "float_search precision must be a positive finite value".to_string(),
+        ));
+    }
+    Ok(parsed)
 }
 
 fn compile_search_phases(
@@ -3509,6 +3529,7 @@ mod tests {
                 variable_ordering: VariableOrdering::InputOrder,
                 value_ordering: ValueOrdering::Ascending,
                 restart_policy: RestartPolicy::default(),
+                float_precision: None,
             })
         );
     }
@@ -3540,6 +3561,10 @@ mod tests {
         assert_eq!(
             instance.annotation_search.map(|c| c.value_ordering),
             Some(ValueOrdering::ReverseSplit)
+        );
+        assert_eq!(
+            instance.annotation_search.and_then(|c| c.float_precision),
+            Some(0.001)
         );
     }
 

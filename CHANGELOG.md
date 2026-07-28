@@ -97,12 +97,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `float_sin` / `float_cos` reverse-project a fixed image onto the unique preimage when the input domain is locally monotonic; handwritten `float_sin_fixed.fzn` + CI smoke.
 - `int2float` keeps discrete holes aligned both ways (missing ints punch float holes; float holes remove ints); handwritten `int2float.fzn` + CI smoke.
 - `ceil` / `floor` / `round` wide spans (>10 000 integers) still shrink hole-emptied image endpoints via bounded end scans (interior remains hole-free).
-- `FloatDomain` bound tightening that lands on a hole advances past it (pinning to a hole empties the domain); handwritten `float_lin_eq_hole.fzn` (expected UNSAT).
+- `FloatDomain` bound tightening that lands on a hole advances past it (pinning to a hole empties the domain).
 - Float `array_element` treats a singleton bound-overlap that lands on a hole as disjoint (index prune); handwritten `array_float_element_prune.fzn` + CI smoke.
 - `float_min` / `float_max` forward images drop a hole when one operand forbids it and the other lies entirely above (min) / below (max) that hole; handwritten `float_max_hole.fzn` + CI smoke.
 - `float_lin_eq` affine hole sharing ignores unfixed zero-coeff terms so two free nonzero-coeff variables still link; handwritten `float_lin_eq_zero_coeff.fzn` + CI smoke.
 - `float_plus` / `float_div` / `float_times` reverse-project using pre-tighten result holes (same pattern as unary); handwritten `float_cos_fixed.fzn` + CI smoke.
 - `float_eq` shares pre-tighten holes so a hole that bound sync would drop at a new endpoint is still mirrored onto the other side.
+- FlatZinc `float_search` precision is applied during DFS: floats whose domain width is at most the precision are fixed (midpoint); handwritten `float_search_precision.fzn` + CI smoke.
 
 ### Fixed
 

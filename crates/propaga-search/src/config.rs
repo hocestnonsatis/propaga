@@ -231,6 +231,8 @@ pub struct SearchConfig {
     pub phase_saving: bool,
     /// Wall-clock time limit for search; `None` means no limit.
     pub time_limit: Option<Duration>,
+    /// Float domain width at which a variable is treated as fixed (FlatZinc `float_search` precision).
+    pub float_precision: f64,
 }
 
 impl Default for SearchConfig {
@@ -243,6 +245,7 @@ impl Default for SearchConfig {
             variable_ordering: VariableOrdering::default(),
             phase_saving: true,
             time_limit: None,
+            float_precision: f64::EPSILON,
         }
     }
 }

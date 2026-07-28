@@ -373,10 +373,12 @@ impl DepthFirstSearch {
         }
 
         let width = float.upper_bound() - float.lower_bound();
-        if width <= f64::EPSILON {
+        let precision = self.config.float_precision.max(f64::EPSILON);
+        if width <= precision {
             self.record_branch();
             let level = engine.trail_mark();
-            match engine.fix_float(var, float.lower_bound()) {
+            let value = float.lower_bound() + width / 2.0;
+            match engine.fix_float(var, value) {
                 Ok(PropagationStatus::Failure) => {
                     let jumped = self.handle_failure(engine, level);
                     if jumped {
@@ -552,10 +554,12 @@ impl DepthFirstSearch {
             return self.collect_each(engine, on_solution);
         }
         let width = float.upper_bound() - float.lower_bound();
-        if width <= f64::EPSILON {
+        let precision = self.config.float_precision.max(f64::EPSILON);
+        if width <= precision {
             self.record_branch();
             let level = engine.trail_mark();
-            if let Ok(PropagationStatus::Failure) = engine.fix_float(var, float.lower_bound()) {
+            let value = float.lower_bound() + width / 2.0;
+            if let Ok(PropagationStatus::Failure) = engine.fix_float(var, value) {
                 let _ = self.handle_failure(engine, level);
             } else {
                 let cont = self.collect_each(engine, on_solution);

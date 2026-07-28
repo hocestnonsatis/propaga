@@ -160,7 +160,7 @@ Holes are **sound over-approximations**: dropping a hole never removes a feasibl
 | Feature | Status | Notes |
 |---------|--------|-------|
 | `int_search` / `bool_search` | Supported subset | Variable list, common selectors, `complete` / `incomplete` |
-| `float_search` / `set_search` | Supported subset | Same selectors; `float_search` precision accepted/ignored; set branching picks undecided element + in/out order from value selector |
+| `float_search` / `set_search` | Supported subset | Same selectors; `float_search` precision stops splitting when domain width ≤ precision; set branching picks undecided element + in/out order from value selector |
 | `seq_search([...])` | Supported | Multi-phase: each nested group uses its own selectors until all its vars are fixed |
 | `restart_luby`, `restart_constant`, `restart_geometric`, `restart_none` | Supported | |
 | `incomplete` | Tolerated | Treated like `complete` for exploration completeness |
