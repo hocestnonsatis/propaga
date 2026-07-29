@@ -72,20 +72,19 @@ impl Propagator for SetLtPropagator {
         }
 
         // Fixed subset and superset must grow by exactly one LUB candidate ⇒ force it in.
-        if let (Some(sub), Some(sup)) = (ext.set_domain(sub_id), ext.set_domain(sup_id)) {
-            if sub.glb.len() == sub.lub.len()
-                && sup.card_min == sub.glb.len() + 1
-                && sup.card_max == sub.glb.len() + 1
-            {
-                let extra: Vec<i32> = sup
-                    .lub
-                    .iter()
-                    .copied()
-                    .filter(|value| !sub.glb.contains(value))
-                    .collect();
-                if extra.len() == 1 {
-                    changed |= ext.force_set_in(sup_id, extra[0]);
-                }
+        if let (Some(sub), Some(sup)) = (ext.set_domain(sub_id), ext.set_domain(sup_id))
+            && sub.glb.len() == sub.lub.len()
+            && sup.card_min == sub.glb.len() + 1
+            && sup.card_max == sub.glb.len() + 1
+        {
+            let extra: Vec<i32> = sup
+                .lub
+                .iter()
+                .copied()
+                .filter(|value| !sub.glb.contains(value))
+                .collect();
+            if extra.len() == 1 {
+                changed |= ext.force_set_in(sup_id, extra[0]);
             }
         }
 

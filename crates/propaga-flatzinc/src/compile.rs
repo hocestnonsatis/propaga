@@ -416,7 +416,7 @@ fn parse_float_search_precision(text: &str) -> Result<f64, FlatZincError> {
     let parsed = text.parse::<f64>().map_err(|_| {
         FlatZincError::Unsupported(format!("invalid float_search precision `{text}`"))
     })?;
-    if !(parsed > 0.0) || !parsed.is_finite() {
+    if !parsed.is_finite() || parsed.partial_cmp(&0.0) != Some(std::cmp::Ordering::Greater) {
         return Err(FlatZincError::Unsupported(
             "float_search precision must be a positive finite value".to_string(),
         ));

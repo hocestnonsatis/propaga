@@ -1336,7 +1336,7 @@ fn shuffle_values_deterministic(values: &mut [i32], var: VariableId) {
     }
 }
 
-fn order_first_interval_or_split(values: &mut Vec<i32>, min: Option<i32>, max: Option<i32>) {
+fn order_first_interval_or_split(values: &mut [i32], min: Option<i32>, max: Option<i32>) {
     if values.is_empty() {
         return;
     }

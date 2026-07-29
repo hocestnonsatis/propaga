@@ -105,7 +105,7 @@ impl Propagator for IntModPropagator {
             changed |= ctx.remove_below(c, 0);
             changed |= ctx.remove_above(c, bmin - 1);
         } else if bmax < 0 {
-            let abs_lo = (-bmax) as i32;
+            let abs_lo = -bmax;
             changed |= ctx.remove_above(c, 0);
             changed |= ctx.remove_below(c, 1 - abs_lo);
         } else if bmin < 0 && bmax > 0 {

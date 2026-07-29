@@ -65,7 +65,7 @@ pub fn encode_forbidden_float(
 ) -> EncodedForbiddenFloat {
     let down = next_float_down(value);
     let up = next_float_up(value);
-    if !down.is_finite() || !up.is_finite() || !(down < value && value < up) {
+    if !(down.is_finite() && up.is_finite() && down < value && value < up) {
         return EncodedForbiddenFloat {
             forbidden: vec![(var, ForbiddenValue::Float(value))],
             decision_vars: Vec::new(),

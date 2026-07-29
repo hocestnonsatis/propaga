@@ -224,7 +224,7 @@ fn force_improve(ctx: &mut dyn PropagationContext, cut: DominanceCutTarget) -> b
             match direction {
                 DominanceCutDirection::Minimize => {
                     let bound = next_float_down(value);
-                    if !(bound < value) {
+                    if bound.partial_cmp(&value) != Some(std::cmp::Ordering::Less) {
                         return false;
                     }
                     let _ = ext.tighten_float_above(var, bound);
@@ -233,7 +233,7 @@ fn force_improve(ctx: &mut dyn PropagationContext, cut: DominanceCutTarget) -> b
                 }
                 DominanceCutDirection::Maximize => {
                     let bound = next_float_up(value);
-                    if !(bound > value) {
+                    if bound.partial_cmp(&value) != Some(std::cmp::Ordering::Greater) {
                         return false;
                     }
                     let _ = ext.tighten_float_below(var, bound);

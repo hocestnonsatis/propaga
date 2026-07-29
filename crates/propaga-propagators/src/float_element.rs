@@ -67,15 +67,15 @@ impl Propagator for FloatElementPropagator {
         changed |= tighten_value_from_candidates(ctx, self.index, &self.array, self.value);
         changed |= project_common_absent_holes(ctx, self.index, &self.array, self.value);
 
-        if let Some(idx) = ctx.fixed_value(self.index) {
-            if (0..self.array.len()).contains(&(idx as usize)) {
-                let mut eq = FloatEqPropagator::new(self.value, self.array[idx as usize]);
-                let status = eq.propagate(ctx);
-                if status.is_failure() {
-                    return status;
-                }
-                changed |= status == PropagationStatus::OkChanged;
+        if let Some(idx) = ctx.fixed_value(self.index)
+            && (0..self.array.len()).contains(&(idx as usize))
+        {
+            let mut eq = FloatEqPropagator::new(self.value, self.array[idx as usize]);
+            let status = eq.propagate(ctx);
+            if status.is_failure() {
+                return status;
             }
+            changed |= status == PropagationStatus::OkChanged;
         }
 
         finish(ctx, self.index, &self.array, self.value, changed)
