@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-29
+
 ### Added
 
 - Lexicographic and Pareto multi-objective search now accept float and set-cardinality objectives (same typed targets as single-objective optimization).
@@ -359,6 +361,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multi-objective optimization supports lexicographic API; FlatZinc multi-objective directives are not yet parsed.
 - See [ROADMAP.md](ROADMAP.md) for planned features.
 
+[1.1.0]: https://github.com/hocestnonsatis/propaga/releases/tag/v1.1.0
+[1.0.0]: https://github.com/hocestnonsatis/propaga/releases/tag/v1.0.0
 [0.3.0]: https://github.com/hocestnonsatis/propaga/releases/tag/v0.3.0
 [0.2.0]: https://github.com/hocestnonsatis/propaga/releases/tag/v0.2.0
 [0.1.0]: https://github.com/hocestnonsatis/propaga/releases/tag/v0.1.0

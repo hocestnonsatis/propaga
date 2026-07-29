@@ -4,7 +4,7 @@ A propagator-based constraint solver written in Rust.
 
 Propaga combines a typed propagation engine with pluggable domains, composable propagators, and conflict-driven search. Use it as a library via the `Model` API, from FlatZinc files, or through the `propaga` CLI.
 
-**v1.0.0** (FlatZinc milestone) — [crates.io](https://crates.io/crates/propaga-cli) · [GitHub Releases](https://github.com/hocestnonsatis/propaga/releases) · [CHANGELOG](CHANGELOG.md)
+**v1.1.0** — [crates.io](https://crates.io/crates/propaga-cli) · [GitHub Releases](https://github.com/hocestnonsatis/propaga/releases) · [CHANGELOG](CHANGELOG.md)
 
 ## Installation
 
@@ -20,9 +20,9 @@ Prebuilt binaries: [GitHub Releases](https://github.com/hocestnonsatis/propaga/r
 **As a library** ([docs.rs](https://docs.rs/propaga-core)):
 
 ```toml
-propaga-core = "0.6"
-propaga-model = "0.6"
-propaga-flatzinc = "0.6"
+propaga-core = "1.1"
+propaga-model = "1.1"
+propaga-flatzinc = "1.1"
 ```
 
 FlatZinc support covers the MiniZinc **FlatZinc 1.6 stdlib workflow** (compile `.mzn` → solve `.fzn`). See [COMPATIBILITY.md](benchmarks/minizinc/COMPATIBILITY.md) for the full matrix, including float interval + IEEE-hole semantics.

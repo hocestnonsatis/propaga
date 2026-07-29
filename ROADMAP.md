@@ -1,12 +1,12 @@
 # Propaga Roadmap
 
-Forward-looking ideas beyond v1.0.0. See [README.md](README.md) for what ships today and [COMPATIBILITY.md](benchmarks/minizinc/COMPATIBILITY.md) for FlatZinc coverage.
+Forward-looking ideas beyond v1.1.0. See [README.md](README.md) for what ships today and [COMPATIBILITY.md](benchmarks/minizinc/COMPATIBILITY.md) for FlatZinc coverage.
 
 ## Next
 
 - Small propagator/search polish
 
-## Shipped after v1.0.0
+## Shipped in v1.1.0
 
 - Float / set objectives in lexicographic and Pareto multi-objective search
 - Incremental Pareto front maintenance (streamed DFS, online filtering)
