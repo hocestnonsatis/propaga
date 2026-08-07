@@ -119,6 +119,22 @@ enum Commands {
         /// Output format override for this command.
         #[arg(long)]
         format: Option<String>,
+
+        /// JSON warm-start assignment (`{ "x": 1 }` or `{ "variables": { "x": 1 } }`).
+        #[arg(long, value_name = "PATH")]
+        hint: Option<PathBuf>,
+
+        /// Large-neighborhood search repair iterations (single-objective optimize only).
+        #[arg(long, value_name = "N")]
+        lns_iterations: Option<u32>,
+
+        /// Fraction of decision variables freed each LNS iteration (`0.0..=1.0`).
+        #[arg(long, default_value_t = 0.3, value_name = "FRAC")]
+        lns_destroy: f64,
+
+        /// Deterministic seed for LNS destroy selection.
+        #[arg(long, default_value_t = 1)]
+        lns_seed: u64,
     },
     /// Solve a cumulative scheduling instance from JSON.
     Schedule {
@@ -234,7 +250,15 @@ fn main() {
             };
             n_queens::run(size, options)
         }
-        Commands::Solve { file, dir, format } => {
+        Commands::Solve {
+            file,
+            dir,
+            format,
+            hint,
+            lns_iterations,
+            lns_destroy,
+            lns_seed,
+        } => {
             let options = GlobalOptions {
                 format: format
                     .as_deref()
@@ -242,9 +266,18 @@ fn main() {
                     .unwrap_or(global_format),
                 ..base_options
             };
-            match (file, dir) {
-                (Some(file), None) => flatzinc::run(&file, options),
-                (None, Some(dir)) => flatzinc::run_dir(&dir, options),
+            let extras = flatzinc::SolveExtras {
+                hint_path: hint,
+                lns_iterations,
+                lns_destroy_fraction: lns_destroy,
+                lns_seed,
+            };
+            let use_extras = extras.hint_path.is_some() || extras.lns_iterations.is_some();
+            match (file, dir, use_extras) {
+                (Some(file), None, false) => flatzinc::run(&file, options),
+                (Some(file), None, true) => flatzinc::run_ex(&file, options, extras),
+                (None, Some(dir), false) => flatzinc::run_dir(&dir, options),
+                (None, Some(dir), true) => flatzinc::run_dir_ex(&dir, options, extras),
                 _ => Err("exactly one of --file or --dir is required".into()),
             }
         }

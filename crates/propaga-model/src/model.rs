@@ -22,9 +22,10 @@ use propaga_propagators::{
     SetSubsetReifPropagator, SetSymDiffPropagator, SetUnionPropagator, TablePropagator, TaskSpec,
 };
 use propaga_search::{
-    DepthFirstSearch, LexicographicOptimization, LexicographicResult, Objective,
-    ObjectiveDirection, ParetoOptimization, ParetoResult, PortfolioConfig, PortfolioSearch,
-    SearchConfig, SearchPhase, SearchStats, Solution,
+    DepthFirstSearch, LargeNeighborhoodSearch, LexicographicOptimization, LexicographicResult,
+    LnsConfig, Objective, ObjectiveDirection, OptimizationSearch, OptimizationTarget,
+    ParetoOptimization, ParetoResult, PortfolioConfig, PortfolioSearch, SearchConfig, SearchPhase,
+    SearchStats, Solution,
 };
 
 /// High-level modeling facade over the Propaga engine.
@@ -890,21 +891,72 @@ impl Model {
     pub fn optimize_objective(
         &mut self,
         variables: impl Into<Vec<VariableId>>,
-        target: propaga_search::OptimizationTarget,
-        direction: propaga_search::ObjectiveDirection,
+        target: OptimizationTarget,
+        direction: ObjectiveDirection,
     ) -> (
         Option<Solution>,
         Option<propaga_search::ObjectiveValue>,
         SearchStats,
         u32,
     ) {
-        let mut search = propaga_search::OptimizationSearch::with_target(
-            variables,
-            target,
-            direction,
-            self.search_config,
+        let mut search =
+            OptimizationSearch::with_target(variables, target, direction, self.search_config)
+                .with_search_phases(self.search_phases.clone());
+        let result = search.optimize(&mut self.engine);
+        (
+            result.solution,
+            result.objective_value,
+            result.stats,
+            result.solutions_found,
         )
-        .with_search_phases(self.search_phases.clone());
+    }
+
+    /// Branch-and-bound seeded with a warm-start assignment when feasible.
+    pub fn optimize_objective_with_hint(
+        &mut self,
+        variables: impl Into<Vec<VariableId>>,
+        target: OptimizationTarget,
+        direction: ObjectiveDirection,
+        hint: Solution,
+    ) -> (
+        Option<Solution>,
+        Option<propaga_search::ObjectiveValue>,
+        SearchStats,
+        u32,
+    ) {
+        let mut search =
+            OptimizationSearch::with_target(variables, target, direction, self.search_config)
+                .with_search_phases(self.search_phases.clone())
+                .with_hint(hint);
+        let result = search.optimize(&mut self.engine);
+        (
+            result.solution,
+            result.objective_value,
+            result.stats,
+            result.solutions_found,
+        )
+    }
+
+    /// Large-neighborhood search for a single objective (optional warm-start hint).
+    pub fn optimize_objective_lns(
+        &mut self,
+        variables: impl Into<Vec<VariableId>>,
+        target: OptimizationTarget,
+        direction: ObjectiveDirection,
+        lns: LnsConfig,
+        hint: Option<Solution>,
+    ) -> (
+        Option<Solution>,
+        Option<propaga_search::ObjectiveValue>,
+        SearchStats,
+        u32,
+    ) {
+        let mut search =
+            LargeNeighborhoodSearch::new(variables, target, direction, self.search_config, lns)
+                .with_search_phases(self.search_phases.clone());
+        if let Some(hint) = hint {
+            search = search.with_hint(hint);
+        }
         let result = search.optimize(&mut self.engine);
         (
             result.solution,
@@ -1026,6 +1078,7 @@ impl Default for Model {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use propaga_search::{AssignmentValue, ObjectiveValue};
 
     #[test]
     fn solves_simple_equality() {
@@ -1036,5 +1089,43 @@ mod tests {
         model.engine_mut().fix_variable(left, 3).unwrap();
         model.propagate().unwrap();
         assert_eq!(model.engine().hybrid_domain(right).fixed_value(), Some(3));
+    }
+
+    #[test]
+    fn optimize_with_hint_reaches_optimum() {
+        let mut model = Model::new();
+        let x = model.int_var(0, 10);
+        let y = model.int_var(0, 10);
+        model.scalar_le([1, 1], [x, y], 10);
+        let hint = vec![(x, AssignmentValue::Int(3)), (y, AssignmentValue::Int(0))];
+        let (_sol, value, _stats, found) = model.optimize_objective_with_hint(
+            vec![x, y],
+            OptimizationTarget::Int(x),
+            ObjectiveDirection::Maximize,
+            hint,
+        );
+        assert!(found >= 1);
+        assert_eq!(value, Some(ObjectiveValue::Int(10)));
+    }
+
+    #[test]
+    fn optimize_lns_from_hint_reaches_optimum() {
+        let mut model = Model::new();
+        let x = model.int_var(0, 10);
+        let y = model.int_var(0, 10);
+        model.scalar_le([1, 1], [x, y], 10);
+        let hint = vec![(x, AssignmentValue::Int(3)), (y, AssignmentValue::Int(0))];
+        let (_sol, value, _stats, _) = model.optimize_objective_lns(
+            vec![x, y],
+            OptimizationTarget::Int(x),
+            ObjectiveDirection::Maximize,
+            LnsConfig {
+                iterations: 8,
+                destroy_fraction: 0.5,
+                seed: 7,
+            },
+            Some(hint),
+        );
+        assert_eq!(value, Some(ObjectiveValue::Int(10)));
     }
 }

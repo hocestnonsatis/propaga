@@ -30,6 +30,8 @@ jobs:
       - run: cargo run -p propaga-cli -- solve --file benchmarks/fzn_aliases.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/fzn_cumulative.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/incomplete_maximize.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/maximize_x.fzn --hint benchmarks/maximize_x_hint.json --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/maximize_x.fzn --hint benchmarks/maximize_x_hint.json --lns-iterations 8 --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/gcc_exact.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/set_union.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/set_intersect.fzn --quiet

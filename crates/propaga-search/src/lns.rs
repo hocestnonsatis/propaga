@@ -6,7 +6,7 @@ use crate::optimize::{
     is_better, objective_value_from_solution,
 };
 use crate::stats::SearchStats;
-use crate::value::{AssignmentValue, Solution, assignment_int};
+use crate::value::{AssignmentValue, Solution};
 use propaga_core::{PropagationStatus, VariableId};
 use propaga_engine::Engine;
 
@@ -286,6 +286,7 @@ fn merge_stats(total: &mut SearchStats, partial: SearchStats) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::value::assignment_int;
     use propaga_domains::IntervalDomain;
     use propaga_propagators::LinearScalarLePropagator;
 

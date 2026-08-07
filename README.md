@@ -48,7 +48,7 @@ Equality, disequality, linear constraints, ordering (`<=`, `<`), reified compari
 
 ### Search
 
-MRV, DOM, DOM/W-DEG, activity-based, and input-order variable ordering; ascending, descending, LCV, split, reverse-split, median, random, and interval value ordering; first-UIP nogood learning; optional lazy clause pruning; Luby, constant, geometric, linear, and on-solution restarts; phase saving; parallel portfolio search (`--workers`, including FlatZinc `seq_search` phases); lexicographic multi-objective optimization; branch-and-bound for single-objective optimization.
+MRV, DOM, DOM/W-DEG, activity-based, and input-order variable ordering; ascending, descending, LCV, split, reverse-split, median, random, and interval value ordering; first-UIP nogood learning; optional lazy clause pruning; Luby, constant, geometric, linear, and on-solution restarts; phase saving; parallel portfolio search (`--workers`, including FlatZinc `seq_search` phases); lexicographic multi-objective optimization; branch-and-bound for single-objective optimization; warm-start hints and large-neighborhood search (`--hint`, `--lns-iterations`).
 
 ### FlatZinc
 
@@ -66,6 +66,8 @@ JSON input format for cumulative, sequential, and disjunctive scheduling problem
 propaga sudoku [--puzzle ... | --file ...]
 propaga n-queens [--size N] [--visual]
 propaga solve --file model.fzn | --dir benchmarks/
+propaga solve --file model.fzn --hint warm.json
+propaga solve --file model.fzn --hint warm.json --lns-iterations 20
 propaga schedule --file schedule.json
 ```
 
@@ -85,6 +87,15 @@ Global options:
 | `--no-phase-saving` | off | Disable phase saving |
 | `--workers N` | `1` | Portfolio worker count for `solve` and puzzles (satisfy, BnB, lex, Pareto) |
 | `--deterministic` | off | Use only the base search configuration in portfolio mode |
+
+`solve`-only options:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--hint PATH` | — | JSON warm-start ints (`{ "x": 1 }` or `{ "variables": { "x": 1 } }`) for single-objective BnB / LNS |
+| `--lns-iterations N` | — | Large-neighborhood repair iterations (single-objective optimize; ignores `--workers`) |
+| `--lns-destroy FRAC` | `0.3` | Fraction of decision vars freed each LNS iteration |
+| `--lns-seed N` | `1` | Deterministic LNS destroy seed |
 
 ## Quick start
 

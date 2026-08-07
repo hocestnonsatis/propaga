@@ -21,11 +21,10 @@ Phased plan: [docs/superpowers/plans/2026-08-07-phased-v1.2-v1.4.md](docs/superp
 
 ## Later (v1.4+ — competitive)
 
-- Warm-start + LNS for int optimize
+- ~~Warm-start + LNS for int optimize~~ (`--hint` / `--lns-iterations`; Model APIs)
 - Stronger native `cumulative` / variable-size `diffn`
 - Timed FlatZinc perf corpus / nightly Criterion
-
-## Shipped in v1.1.0
+- Release v1.4.0 when ready
 
 - Float / set objectives in lexicographic and Pareto multi-objective search
 - Incremental Pareto front maintenance (streamed DFS, online filtering)

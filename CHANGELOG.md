@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Warm-start: `OptimizationSearch::with_hint`, `Model::optimize_objective_with_hint`, CLI `solve --hint` (JSON int map).
+- Large-neighborhood search for single-objective optimize: `LargeNeighborhoodSearch` / `Model::optimize_objective_lns`, CLI `--lns-iterations` / `--lns-destroy` / `--lns-seed`.
 - Portfolio `--workers` for single-objective BnB, lexicographic, and Pareto FlatZinc solves (diversified configs; best objective / merged front).
 - Typed conflict learning for set/float wipeouts: posts a `ForbiddenAssignmentPropagator` (float points via `encode_forbidden_float`) over fixed decision vars at conflict.
 - FlatZinc alias layer for MiniZinc solver-library predicates (`fzn_*`, `array_int_lt`, …) plus `fzn_cumulative` / `fzn_exactly_int` / 3-arg `fzn_global_cardinality` remaps.

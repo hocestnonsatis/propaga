@@ -204,8 +204,12 @@ Supported value selectors: `indomain_min`, `indomain_max`, `indomain_middle`, `i
 | `--all`, `--solutions N` | Supported | Satisfy instances |
 | `--stats`, `--format json` | Supported | Typed assignments; objective values for float/set |
 | `--workers N` | Supported | Portfolio search for satisfy, BnB, lexicographic, and Pareto; inherits FlatZinc `seq_search` phases |
+| `--hint PATH` | Supported | JSON int warm-start for single-objective BnB / LNS (`{ "x": 1 }` or `{ "variables": … }`) |
+| `--lns-iterations N` | Supported | Large-neighborhood repair iterations (single-objective; takes precedence over `--workers`) |
+| `--lns-destroy FRAC` | Supported | Destroy fraction per LNS iteration (default `0.3`) |
+| `--lns-seed N` | Supported | Deterministic LNS destroy seed |
 
-BnB, lexicographic, and Pareto optimize paths inherit `seq_search` phases and honor `--workers` (independent diversified workers; best objective or merged Pareto front).
+BnB, lexicographic, and Pareto optimize paths inherit `seq_search` phases and honor `--workers` (independent diversified workers; best objective or merged Pareto front). `--hint` / LNS apply to single-objective optimize only.
 
 ## MiniZinc workflow
 

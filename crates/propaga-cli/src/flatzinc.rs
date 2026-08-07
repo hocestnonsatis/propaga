@@ -5,13 +5,37 @@ use crate::puzzle_io::{GlobalOptions, OutputFormat};
 use propaga_core::VariableId;
 use propaga_flatzinc::{OutputDirective, compile, parse};
 use propaga_search::{
-    Objective, ObjectiveDirection, ObjectiveValue, OptimizationTarget, ParetoSolution,
-    PortfolioConfig, SearchStats, Solution,
+    AssignmentValue, LnsConfig, Objective, ObjectiveDirection, ObjectiveValue, OptimizationTarget,
+    ParetoSolution, PortfolioConfig, SearchStats, Solution,
 };
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
+
+/// Optional warm-start / LNS controls for FlatZinc optimize solves.
+#[derive(Clone, Debug)]
+pub struct SolveExtras {
+    /// Path to a JSON hint file (`{ "x": 1 }` or `{ "variables": { "x": 1 } }`).
+    pub hint_path: Option<PathBuf>,
+    /// When `Some(n)` with `n > 0`, use LNS with `n` repair iterations.
+    pub lns_iterations: Option<u32>,
+    /// Fraction of decision vars freed each LNS iteration.
+    pub lns_destroy_fraction: f64,
+    /// Deterministic LNS destroy seed.
+    pub lns_seed: u64,
+}
+
+impl Default for SolveExtras {
+    fn default() -> Self {
+        Self {
+            hint_path: None,
+            lns_iterations: None,
+            lns_destroy_fraction: 0.3,
+            lns_seed: 1,
+        }
+    }
+}
 
 /// Outcome of solving a single FlatZinc instance.
 struct SolveOutcome {
@@ -52,14 +76,32 @@ impl SolveStatus {
 
 /// Loads and solves a FlatZinc instance.
 pub fn run(path: &Path, options: GlobalOptions) -> Result<(), Box<dyn std::error::Error>> {
+    run_ex(path, options, SolveExtras::default())
+}
+
+/// Loads and solves a FlatZinc instance with optional warm-start / LNS.
+pub fn run_ex(
+    path: &Path,
+    options: GlobalOptions,
+    extras: SolveExtras,
+) -> Result<(), Box<dyn std::error::Error>> {
     let source = fs::read_to_string(path)?;
-    let outcome = solve_source(&source, options)?;
+    let outcome = solve_source(&source, options, &extras)?;
     print_outcome(path, options, &outcome);
     outcome_to_result(outcome.status)
 }
 
 /// Solves every `.fzn` file in a directory.
 pub fn run_dir(dir: &Path, options: GlobalOptions) -> Result<(), Box<dyn std::error::Error>> {
+    run_dir_ex(dir, options, SolveExtras::default())
+}
+
+/// Directory batch solve with optional warm-start / LNS.
+pub fn run_dir_ex(
+    dir: &Path,
+    options: GlobalOptions,
+    extras: SolveExtras,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut files: Vec<PathBuf> = fs::read_dir(dir)?
         .filter_map(Result::ok)
         .map(|entry| entry.path())
@@ -74,7 +116,7 @@ pub fn run_dir(dir: &Path, options: GlobalOptions) -> Result<(), Box<dyn std::er
     let mut batch = Vec::with_capacity(files.len());
     for path in &files {
         let source = fs::read_to_string(path)?;
-        let outcome = solve_source(&source, options)?;
+        let outcome = solve_source(&source, options, &extras)?;
         batch.push((path.clone(), outcome));
     }
 
@@ -108,14 +150,36 @@ pub fn run_dir(dir: &Path, options: GlobalOptions) -> Result<(), Box<dyn std::er
     }
 }
 
-fn solve_source(source: &str, options: GlobalOptions) -> Result<SolveOutcome, String> {
+fn solve_source(
+    source: &str,
+    options: GlobalOptions,
+    extras: &SolveExtras,
+) -> Result<SolveOutcome, String> {
     let program = parse(source).map_err(|error| error.to_string())?;
     let mut instance = compile(program).map_err(|error| error.to_string())?;
 
     instance
         .model
         .set_search_config(options.merge_flatzinc_search_config(instance.annotation_search));
-    instance.model.set_search_phases(instance.search_phases);
+    instance
+        .model
+        .set_search_phases(instance.search_phases.clone());
+
+    let hint = match &extras.hint_path {
+        Some(path) => {
+            let text = fs::read_to_string(path).map_err(|error| error.to_string())?;
+            Some(parse_int_hint(&text, &instance.names)?)
+        }
+        None => None,
+    };
+    let lns = extras
+        .lns_iterations
+        .filter(|n| *n > 0)
+        .map(|iterations| LnsConfig {
+            iterations,
+            destroy_fraction: extras.lns_destroy_fraction,
+            seed: extras.lns_seed,
+        });
 
     let started = Instant::now();
     let (
@@ -206,7 +270,21 @@ fn solve_source(source: &str, options: GlobalOptions) -> Result<SolveOutcome, St
             )
         } else {
             let objective = instance.objectives[0];
-            let (solution, value, stats, solutions_found) = if options.workers > 1 {
+            let (solution, value, stats, solutions_found) = if let Some(lns) = lns {
+                if options.workers > 1 {
+                    eprintln!("warning: --lns-iterations ignores --workers for single-objective");
+                }
+                instance.model.optimize_objective_lns(
+                    instance.solve_vars.clone(),
+                    objective.optimization_target(),
+                    objective.direction(),
+                    lns,
+                    hint,
+                )
+            } else if options.workers > 1 {
+                if hint.is_some() {
+                    eprintln!("warning: --hint is ignored with --workers > 1");
+                }
                 instance.model.optimize_objective_portfolio(
                     instance.solve_vars.clone(),
                     objective.optimization_target(),
@@ -215,6 +293,13 @@ fn solve_source(source: &str, options: GlobalOptions) -> Result<SolveOutcome, St
                         workers: options.workers,
                         deterministic: options.deterministic,
                     },
+                )
+            } else if let Some(hint) = hint {
+                instance.model.optimize_objective_with_hint(
+                    instance.solve_vars.clone(),
+                    objective.optimization_target(),
+                    objective.direction(),
+                    hint,
                 )
             } else {
                 instance.model.optimize_objective(
@@ -293,6 +378,44 @@ fn solve_source(source: &str, options: GlobalOptions) -> Result<SolveOutcome, St
         objective_direction,
         pareto_solutions,
     })
+}
+
+/// Parses a JSON integer hint map against FlatZinc variable names.
+fn parse_int_hint(text: &str, names: &HashMap<VariableId, String>) -> Result<Solution, String> {
+    let value: serde_json::Value =
+        serde_json::from_str(text).map_err(|error| format!("hint JSON: {error}"))?;
+    let map = if let Some(vars) = value.get("variables").and_then(|v| v.as_object()) {
+        vars
+    } else if let Some(obj) = value.as_object() {
+        obj
+    } else {
+        return Err("hint JSON must be an object of name → int".into());
+    };
+
+    let name_to_id: HashMap<&str, VariableId> = names
+        .iter()
+        .map(|(id, name)| (name.as_str(), *id))
+        .collect();
+
+    let mut solution = Solution::new();
+    for (name, raw) in map {
+        if name == "type" || name == "status" || name == "output" || name == "sections" {
+            continue;
+        }
+        let Some(id) = name_to_id.get(name.as_str()).copied() else {
+            return Err(format!("hint references unknown variable `{name}`"));
+        };
+        let int_value = raw
+            .as_i64()
+            .ok_or_else(|| format!("hint value for `{name}` must be an integer"))?;
+        let int_value = i32::try_from(int_value)
+            .map_err(|_| format!("hint value for `{name}` is out of i32 range"))?;
+        solution.push((id, AssignmentValue::Int(int_value)));
+    }
+    if solution.is_empty() {
+        return Err("hint JSON contained no integer assignments".into());
+    }
+    Ok(solution)
 }
 
 fn print_outcome(path: &Path, options: GlobalOptions, outcome: &SolveOutcome) {
@@ -446,6 +569,58 @@ mod tests {
         solves_maximize_x_flatzinc,
         "../../benchmarks/maximize_x.fzn"
     );
+
+    #[test]
+    fn warm_start_hint_reaches_optimum() {
+        let path =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../benchmarks/maximize_x.fzn");
+        let hint =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../benchmarks/maximize_x_hint.json");
+        run_ex(
+            &path,
+            GlobalOptions {
+                quiet: true,
+                ..GlobalOptions::default()
+            },
+            SolveExtras {
+                hint_path: Some(hint),
+                ..SolveExtras::default()
+            },
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn lns_from_hint_reaches_optimum() {
+        let path =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../benchmarks/maximize_x.fzn");
+        let hint =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../benchmarks/maximize_x_hint.json");
+        run_ex(
+            &path,
+            GlobalOptions {
+                quiet: true,
+                ..GlobalOptions::default()
+            },
+            SolveExtras {
+                hint_path: Some(hint),
+                lns_iterations: Some(8),
+                lns_destroy_fraction: 0.5,
+                lns_seed: 7,
+            },
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn parse_int_hint_accepts_variables_wrapper() {
+        let program = parse("var 0..10: x;\nsolve satisfy;\n").unwrap();
+        let instance = compile(program).unwrap();
+        let solution = parse_int_hint(r#"{"variables":{"x":4}}"#, &instance.names).unwrap();
+        assert_eq!(solution.len(), 1);
+        assert_eq!(solution[0].1, AssignmentValue::Int(4));
+    }
+
     flatzinc_test!(
         solves_bool_reify_flatzinc,
         "../../benchmarks/bool_reify.fzn"
