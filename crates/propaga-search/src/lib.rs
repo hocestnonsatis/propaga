@@ -10,6 +10,7 @@ mod conflict;
 mod dfs;
 mod lcg;
 mod lexicographic;
+mod lns;
 mod optimize;
 mod pareto;
 mod portfolio;
@@ -23,9 +24,10 @@ pub use conflict::{ConflictAnalyzer, NogoodStore};
 pub use dfs::DepthFirstSearch;
 pub use lcg::{ClauseStore, LearnedClause};
 pub use lexicographic::{LexicographicOptimization, LexicographicResult, Objective};
+pub use lns::{LargeNeighborhoodSearch, LnsConfig, assign_int_hint, try_accept_hint};
 pub use optimize::{
     ObjectiveDirection, ObjectiveValue, OptimizationResult, OptimizationSearch, OptimizationTarget,
-    is_better, objective_value_from_solution,
+    is_better, objective_value_from_solution, post_objective_pruning_bound,
 };
 pub use pareto::{ParetoOptimization, ParetoResult, ParetoSolution, dominates};
 pub use portfolio::{PortfolioConfig, PortfolioSearch};

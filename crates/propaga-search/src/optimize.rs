@@ -80,6 +80,7 @@ pub struct OptimizationSearch {
     direction: ObjectiveDirection,
     config: SearchConfig,
     search_phases: Vec<SearchPhase>,
+    hint: Option<Solution>,
 }
 
 impl OptimizationSearch {
@@ -113,6 +114,7 @@ impl OptimizationSearch {
             direction,
             config,
             search_phases: Vec::new(),
+            hint: None,
         }
     }
 
@@ -120,6 +122,13 @@ impl OptimizationSearch {
     #[must_use]
     pub fn with_search_phases(mut self, search_phases: impl Into<Vec<SearchPhase>>) -> Self {
         self.search_phases = search_phases.into();
+        self
+    }
+
+    /// Seeds BnB with a feasible warm-start assignment when possible.
+    #[must_use]
+    pub fn with_hint(mut self, hint: Solution) -> Self {
+        self.hint = Some(hint);
         self
     }
 
@@ -132,6 +141,32 @@ impl OptimizationSearch {
         let mut total_stats = SearchStats::default();
         let mut solutions_found = 0;
         let mut timed_out = false;
+
+        if let Some(hint) = &self.hint
+            && let Some((solution, value)) = crate::lns::try_accept_hint(engine, self.target, hint)
+        {
+            solutions_found += 1;
+            best_solution = Some(solution);
+            best_value = Some(value.clone());
+            if self.config.incomplete {
+                return OptimizationResult {
+                    solution: best_solution,
+                    objective_value: best_value,
+                    stats: total_stats,
+                    solutions_found,
+                    timed_out,
+                };
+            }
+            if !self.post_pruning_bound(engine, &value) {
+                return OptimizationResult {
+                    solution: best_solution,
+                    objective_value: best_value,
+                    stats: total_stats,
+                    solutions_found,
+                    timed_out,
+                };
+            }
+        }
 
         loop {
             if engine.trail_depth() > 0 {
@@ -192,18 +227,28 @@ impl OptimizationSearch {
     }
 
     fn post_pruning_bound(&mut self, engine: &mut Engine, best: &ObjectiveValue) -> bool {
-        match (self.target, best) {
-            (OptimizationTarget::Int(objective), ObjectiveValue::Int(best)) => {
-                post_int_pruning_bound(engine, objective, self.direction, *best)
-            }
-            (OptimizationTarget::Float(objective), ObjectiveValue::Float(best)) => {
-                post_float_pruning_bound(engine, objective, self.direction, *best)
-            }
-            (OptimizationTarget::SetCardinality(set), ObjectiveValue::SetCardinality(best)) => {
-                post_set_pruning_bound(engine, set, self.direction, *best)
-            }
-            _ => false,
+        post_objective_pruning_bound(engine, self.target, self.direction, best)
+    }
+}
+
+/// Posts a strict improving bound for `target` given the incumbent `best`.
+pub fn post_objective_pruning_bound(
+    engine: &mut Engine,
+    target: OptimizationTarget,
+    direction: ObjectiveDirection,
+    best: &ObjectiveValue,
+) -> bool {
+    match (target, best) {
+        (OptimizationTarget::Int(objective), ObjectiveValue::Int(best)) => {
+            post_int_pruning_bound(engine, objective, direction, *best)
         }
+        (OptimizationTarget::Float(objective), ObjectiveValue::Float(best)) => {
+            post_float_pruning_bound(engine, objective, direction, *best)
+        }
+        (OptimizationTarget::SetCardinality(set), ObjectiveValue::SetCardinality(best)) => {
+            post_set_pruning_bound(engine, set, direction, *best)
+        }
+        _ => false,
     }
 }
 
