@@ -22,7 +22,8 @@ Phased plan: [docs/superpowers/plans/2026-08-07-phased-v1.2-v1.4.md](docs/superp
 ## Later (v1.4+ — competitive)
 
 - ~~Warm-start + LNS for int optimize~~ (`--hint` / `--lns-iterations`; Model APIs)
-- Stronger native `cumulative` / variable-size `diffn`
+- ~~Variable capacity for native `cumulative`~~ (`cumulative_var` / FlatZinc var capacity)
+- Variable-size `diffn` rectangles; stronger edge-finding for cumulative
 - Timed FlatZinc perf corpus / nightly Criterion
 - Release v1.4.0 when ready
 

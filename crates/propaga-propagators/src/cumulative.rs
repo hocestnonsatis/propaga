@@ -9,11 +9,14 @@ use propaga_core::{PropagationContext, PropagationStatus, Propagator, VariableId
 pub struct CumulativePropagator {
     watched: Vec<VariableId>,
     tasks: Vec<TaskSpec>,
+    /// Fixed capacity when [`Self::capacity_var`] is `None`.
     capacity: i32,
+    /// Optional variable capacity (domain bounds used as cap min/max).
+    capacity_var: Option<VariableId>,
 }
 
 impl CumulativePropagator {
-    /// Creates a cumulative propagator over `tasks` with resource `capacity`.
+    /// Creates a cumulative propagator over `tasks` with fixed resource `capacity`.
     #[must_use]
     pub fn new(tasks: impl Into<Vec<TaskSpec>>, capacity: i32) -> Self {
         let tasks = tasks.into();
@@ -26,6 +29,25 @@ impl CumulativePropagator {
             watched,
             tasks,
             capacity,
+            capacity_var: None,
+        }
+    }
+
+    /// Creates a cumulative propagator with a variable resource capacity.
+    #[must_use]
+    pub fn with_capacity_var(tasks: impl Into<Vec<TaskSpec>>, capacity: VariableId) -> Self {
+        let tasks = tasks.into();
+        let mut watched = Vec::with_capacity(tasks.len() * 2 + 1);
+        for task in &tasks {
+            watched.push(task.start);
+            watched.push(task.end);
+        }
+        watched.push(capacity);
+        Self {
+            watched,
+            tasks,
+            capacity: 0,
+            capacity_var: Some(capacity),
         }
     }
 }
@@ -40,16 +62,23 @@ impl Propagator for CumulativePropagator {
     }
 
     fn propagate(&mut self, ctx: &mut dyn PropagationContext) -> PropagationStatus {
+        let Some((cap_min, cap_max)) = capacity_bounds(ctx, self.capacity, self.capacity_var)
+        else {
+            return PropagationStatus::Failure;
+        };
+
         let mut changed = false;
         loop {
-            if let Some(literals) = cumulative_conflict_literals(ctx, &self.tasks, self.capacity) {
+            if let Some(literals) = cumulative_conflict_literals(ctx, &self.tasks, cap_max) {
                 ctx.record_propagator_conflict(&literals);
                 return PropagationStatus::Failure;
             }
 
             let mut round_changed = false;
             round_changed |= propagate_precedence(ctx, &self.tasks);
-            round_changed |= propagate_time_table(ctx, &self.tasks, self.capacity);
+            round_changed |= propagate_time_table(ctx, &self.tasks, cap_max);
+            round_changed |=
+                tighten_capacity_lower_bound(ctx, &self.tasks, self.capacity_var, cap_min);
             changed |= round_changed;
             if !round_changed {
                 break;
@@ -63,11 +92,52 @@ impl Propagator for CumulativePropagator {
         {
             return PropagationStatus::Failure;
         }
+        if let Some(cap) = self.capacity_var
+            && ctx.domain(cap).is_empty()
+        {
+            return PropagationStatus::Failure;
+        }
         if changed {
             PropagationStatus::OkChanged
         } else {
             PropagationStatus::OkNoChange
         }
+    }
+}
+
+fn capacity_bounds(
+    ctx: &dyn PropagationContext,
+    fixed: i32,
+    capacity_var: Option<VariableId>,
+) -> Option<(i32, i32)> {
+    match capacity_var {
+        Some(var) => Some((ctx.domain(var).min()?, ctx.domain(var).max()?)),
+        None => Some((fixed, fixed)),
+    }
+}
+
+/// Raises variable capacity so it can cover the peak mandatory usage.
+fn tighten_capacity_lower_bound(
+    ctx: &mut dyn PropagationContext,
+    tasks: &[TaskSpec],
+    capacity_var: Option<VariableId>,
+    current_min: i32,
+) -> bool {
+    let Some(cap) = capacity_var else {
+        return false;
+    };
+    let contributions = collect_mandatory_contributions(ctx, tasks);
+    if contributions.is_empty() {
+        return false;
+    }
+    let intervals = mandatory_intervals(&contributions);
+    let (horizon_start, horizon_end) = interval_horizon(&intervals);
+    let table = build_time_table(&intervals, horizon_start, horizon_end);
+    let peak = table.iter().map(|point| point.usage).max().unwrap_or(0);
+    if peak > current_min {
+        ctx.remove_below(cap, peak)
+    } else {
+        false
     }
 }
 
@@ -339,6 +409,43 @@ mod tests {
     use propaga_core::DomainView;
     use propaga_domains::IntervalDomain;
     use propaga_engine::Engine;
+
+    #[test]
+    fn variable_capacity_raises_lower_bound_from_mandatory_usage() {
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::fix(0));
+        let end_a = engine.new_variable(IntervalDomain::fix(2));
+        let start_b = engine.new_variable(IntervalDomain::fix(0));
+        let end_b = engine.new_variable(IntervalDomain::fix(2));
+        let capacity = engine.new_variable(IntervalDomain::new(0, 5));
+        let tasks = vec![
+            TaskSpec::with_demand(start_a, 2, end_a, 2),
+            TaskSpec::with_demand(start_b, 2, end_b, 1),
+        ];
+        engine.add_propagator(Box::new(CumulativePropagator::with_capacity_var(
+            tasks, capacity,
+        )));
+        assert!(!engine.commit_initial_propagation().unwrap().is_failure());
+        assert_eq!(engine.hybrid_domain(capacity).min(), Some(3));
+    }
+
+    #[test]
+    fn variable_capacity_conflicts_when_max_too_small() {
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::fix(0));
+        let end_a = engine.new_variable(IntervalDomain::fix(1));
+        let start_b = engine.new_variable(IntervalDomain::fix(0));
+        let end_b = engine.new_variable(IntervalDomain::fix(1));
+        let capacity = engine.new_variable(IntervalDomain::new(0, 1));
+        let tasks = vec![
+            TaskSpec::new(start_a, 1, end_a),
+            TaskSpec::new(start_b, 1, end_b),
+        ];
+        engine.add_propagator(Box::new(CumulativePropagator::with_capacity_var(
+            tasks, capacity,
+        )));
+        assert!(engine.commit_initial_propagation().unwrap().is_failure());
+    }
 
     #[test]
     fn weighted_demand_overload_records_literals() {

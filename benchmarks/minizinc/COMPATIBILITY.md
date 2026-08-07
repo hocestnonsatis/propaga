@@ -120,7 +120,7 @@ Holes are **sound over-approximations**: dropping a hole never removes a feasibl
 | Constraint | Status | Propaga mapping |
 |------------|--------|-----------------|
 | `all_different` | Supported | GAC all-different |
-| `cumulative` | Supported | Overload + time-table edges |
+| `cumulative` | Supported | Overload + time-table; fixed or variable capacity (raises cap LB from mandatory peak) |
 | `disjunctive` | Supported | Disjunctive propagator |
 | `global_cardinality` | Supported | 2-arg and 4-arg forms |
 | `table` | Supported | Tuple table propagator |
@@ -148,7 +148,7 @@ MiniZinc solver profiles that declare native `fzn_*` predicates emit those names
 | `fzn_exactly_int` | `count` (argument reorder) |
 | `fzn_nvalue`, `fzn_circuit`, `fzn_inverse`, `fzn_diffn`, `fzn_disjunctive`, `fzn_sort`, `fzn_table_*`, `fzn_regular` | same-named builtin |
 | `fzn_global_cardinality(xs, cover, counts)` | `global_cardinality` with `lbound=ubound=counts` |
-| `fzn_cumulative(start, duration, resource, capacity)` | `cumulative` with synthesized end auxiliaries |
+| `fzn_cumulative(start, duration, resource, capacity)` | `cumulative` with synthesized end auxiliaries; capacity may be int or `var int` |
 
 See [`aliases.rs`](../../crates/propaga-flatzinc/src/aliases.rs).
 

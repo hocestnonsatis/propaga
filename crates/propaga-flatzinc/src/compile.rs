@@ -1595,7 +1595,7 @@ fn substitute_constraint(
             durations: durations.clone(),
             ends: map(ends),
             heights: heights.clone(),
-            capacity: *capacity,
+            capacity: map(capacity),
         },
         Constraint::Disjunctive { starts, durations } => Constraint::Disjunctive {
             starts: map(starts),
@@ -2086,7 +2086,7 @@ fn post_cumulative(
     durations: DurationSpec,
     ends: Expr,
     heights: Option<DurationSpec>,
-    capacity: i32,
+    capacity: Expr,
 ) -> Result<(), FlatZincError> {
     let start_vars = resolve_var_list(env, starts)?;
     let end_vars = resolve_var_list(env, ends)?;
@@ -2132,8 +2132,7 @@ fn post_cumulative(
             TaskSpec::with_variable_spec(start, end, duration, duration_var, demand, demand_var)
         })
         .collect();
-    model.cumulative(tasks, capacity);
-    Ok(())
+    post_cumulative_capacity(model, env, tasks, capacity)
 }
 
 /// MiniZinc `fzn_cumulative(start, duration, resource, capacity)` without explicit ends.
@@ -2150,7 +2149,7 @@ fn post_fzn_cumulative(
     let start_vars = resolve_var_list(env, args[0].clone())?;
     let duration_binding = resolve_duration_binding(env, expr_as_duration_spec(&args[1])?)?;
     let height_binding = resolve_duration_binding(env, expr_as_duration_spec(&args[2])?)?;
-    let capacity = resolve_int(env, args[3].clone())?;
+    let capacity = args[3].clone();
 
     let duration_len = match &duration_binding {
         DurationBinding::Fixed(values) => values.len(),
@@ -2185,8 +2184,45 @@ fn post_fzn_cumulative(
             TaskSpec::with_variable_spec(start, end, duration, duration_var, demand, demand_var)
         })
         .collect();
-    model.cumulative(tasks, capacity);
+    post_cumulative_capacity(model, env, tasks, capacity)
+}
+
+fn post_cumulative_capacity(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    tasks: Vec<TaskSpec>,
+    capacity: Expr,
+) -> Result<(), FlatZincError> {
+    match resolve_capacity(env, capacity)? {
+        CapacitySpec::Fixed(value) => model.cumulative(tasks, value),
+        CapacitySpec::Var(var) => model.cumulative_var(tasks, var),
+    }
     Ok(())
+}
+
+enum CapacitySpec {
+    Fixed(i32),
+    Var(VariableId),
+}
+
+fn resolve_capacity(
+    env: &HashMap<String, Binding>,
+    expr: Expr,
+) -> Result<CapacitySpec, FlatZincError> {
+    match expr {
+        Expr::Int(value) => Ok(CapacitySpec::Fixed(value)),
+        Expr::Name(name) => match env.get(&name) {
+            Some(Binding::Param(value)) => Ok(CapacitySpec::Fixed(*value)),
+            Some(Binding::Var(var)) => Ok(CapacitySpec::Var(*var)),
+            Some(_) => Err(FlatZincError::Unsupported(format!(
+                "cumulative capacity `{name}` must be an int param or variable"
+            ))),
+            None => Err(FlatZincError::UnknownIdentifier(name)),
+        },
+        _ => Err(FlatZincError::Unsupported(
+            "cumulative capacity must be an integer or variable".to_string(),
+        )),
+    }
 }
 
 fn expr_as_duration_spec(expr: &Expr) -> Result<DurationSpec, FlatZincError> {

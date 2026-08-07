@@ -291,8 +291,8 @@ pub enum Constraint {
         ends: Expr,
         /// Optional height/demand list or parameter name.
         heights: Option<DurationSpec>,
-        /// Resource capacity.
-        capacity: i32,
+        /// Resource capacity (integer literal, param, or variable).
+        capacity: Expr,
     },
     /// `disjunctive(starts, durations)`
     Disjunctive {
@@ -692,6 +692,30 @@ pub enum DurationSpec {
     Inline(Vec<i32>),
     /// Name of an `array of int` parameter.
     Name(String),
+}
+
+/// Converts a FlatZinc expression into a duration/height array spec.
+pub(crate) fn expr_to_duration_spec(expr: &Expr) -> Result<DurationSpec, FlatZincError> {
+    match expr {
+        Expr::Name(name) => Ok(DurationSpec::Name(name.clone())),
+        Expr::List(items) => {
+            let mut values = Vec::with_capacity(items.len());
+            for item in items {
+                match item {
+                    Expr::Int(value) => values.push(*value),
+                    _ => {
+                        return Err(FlatZincError::Unsupported(
+                            "duration/height list must contain integer literals".to_string(),
+                        ));
+                    }
+                }
+            }
+            Ok(DurationSpec::Inline(values))
+        }
+        _ => Err(FlatZincError::Unsupported(
+            "duration/height must be an array name or integer list".to_string(),
+        )),
+    }
 }
 
 /// FlatZinc expression subset.
@@ -1660,16 +1684,15 @@ impl Parser {
                 self.expect_symbol(",")?;
                 let ends = self.parse_expr()?;
                 self.expect_symbol(",")?;
-                let (heights, capacity) =
-                    if self.peek_is_symbol("[") || matches!(self.peek(), Some(Token::Ident(_))) {
-                        let heights = self.parse_duration_spec()?;
-                        self.expect_symbol(",")?;
-                        let capacity = self.expect_int()?;
-                        (Some(heights), capacity)
-                    } else {
-                        let capacity = self.expect_int()?;
-                        (None, capacity)
-                    };
+                let fourth = self.parse_expr()?;
+                let (heights, capacity) = if self.peek_is_symbol(",") {
+                    self.expect_symbol(",")?;
+                    let capacity = self.parse_expr()?;
+                    let heights = expr_to_duration_spec(&fourth)?;
+                    (Some(heights), capacity)
+                } else {
+                    (None, fourth)
+                };
                 Constraint::Cumulative {
                     starts,
                     durations,

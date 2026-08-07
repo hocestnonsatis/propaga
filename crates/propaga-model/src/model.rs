@@ -757,6 +757,14 @@ impl Model {
             .add_propagator(Box::new(CumulativePropagator::new(tasks, capacity)));
     }
 
+    /// Posts a cumulative constraint with a variable resource capacity.
+    pub fn cumulative_var(&mut self, tasks: impl Into<Vec<TaskSpec>>, capacity: VariableId) {
+        self.engine
+            .add_propagator(Box::new(CumulativePropagator::with_capacity_var(
+                tasks, capacity,
+            )));
+    }
+
     /// Posts a disjunctive (single-machine) constraint over `tasks`.
     pub fn disjunctive(&mut self, tasks: impl Into<Vec<DisjunctiveTask>>) {
         self.engine
