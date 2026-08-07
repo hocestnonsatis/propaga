@@ -137,9 +137,20 @@ fn solve_source(source: &str, options: GlobalOptions) -> Result<SolveOutcome, St
                 )
             })
             .collect();
-        let result = instance
-            .model
-            .pareto_optimize(instance.solve_vars.clone(), objectives);
+        let result = if options.workers > 1 {
+            instance.model.pareto_optimize_portfolio(
+                instance.solve_vars.clone(),
+                objectives,
+                PortfolioConfig {
+                    workers: options.workers,
+                    deterministic: options.deterministic,
+                },
+            )
+        } else {
+            instance
+                .model
+                .pareto_optimize(instance.solve_vars.clone(), objectives)
+        };
         let found = result.front.len() as u32;
         let first = result.front.first().cloned();
         (
@@ -165,9 +176,20 @@ fn solve_source(source: &str, options: GlobalOptions) -> Result<SolveOutcome, St
                     direction: objective.direction(),
                 })
                 .collect();
-            let result = instance
-                .model
-                .optimize_lexicographic(instance.solve_vars.clone(), objectives);
+            let result = if options.workers > 1 {
+                instance.model.optimize_lexicographic_portfolio(
+                    instance.solve_vars.clone(),
+                    objectives,
+                    PortfolioConfig {
+                        workers: options.workers,
+                        deterministic: options.deterministic,
+                    },
+                )
+            } else {
+                instance
+                    .model
+                    .optimize_lexicographic(instance.solve_vars.clone(), objectives)
+            };
             let direction = instance
                 .objectives
                 .first()
@@ -184,11 +206,23 @@ fn solve_source(source: &str, options: GlobalOptions) -> Result<SolveOutcome, St
             )
         } else {
             let objective = instance.objectives[0];
-            let (solution, value, stats, solutions_found) = instance.model.optimize_objective(
-                instance.solve_vars.clone(),
-                objective.optimization_target(),
-                objective.direction(),
-            );
+            let (solution, value, stats, solutions_found) = if options.workers > 1 {
+                instance.model.optimize_objective_portfolio(
+                    instance.solve_vars.clone(),
+                    objective.optimization_target(),
+                    objective.direction(),
+                    PortfolioConfig {
+                        workers: options.workers,
+                        deterministic: options.deterministic,
+                    },
+                )
+            } else {
+                instance.model.optimize_objective(
+                    instance.solve_vars.clone(),
+                    objective.optimization_target(),
+                    objective.direction(),
+                )
+            };
             let objective_values = value.clone().into_iter().collect();
             (
                 solution,

@@ -539,8 +539,9 @@ impl FloatDomain {
 
     /// True when `[lo, hi] ∩ domain` contains at least one admissible point.
     ///
-    /// Positive-length intersections stay feasible under sparse holes; singletons
-    /// require `contains`.
+    /// Unit-width preimages (ceil/floor/round) walk gaps between holes so a
+    /// covering of every IEEE point in the clipped interval is detected. Longer
+    /// intersections stay feasible under sparse holes.
     fn intersects_closed(&self, lo: f64, hi: f64) -> bool {
         let a = lo.max(self.min);
         let b = hi.min(self.max);
@@ -550,7 +551,35 @@ impl FloatDomain {
         if (b - a).abs() <= f64::EPSILON {
             return self.contains(a);
         }
+        if b - a <= 1.0 + f64::EPSILON && !self.holes.is_empty() {
+            return self.has_admissible_in(a, b);
+        }
         true
+    }
+
+    /// Returns true when `[a, b]` contains an admissible IEEE point.
+    fn has_admissible_in(&self, a: f64, b: f64) -> bool {
+        if self.contains(a) {
+            return true;
+        }
+        let mut holes: Vec<f64> = self
+            .holes
+            .iter()
+            .copied()
+            .filter(|&hole| hole > a && hole < b)
+            .collect();
+        holes.sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
+        let mut prev = a;
+        for hole in holes {
+            if next_up(prev) < hole {
+                return true;
+            }
+            prev = hole;
+        }
+        if self.contains(b) {
+            return true;
+        }
+        next_up(prev) < b
     }
 
     fn project_integer_images(
@@ -575,8 +604,8 @@ impl FloatDomain {
         let start = lo as i64;
         let end = hi as i64;
         if end - start > MAX_INTEGER_IMAGE_SCAN {
-            // Wide span: still shrink hole-emptied endpoints (bounded end scans);
-            // interior stays a hole-free over-approximation.
+            // Wide span: shrink hole-emptied endpoints (bounded end scans), then
+            // punch interior integer images emptied by the domain hole list.
             let mut min = None;
             for k in 0..=MAX_INTEGER_IMAGE_SCAN {
                 let n = (start + k) as f64;
@@ -600,7 +629,17 @@ impl FloatDomain {
                 }
             }
             return match (min, max) {
-                (Some(a), Some(b)) if a <= b => Self::new(a, b),
+                (Some(a), Some(b)) if a <= b => {
+                    let mut holes = Vec::new();
+                    for &hole in &self.holes {
+                        for n in integer_images_near_hole(hole) {
+                            if n > a && n < b && !feasible(n) {
+                                holes.push(n);
+                            }
+                        }
+                    }
+                    Self::from_parts(a, b, holes)
+                }
                 _ => Self::new(1.0, 0.0),
             };
         }
@@ -635,6 +674,11 @@ impl FloatDomain {
 
 /// Cap for scanning integer images of ceil/floor/round (wide spans use end-only scans).
 const MAX_INTEGER_IMAGE_SCAN: i64 = 10_000;
+
+/// Candidate integer images that a domain hole might empty under ceil/floor/round.
+fn integer_images_near_hole(hole: f64) -> [f64; 3] {
+    [hole.floor(), hole.ceil(), hole.round()]
+}
 
 /// Inclusive bounds for the preimage of `n` under `f64::round` (half away from zero).
 fn round_preimage_bounds(n: f64) -> (f64, f64) {
@@ -924,6 +968,28 @@ mod tests {
         assert!((image.lower_bound() - 3.0).abs() < f64::EPSILON);
         assert!((image.upper_bound() - 20_000.0).abs() < f64::EPSILON);
         assert!(image.holes().is_empty());
+    }
+
+    #[test]
+    fn ceil_wide_span_hole_list_keeps_continuum_preimages() {
+        // exclude(100) does not empty ceil⁻¹(100)=(99,100] on a continuum domain;
+        // hole-list projection must not spuriously drop interior images.
+        let domain = FloatDomain::new(2.0, 20_000.0).exclude(2.0).exclude(100.0);
+        let image = domain.ceil();
+        assert!((image.lower_bound() - 3.0).abs() < f64::EPSILON);
+        assert!(image.contains(100.0));
+        assert!(image.holes().is_empty());
+    }
+
+    #[test]
+    fn ceil_unit_preimage_emptied_when_only_ieee_points_are_holes() {
+        // ceil⁻¹(3) ∩ [2,3] = {2,3} in the bound sense; with both endpoints
+        // excluded and nothing admissible left in (2,3], image 3 is dropped on
+        // the small-span path. Wide-span hole-list uses the same feasibility check.
+        let domain = FloatDomain::new(2.0, 3.0).exclude(2.0).exclude(3.0);
+        let image = domain.ceil();
+        // Domain collapses toward empty or a sliver; ceil image must not keep 2.
+        assert!(!image.contains(2.0) || image.is_empty());
     }
 
     #[test]

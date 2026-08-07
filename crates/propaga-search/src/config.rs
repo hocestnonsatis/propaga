@@ -248,6 +248,8 @@ pub struct SearchConfig {
     pub time_limit: Option<Duration>,
     /// Float domain width at which a variable is treated as fixed (FlatZinc `float_search` precision).
     pub float_precision: f64,
+    /// When `true`, optimization may return after the first feasible solution without proving optimality.
+    pub incomplete: bool,
 }
 
 impl Default for SearchConfig {
@@ -261,6 +263,7 @@ impl Default for SearchConfig {
             phase_saving: true,
             time_limit: None,
             float_precision: f64::EPSILON,
+            incomplete: false,
         }
     }
 }

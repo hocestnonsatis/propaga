@@ -83,7 +83,7 @@ Global options:
 | `--var-ordering` | (from annotation or `mrv`) | `mrv`, `dom`, `dom-wdeg`, `input-order`, `activity`, `smallest`, `largest`, `max-regret` (FlatZinc aliases: `first_fail`, `dom_w_deg`, …) |
 | `--value-ordering` | (from annotation or `asc`) | `asc`, `desc`, `lcv`, `split`, `reverse-split`, `median`, `middle`, `random`, `interval` |
 | `--no-phase-saving` | off | Disable phase saving |
-| `--workers N` | `1` | Portfolio worker count for `solve` and puzzles |
+| `--workers N` | `1` | Portfolio worker count for `solve` and puzzles (satisfy, BnB, lex, Pareto) |
 | `--deterministic` | off | Use only the base search configuration in portfolio mode |
 
 ## Quick start

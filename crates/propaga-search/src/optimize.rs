@@ -164,6 +164,10 @@ impl OptimizationSearch {
                 best_solution = Some(solution);
             }
 
+            if self.config.incomplete {
+                break;
+            }
+
             if engine.trail_depth() > 0 {
                 engine.trail_backtrack(0);
             }

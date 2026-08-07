@@ -27,6 +27,9 @@ jobs:
       - run: cargo run -p propaga-cli -- n-queens --size 8
       - run: cargo run -p propaga-cli -- solve --file benchmarks/magic_square.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/cumulative.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/fzn_aliases.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/fzn_cumulative.fzn --quiet
+      - run: cargo run -p propaga-cli -- solve --file benchmarks/incomplete_maximize.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/gcc_exact.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/set_union.fzn --quiet
       - run: cargo run -p propaga-cli -- solve --file benchmarks/set_intersect.fzn --quiet
@@ -144,10 +147,25 @@ jobs:
       - name: Stdlib FlatZinc corpus regression
         run: |
           # Hand-written fixtures under benchmarks/minizinc/stdlib/*.fzn.
-          # Fresh MiniZinc output is solver-specific (annotations, fzn_*,
-          # array_int_lt) and is not the regression target; use local
-          # scripts/flatzinc-*.sh with MiniZinc installed for that path.
           cargo test -p propaga-flatzinc --test builtin_corpus -- --nocapture
+
+  minizinc-fresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install MiniZinc
+        run: |
+          set -euo pipefail
+          VER=2.9.3
+          curl -fsSL -o /tmp/minizinc.tgz \
+            "https://github.com/MiniZinc/MiniZincIDE/releases/download/${VER}/MiniZincIDE-${VER}-bundle-linux-x86_64.tgz"
+          sudo mkdir -p /opt/minizinc
+          sudo tar -xzf /tmp/minizinc.tgz -C /opt/minizinc --strip-components=1
+          echo /opt/minizinc/bin >> "$GITHUB_PATH"
+          minizinc --version
+      - name: Fresh MiniZinc FlatZinc compat report
+        run: bash scripts/flatzinc-full-compat-report.sh
 
   msrv:
     runs-on: ubuntu-latest

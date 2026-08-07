@@ -2,9 +2,28 @@
 
 Forward-looking ideas beyond v1.1.0. See [README.md](README.md) for what ships today and [COMPATIBILITY.md](benchmarks/minizinc/COMPATIBILITY.md) for FlatZinc coverage.
 
-## Next
+Phased plan: [docs/superpowers/plans/2026-08-07-phased-v1.2-v1.4.md](docs/superpowers/plans/2026-08-07-phased-v1.2-v1.4.md).
 
-- Small propagator/search polish
+## Next (v1.2 — polish)
+
+- ~~`ceil` / `floor` / `round`: hole-list-driven interior integer-image holes on wide spans (endpoint shrink already lands)~~ (landed: hole-list + unit-width gap checks)
+- ~~Typed conflict learning for set / float wipeouts (domain-reason nogoods; int path unchanged)~~ (landed: forbidden-assignment blocking of fixed typed decisions)
+- ~~Portfolio `--workers` on BnB / lex / Pareto (best-objective / front merge across diversified workers)~~
+- Doc parity: `restart_linear` / `restart_on_solution` in COMPATIBILITY; tighten Known limitations
+- Release v1.2.0 when polish backlog is closed
+
+## Later (v1.3 — ecosystem)
+
+- ~~Fresh MiniZinc FlatZinc aliases (`fzn_*`, `array_int_lt`, …) → stdlib primitive map~~
+- ~~CI MiniZinc install + `flatzinc-full-compat-report.sh` fail-closed gate~~ (`minizinc-fresh` job)
+- ~~Real `incomplete` search semantics (BnB stops after first feasible)~~
+- Release v1.3.0 when ecosystem backlog is closed (user-gated)
+
+## Later (v1.4+ — competitive)
+
+- Warm-start + LNS for int optimize
+- Stronger native `cumulative` / variable-size `diffn`
+- Timed FlatZinc perf corpus / nightly Criterion
 
 ## Shipped in v1.1.0
 

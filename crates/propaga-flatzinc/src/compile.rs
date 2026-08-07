@@ -22,6 +22,8 @@ pub struct AnnotationSearchConfig {
     pub restart_policy: RestartPolicy,
     /// Float domain width at which search treats a variable as fixed (`float_search` precision).
     pub float_precision: Option<f64>,
+    /// When `true`, search may stop without proving completeness / optimality.
+    pub incomplete: bool,
 }
 
 /// Objective specification extracted from a FlatZinc solve directive.
@@ -355,14 +357,18 @@ fn compile_search_config(
         return Ok(None);
     }
 
-    let (variable_ordering, value_ordering) = if let Some(seq) = annotations.seq_search.as_ref() {
+    let (variable_ordering, value_ordering, incomplete) = if let Some(seq) =
+        annotations.seq_search.as_ref()
+    {
         // Defaults when CLI overrides phases; DFS uses search_phases for true sequencing.
         let first = seq.first().ok_or_else(|| {
             FlatZincError::Unsupported("seq_search requires at least one nested search".to_string())
         })?;
+        let incomplete = seq.iter().any(|search| !search.complete);
         (
             map_var_choice(&first.var_choice)?,
             map_value_choice(&first.value_choice)?,
+            incomplete,
         )
     } else if let Some(search) = annotations
         .int_search
@@ -371,13 +377,13 @@ fn compile_search_config(
         .or(annotations.float_search.as_ref())
         .or(annotations.set_search.as_ref())
     {
-        let _ = search.complete;
         (
             map_var_choice(&search.var_choice)?,
             map_value_choice(&search.value_choice)?,
+            !search.complete,
         )
     } else {
-        (VariableOrdering::default(), ValueOrdering::default())
+        (VariableOrdering::default(), ValueOrdering::default(), false)
     };
 
     let restart_policy = match annotations.restart.as_ref().map(|restart| &restart.kind) {
@@ -409,6 +415,7 @@ fn compile_search_config(
         value_ordering,
         restart_policy,
         float_precision,
+        incomplete,
     }))
 }
 
@@ -1321,10 +1328,14 @@ fn post_constraint(
                 accepting,
             )?;
         }
-        Constraint::PredicateCall { name, .. } => {
-            return Err(FlatZincError::Unsupported(format!(
-                "unexpanded predicate call `{name}`"
-            )));
+        Constraint::PredicateCall { name, args } => {
+            if name == "fzn_cumulative" || name == "cumulative_fzn" {
+                post_fzn_cumulative(model, env, &args)?;
+            } else {
+                return Err(FlatZincError::Unsupported(format!(
+                    "unexpanded predicate call `{name}`"
+                )));
+            }
         }
     }
     Ok(())
@@ -1345,11 +1356,19 @@ fn expand_predicates(
     while let Some(constraint) = pending.pop() {
         match constraint {
             Constraint::PredicateCall { name, args } => {
-                if let Some(constraint) = try_expand_generic_min_max(&name, &args, model, env)? {
+                let resolved = crate::aliases::resolve_constraint_name(&name);
+                if let Some(constraint) = try_expand_generic_min_max(resolved, &args, model, env)? {
                     pending.push(constraint);
-                } else if let Some(constraint) = try_expand_global_call(&name, &args) {
+                } else if let Some(constraint) = try_expand_global_call(resolved, &args) {
                     pending.push(constraint);
-                } else if let Some(predicate) = lookup.get(name.as_str()) {
+                } else if let Some(constraint) = try_expand_aliased_builtin(resolved, &args) {
+                    pending.push(constraint);
+                } else if name == "fzn_cumulative" || name == "cumulative_fzn" {
+                    // Handled in post_constraint (needs aux end variables).
+                    expanded.push(Constraint::PredicateCall { name, args });
+                } else if let Some(predicate) =
+                    lookup.get(name.as_str()).or_else(|| lookup.get(resolved))
+                {
                     for substituted in substitute_predicate(predicate, &args) {
                         pending.push(substituted);
                     }
@@ -1427,6 +1446,26 @@ fn try_expand_global_call(name: &str, args: &[Expr]) -> Option<Constraint> {
         ("decreasing", 1) => Some(Constraint::Decreasing(args[0].clone())),
         ("sort", 2) => Some(Constraint::Sort(args[0].clone(), args[1].clone())),
         ("nvalue", 2) => Some(Constraint::Nvalue(args[0].clone(), args[1].clone())),
+        _ => None,
+    }
+}
+
+/// Expands aliased builtins that parse as [`Constraint::PredicateCall`] (e.g. nested
+/// predicate bodies) into first-class constraints.
+fn try_expand_aliased_builtin(name: &str, args: &[Expr]) -> Option<Constraint> {
+    match (name, args.len()) {
+        ("all_different", 1) => {
+            let items = match &args[0] {
+                Expr::List(items) => items.clone(),
+                other => vec![other.clone()],
+            };
+            Some(Constraint::AllDifferent(items))
+        }
+        ("circuit", 1) => Some(Constraint::Circuit(args[0].clone())),
+        ("inverse", 2) => Some(Constraint::Inverse {
+            forward: args[0].clone(),
+            backward: args[1].clone(),
+        }),
         _ => None,
     }
 }
@@ -2095,6 +2134,83 @@ fn post_cumulative(
         .collect();
     model.cumulative(tasks, capacity);
     Ok(())
+}
+
+/// MiniZinc `fzn_cumulative(start, duration, resource, capacity)` without explicit ends.
+fn post_fzn_cumulative(
+    model: &mut Model,
+    env: &HashMap<String, Binding>,
+    args: &[Expr],
+) -> Result<(), FlatZincError> {
+    if args.len() != 4 {
+        return Err(FlatZincError::Unsupported(
+            "fzn_cumulative expects start, duration, resource, capacity".to_string(),
+        ));
+    }
+    let start_vars = resolve_var_list(env, args[0].clone())?;
+    let duration_binding = resolve_duration_binding(env, expr_as_duration_spec(&args[1])?)?;
+    let height_binding = resolve_duration_binding(env, expr_as_duration_spec(&args[2])?)?;
+    let capacity = resolve_int(env, args[3].clone())?;
+
+    let duration_len = match &duration_binding {
+        DurationBinding::Fixed(values) => values.len(),
+        DurationBinding::Variables(vars) => vars.len(),
+    };
+    if start_vars.len() != duration_len {
+        return Err(FlatZincError::Unsupported(
+            "fzn_cumulative start/duration length mismatch".to_string(),
+        ));
+    }
+
+    let mut end_vars = Vec::with_capacity(start_vars.len());
+    for (index, &start) in start_vars.iter().enumerate() {
+        let (duration, duration_var) = duration_field(&duration_binding, index);
+        let end = model.int_var_aux(-1_000_000, 1_000_000);
+        if let Some(dvar) = duration_var {
+            model.linear_eq(start, dvar, end);
+        } else {
+            // start + duration = end ⇔ 1*start + (-1)*end = -duration
+            model.scalar_eq(vec![1, -1], vec![start, end], -duration);
+        }
+        end_vars.push(end);
+    }
+
+    let tasks: Vec<TaskSpec> = start_vars
+        .into_iter()
+        .zip(end_vars)
+        .enumerate()
+        .map(|(index, (start, end))| {
+            let (duration, duration_var) = duration_field(&duration_binding, index);
+            let (demand, demand_var) = duration_field(&height_binding, index);
+            TaskSpec::with_variable_spec(start, end, duration, duration_var, demand, demand_var)
+        })
+        .collect();
+    model.cumulative(tasks, capacity);
+    Ok(())
+}
+
+fn expr_as_duration_spec(expr: &Expr) -> Result<DurationSpec, FlatZincError> {
+    match expr {
+        Expr::Name(name) => Ok(DurationSpec::Name(name.clone())),
+        Expr::List(items) => {
+            let mut values = Vec::with_capacity(items.len());
+            for item in items {
+                match item {
+                    Expr::Int(value) => values.push(*value),
+                    _ => {
+                        return Err(FlatZincError::Unsupported(
+                            "fzn_cumulative duration/resource list must be integer literals or a named array"
+                                .to_string(),
+                        ));
+                    }
+                }
+            }
+            Ok(DurationSpec::Inline(values))
+        }
+        _ => Err(FlatZincError::Unsupported(
+            "fzn_cumulative duration/resource must be an array name or integer list".to_string(),
+        )),
+    }
 }
 
 enum DurationBinding {
@@ -3542,8 +3658,20 @@ mod tests {
                 value_ordering: ValueOrdering::Ascending,
                 restart_policy: RestartPolicy::default(),
                 float_precision: None,
+                incomplete: false,
             })
         );
+    }
+
+    #[test]
+    fn compiles_incomplete_search_annotation() {
+        let source = r#"
+            var 1..3: x;
+            solve :: int_search([x], input_order, indomain_min, incomplete) satisfy;
+        "#;
+        let program = parse(source).unwrap();
+        let instance = compile(program).unwrap();
+        assert_eq!(instance.annotation_search.map(|c| c.incomplete), Some(true));
     }
 
     #[test]

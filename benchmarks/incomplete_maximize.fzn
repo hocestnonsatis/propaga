@@ -1,0 +1,5 @@
+% incomplete search: first feasible objective is enough
+var 0..10: x;
+var 0..10: y;
+constraint int_lin_le([1, 1], [x, y], 10);
+solve :: int_search([x, y], input_order, indomain_min, incomplete) maximize x;

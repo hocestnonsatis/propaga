@@ -1435,6 +1435,7 @@ impl Parser {
     }
 
     fn parse_constraint_by_name(&mut self, name: &str) -> Result<Constraint, FlatZincError> {
+        let name = crate::aliases::resolve_constraint_name(name);
         let constraint = match name {
             "all_different" => {
                 let expr = self.parse_expr()?;
@@ -1715,6 +1716,15 @@ impl Parser {
                 let value = self.parse_expr()?;
                 Constraint::AtMost(n, xs, value)
             }
+            // MiniZinc fzn_exactly_int(n, xs, value) ≡ count(xs, value) = n
+            "fzn_exactly_int" | "exactly" => {
+                let n = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let xs = self.parse_expr()?;
+                self.expect_symbol(",")?;
+                let value = self.parse_expr()?;
+                Constraint::Count(xs, value, n)
+            }
             "distribute" => {
                 let card = self.parse_expr()?;
                 self.expect_symbol(",")?;
@@ -1847,7 +1857,7 @@ impl Parser {
                 let m = self.parse_expr()?;
                 Constraint::ArrayFloatMinimum(xs, m)
             }
-            "global_cardinality" => {
+            "global_cardinality" | "fzn_global_cardinality" => {
                 let first = self.parse_expr()?;
                 self.expect_symbol(",")?;
                 let second = self.parse_expr()?;
@@ -1860,14 +1870,24 @@ impl Parser {
                     }
                 } else {
                     self.expect_symbol(",")?;
-                    let lbound = self.parse_expr()?;
-                    self.expect_symbol(",")?;
-                    let ubound = self.parse_expr()?;
-                    Constraint::GlobalCardinality {
-                        vars: first,
-                        cover: second,
-                        lbound: Some(lbound),
-                        ubound: Some(ubound),
+                    let third = self.parse_expr()?;
+                    if self.peek_is_symbol(")") {
+                        // fzn_global_cardinality(xs, cover, counts): pin bounds to counts.
+                        Constraint::GlobalCardinality {
+                            vars: first,
+                            cover: second,
+                            lbound: Some(third.clone()),
+                            ubound: Some(third),
+                        }
+                    } else {
+                        self.expect_symbol(",")?;
+                        let ubound = self.parse_expr()?;
+                        Constraint::GlobalCardinality {
+                            vars: first,
+                            cover: second,
+                            lbound: Some(third),
+                            ubound: Some(ubound),
+                        }
                     }
                 }
             }
@@ -3508,6 +3528,26 @@ mod tests {
             &program.constraints[0],
             crate::Constraint::PredicateCall { name, .. } if name == "unknown_constraint"
         ));
+    }
+
+    #[test]
+    fn fzn_and_array_aliases_parse_as_canonical_constraints() {
+        let source = r#"
+            array [1..3] of var 1..3: x;
+            array [1..2] of var 1..2: a;
+            array [1..2] of var 1..2: b;
+            constraint fzn_all_different_int(x);
+            constraint array_int_lt(a, b);
+            constraint fzn_exactly_int(1, x, 2);
+            solve satisfy;
+        "#;
+        let program = parse(source).unwrap();
+        assert!(matches!(
+            program.constraints[0],
+            Constraint::AllDifferent(_)
+        ));
+        assert!(matches!(program.constraints[1], Constraint::LexLess(_, _)));
+        assert!(matches!(program.constraints[2], Constraint::Count(_, _, _)));
     }
 
     #[test]

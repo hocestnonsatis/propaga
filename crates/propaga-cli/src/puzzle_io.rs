@@ -96,6 +96,7 @@ impl GlobalOptions {
             phase_saving: self.phase_saving,
             time_limit: self.time_limit,
             float_precision: f64::EPSILON,
+            incomplete: false,
         }
     }
 
@@ -124,6 +125,7 @@ impl GlobalOptions {
         if let Some(precision) = annotation.float_precision {
             config.float_precision = precision;
         }
+        config.incomplete = annotation.incomplete;
         config
     }
 

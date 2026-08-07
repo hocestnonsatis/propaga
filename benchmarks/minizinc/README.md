@@ -56,9 +56,12 @@ bash scripts/flatzinc-full-compat-report.sh   # models + stdlib corpus
 bash scripts/flatzinc-builtin-inventory.sh    # list FlatZinc constraint names per stdlib model
 ```
 
-Requires MiniZinc installed locally. CI's `minizinc-stdlib` job regresses the
-bundled `.fzn` fixtures (no MiniZinc toolchain required). Fresh MiniZinc
-output is solver-specific and is checked locally via the scripts above.
+Requires MiniZinc installed locally. CI jobs:
+
+- `minizinc-stdlib`: bundled `.fzn` fixtures (`builtin_corpus`)
+- `minizinc-fresh`: installs MiniZinc and runs `scripts/flatzinc-full-compat-report.sh` (fail-closed)
+
+Solver-specific `fzn_*` / `array_int_lt` names are remapped via Propaga aliases; see COMPATIBILITY.
 
 ## Stdlib test corpus
 

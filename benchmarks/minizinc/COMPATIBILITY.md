@@ -110,7 +110,7 @@ See also [README.md](../../README.md) for solver features and [README.md](README
 | `float_abs` / `sqrt` / `ln` / `exp` | Preserve or safely project; `abs` reverse-projects holes `h > 0` to both `±h` (incl. domains straddling zero); fixed images reverse-project when locally invertible |
 | `float_min` / `float_max` | Result holes reverse-project onto an operand when the other side cannot realize that value as the min/max; forward image also drops a hole when one operand forbids it and the other lies entirely above (min) / below (max) that hole |
 | `float_sin` / `float_cos` | Project (and reverse-project) holes only on locally monotonic intervals; fixed images reverse-project onto the unique preimage when one exists |
-| `float_ceil` / `float_floor` / `float_round` | Drop integer images whose preimages are emptied by holes (typically endpoint-only); constant domains collapse to fixed; fixed integer images reverse-project onto the input; integer output holes reverse-project when the preimage is a singleton; spans above 10 000 integers still shrink hole-emptied endpoints (bounded end scans) but keep a hole-free interior |
+| `float_ceil` / `float_floor` / `float_round` | Drop integer images whose preimages are emptied by holes (typically endpoint-only); constant domains collapse to fixed; fixed integer images reverse-project onto the input; integer output holes reverse-project when the preimage is a singleton; spans above 10 000 integers shrink hole-emptied endpoints and record additional interior image holes implied by the domain hole list (full per-integer scan only for smaller spans) |
 | `array_*_float_element` | Share holes when index is fixed; project holes absent from every remaining candidate; prune indices whose only bound-overlap with the value is a forbidden hole |
 
 Holes are **sound over-approximations**: dropping a hole never removes a feasible real, but keeping every hole through non-injective maps is not always possible.
@@ -133,6 +133,24 @@ Holes are **sound over-approximations**: dropping a hole never removes a feasibl
 | `lex_less`, `lex_lesseq`, `lex_greater`, `lex_greatereq` | Supported | Lexicographic decomposition |
 | `increasing`, `decreasing` | Supported | Pairwise order constraints |
 | `sort` | Supported | Permutation + `increasing` decomposition |
+
+### Solver-library aliases
+
+MiniZinc solver profiles that declare native `fzn_*` predicates emit those names in FlatZinc. Propaga remaps common aliases to stdlib builtins (same argument shape):
+
+| Alias | Canonical |
+|-------|-----------|
+| `fzn_all_different_int` / `fzn_all_different_set` | `all_different` |
+| `array_int_lt` / `array_bool_lt` / `fzn_lex_less_*` | `lex_less` |
+| `array_int_le(q)` / `fzn_lex_lesseq_*` | `lex_lesseq` |
+| `fzn_count_eq` | `count` |
+| `fzn_at_least_int` / `fzn_at_most_int` | `at_least` / `at_most` |
+| `fzn_exactly_int` | `count` (argument reorder) |
+| `fzn_nvalue`, `fzn_circuit`, `fzn_inverse`, `fzn_diffn`, `fzn_disjunctive`, `fzn_sort`, `fzn_table_*`, `fzn_regular` | same-named builtin |
+| `fzn_global_cardinality(xs, cover, counts)` | `global_cardinality` with `lbound=ubound=counts` |
+| `fzn_cumulative(start, duration, resource, capacity)` | `cumulative` with synthesized end auxiliaries |
+
+See [`aliases.rs`](../../crates/propaga-flatzinc/src/aliases.rs).
 
 ## Top-level statements
 
@@ -162,8 +180,8 @@ Holes are **sound over-approximations**: dropping a hole never removes a feasibl
 | `int_search` / `bool_search` | Supported subset | Variable list, common selectors, `complete` / `incomplete` |
 | `float_search` / `set_search` | Supported subset | Same selectors; `float_search` precision stops splitting when domain width ≤ precision (then assigns lower/upper/mid from the value selector); set branching picks undecided element + in/out order from value selector |
 | `seq_search([...])` | Supported | Multi-phase: each nested group uses its own selectors until all its vars are fixed |
-| `restart_luby`, `restart_constant`, `restart_geometric`, `restart_none` | Supported | |
-| `incomplete` | Tolerated | Treated like `complete` for exploration completeness |
+| `restart_luby`, `restart_constant`, `restart_geometric`, `restart_linear`, `restart_on_solution`, `restart_none` | Supported | |
+| `incomplete` | Supported | Sets `SearchConfig::incomplete`: satisfy still returns the first solution; BnB / optimize stops after the first feasible solution without proving optimality |
 
 FlatZinc search annotations are applied when solving with `propaga solve`. CLI flags override annotation defaults when explicitly provided:
 
@@ -185,9 +203,9 @@ Supported value selectors: `indomain_min`, `indomain_max`, `indomain_middle`, `i
 | `--time-limit SECS` | Supported | Wall-clock cutoff |
 | `--all`, `--solutions N` | Supported | Satisfy instances |
 | `--stats`, `--format json` | Supported | Typed assignments; objective values for float/set |
-| `--workers N` | Supported | Portfolio search (satisfy); inherits FlatZinc `seq_search` phases |
+| `--workers N` | Supported | Portfolio search for satisfy, BnB, lexicographic, and Pareto; inherits FlatZinc `seq_search` phases |
 
-BnB, lexicographic, and Pareto optimize paths also inherit `seq_search` phases from the compiled model.
+BnB, lexicographic, and Pareto optimize paths inherit `seq_search` phases and honor `--workers` (independent diversified workers; best objective or merged Pareto front).
 
 ## MiniZinc workflow
 

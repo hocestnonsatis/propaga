@@ -914,6 +914,30 @@ impl Model {
         )
     }
 
+    /// Portfolio branch-and-bound over diversified search configurations.
+    pub fn optimize_objective_portfolio(
+        &mut self,
+        variables: impl Into<Vec<VariableId>>,
+        target: propaga_search::OptimizationTarget,
+        direction: propaga_search::ObjectiveDirection,
+        portfolio: PortfolioConfig,
+    ) -> (
+        Option<Solution>,
+        Option<propaga_search::ObjectiveValue>,
+        SearchStats,
+        u32,
+    ) {
+        let search = PortfolioSearch::new(variables, self.search_config, portfolio)
+            .with_search_phases(self.search_phases.clone());
+        let result = search.optimize(&mut self.engine, target, direction);
+        (
+            result.solution,
+            result.objective_value,
+            result.stats,
+            result.solutions_found,
+        )
+    }
+
     /// Optimizes a single integer objective using branch-and-bound.
     pub fn optimize(
         &mut self,
@@ -956,6 +980,18 @@ impl Model {
         search.optimize(&mut self.engine)
     }
 
+    /// Portfolio lexicographic optimization over diversified search configurations.
+    pub fn optimize_lexicographic_portfolio(
+        &mut self,
+        variables: impl Into<Vec<VariableId>>,
+        objectives: Vec<Objective>,
+        portfolio: PortfolioConfig,
+    ) -> LexicographicResult {
+        let search = PortfolioSearch::new(variables, self.search_config, portfolio)
+            .with_search_phases(self.search_phases.clone());
+        search.optimize_lexicographic(&mut self.engine, objectives)
+    }
+
     /// Enumerates the Pareto front for multiple objectives.
     pub fn pareto_optimize(
         &mut self,
@@ -966,6 +1002,18 @@ impl Model {
         let mut search = ParetoOptimization::new(variables, objectives, self.search_config)
             .with_search_phases(self.search_phases.clone());
         search.optimize(&mut self.engine)
+    }
+
+    /// Portfolio Pareto enumeration; worker fronts are merged with dominance filtering.
+    pub fn pareto_optimize_portfolio(
+        &mut self,
+        variables: impl Into<Vec<VariableId>>,
+        objectives: Vec<(propaga_search::OptimizationTarget, ObjectiveDirection)>,
+        portfolio: PortfolioConfig,
+    ) -> ParetoResult {
+        let search = PortfolioSearch::new(variables, self.search_config, portfolio)
+            .with_search_phases(self.search_phases.clone());
+        search.optimize_pareto(&mut self.engine, objectives)
     }
 }
 

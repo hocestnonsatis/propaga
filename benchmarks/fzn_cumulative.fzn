@@ -1,0 +1,8 @@
+% MiniZinc-style fzn_cumulative without explicit end variables
+array [1..2] of int: duration = [3, 2];
+array [1..2] of int: resource = [1, 1];
+array [1..2] of var 0..10: s;
+
+constraint fzn_cumulative(s, duration, resource, 1);
+
+solve satisfy;

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Portfolio `--workers` for single-objective BnB, lexicographic, and Pareto FlatZinc solves (diversified configs; best objective / merged front).
+- Typed conflict learning for set/float wipeouts: posts a `ForbiddenAssignmentPropagator` (float points via `encode_forbidden_float`) over fixed decision vars at conflict.
+- FlatZinc alias layer for MiniZinc solver-library predicates (`fzn_*`, `array_int_lt`, …) plus `fzn_cumulative` / `fzn_exactly_int` / 3-arg `fzn_global_cardinality` remaps.
+- `SearchConfig::incomplete` from FlatZinc `incomplete` annotations: BnB returns after the first feasible solution.
+- CI job `minizinc-fresh`: install MiniZinc bundle + `flatzinc-full-compat-report.sh` (fail-closed).
+- ROADMAP phased backlog for v1.2 polish, v1.3 MiniZinc ecosystem, and v1.4+ competitive work.
+
+### Changed
+
+- Wide-span `ceil` / `floor` / `round` forward images consult the domain hole list (and unit-width gap checks) when deciding emptied integer images.
+- COMPATIBILITY lists `restart_linear` / `restart_on_solution`, alias table, and real `incomplete` semantics; `--workers` covers optimize paths.
+
+### Known limitations
+
+- Float propagation remains interval-based (sound, not exact real arithmetic).
+- Typed set/float learning blocks fixed assignments only (no first-UIP backjump on the typed path yet).
+- `fzn_cumulative` requires a fixed integer capacity (var capacity not yet accepted).
+
 ## [1.1.0] - 2026-07-29
 
 ### Added
@@ -168,7 +188,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Known limitations
 
-- `ceil`/`floor`/`round` still drop sparse holes when the map is non-constant (preimages are intervals).
+- `ceil`/`floor`/`round` still drop sparse holes when the map is non-constant (preimages are intervals); wide spans keep a hole-free interior except endpoint shrink (addressed in Unreleased).
 - Float propagation remains interval-based (sound, not exact real arithmetic).
 
 ## [1.0.0] - 2026-07-13

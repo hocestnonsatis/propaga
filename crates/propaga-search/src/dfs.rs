@@ -9,6 +9,7 @@ use propaga_domains::DomainKind;
 use propaga_engine::Engine;
 use propaga_propagators::ClausePropagator;
 use propaga_propagators::NogoodPropagator;
+use propaga_propagators::{ForbiddenAssignmentPropagator, ForbiddenValue, encode_forbidden_float};
 use std::collections::HashMap;
 use std::time::Instant;
 
@@ -724,11 +725,12 @@ impl DepthFirstSearch {
                 engine.domain(conflict.variable).kind(),
                 propaga_domains::DomainKind::Int
             );
-            // Nogood/clause learning is int-literal based, but activity / WDEG still
-            // benefit from float and set wipeouts.
             if !is_int {
                 self.bump_variable_weight(conflict.variable);
                 self.bump_variable_activity(conflict.variable);
+                if self.config.learning {
+                    self.learn_typed_conflict(engine);
+                }
             } else if self.config.learning {
                 self.bump_weights(&conflict.explanation.unique_branch_literals());
                 self.bump_activities(&conflict.explanation.unique_branch_literals());
@@ -758,6 +760,55 @@ impl DepthFirstSearch {
 
         engine.trail_backtrack(level);
         false
+    }
+
+    /// Blocks rediscovery of the fixed typed assignment present at a set/float wipeout.
+    fn learn_typed_conflict(&mut self, engine: &mut Engine) {
+        let decision_vars = self.variables.clone();
+        let mut forbidden = Vec::new();
+        for var in decision_vars {
+            match engine.domain(var).kind() {
+                DomainKind::Int => {
+                    if let Some(value) = engine
+                        .domain(var)
+                        .as_int()
+                        .and_then(propaga_domains::HybridDomain::fixed_value)
+                    {
+                        forbidden.push((var, ForbiddenValue::Int(value)));
+                    }
+                }
+                DomainKind::Float => {
+                    if let Some(domain) = engine.domain(var).as_float()
+                        && domain.is_fixed()
+                    {
+                        let value = domain.lower_bound();
+                        let encoded = encode_forbidden_float(engine, var, value);
+                        for decision in encoded.decision_vars {
+                            if !self.variables.contains(&decision) {
+                                self.variables.push(decision);
+                            }
+                        }
+                        forbidden.extend(encoded.forbidden);
+                    }
+                }
+                DomainKind::Set => {
+                    if let Some(values) = engine
+                        .domain(var)
+                        .as_set()
+                        .and_then(propaga_domains::SetIntervalDomain::fixed_values)
+                    {
+                        forbidden.push((var, ForbiddenValue::Set(values)));
+                    }
+                }
+            }
+        }
+
+        if forbidden.is_empty() {
+            return;
+        }
+
+        engine.add_propagator(Box::new(ForbiddenAssignmentPropagator::new(forbidden)));
+        self.stats.record_nogood();
     }
 
     fn should_restart(&self) -> bool {
@@ -2059,5 +2110,32 @@ mod tests {
 
         // Float wipeout on `hot` raises its activity above `cold`.
         assert_eq!(search.select_variable(&engine), Some(hot));
+    }
+
+    #[test]
+    fn typed_learning_posts_forbidden_on_float_wipeout() {
+        use propaga_domains::{AnyDomain, FloatDomain};
+        use propaga_propagators::FloatNePropagator;
+
+        let mut engine = Engine::new();
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 1.0)));
+        let zero = engine.new_variable(AnyDomain::Float(FloatDomain::fix(0.0)));
+        engine.add_propagator(Box::new(FloatNePropagator::new(x, zero)));
+
+        let mut search = DepthFirstSearch::with_config(
+            vec![x],
+            SearchConfig {
+                learning: true,
+                restart_policy: RestartPolicy::None,
+                ..SearchConfig::default()
+            },
+        );
+        let level = engine.trail_mark();
+        assert!(matches!(
+            engine.fix_float(x, 0.0),
+            Ok(PropagationStatus::Failure)
+        ));
+        let _ = search.handle_failure(&mut engine, level);
+        assert!(search.stats().nogoods_learned > 0);
     }
 }

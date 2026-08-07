@@ -16,6 +16,7 @@
 //! assert!(solution.is_some());
 //! ```
 
+mod aliases;
 mod compile;
 mod decompose;
 mod decompose_float;
@@ -24,6 +25,7 @@ mod decompose_set;
 mod error;
 mod parse;
 
+pub use aliases::{canonical_constraint_name, resolve_constraint_name};
 pub use compile::{AnnotationSearchConfig, CompiledInstance, ObjectiveSpec, compile};
 pub use error::FlatZincError;
 pub use parse::{
