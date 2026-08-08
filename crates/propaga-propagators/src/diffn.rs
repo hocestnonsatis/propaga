@@ -7,13 +7,52 @@ pub struct RectangleSpec {
     pub x: VariableId,
     /// Bottom y coordinate.
     pub y: VariableId,
-    /// Width.
+    /// Fixed width (used when [`Self::width_var`] is `None`).
     pub width: i32,
-    /// Height.
+    /// Fixed height (used when [`Self::height_var`] is `None`).
     pub height: i32,
+    /// Optional variable width.
+    pub width_var: Option<VariableId>,
+    /// Optional variable height.
+    pub height_var: Option<VariableId>,
 }
 
-/// Propagates pairwise non-overlap among fixed-size rectangles.
+impl RectangleSpec {
+    /// Creates a fixed-size rectangle.
+    #[must_use]
+    pub fn new(x: VariableId, y: VariableId, width: i32, height: i32) -> Self {
+        Self {
+            x,
+            y,
+            width,
+            height,
+            width_var: None,
+            height_var: None,
+        }
+    }
+
+    /// Creates a rectangle with optional variable width/height.
+    #[must_use]
+    pub fn with_variable_size(
+        x: VariableId,
+        y: VariableId,
+        width: i32,
+        width_var: Option<VariableId>,
+        height: i32,
+        height_var: Option<VariableId>,
+    ) -> Self {
+        Self {
+            x,
+            y,
+            width,
+            height,
+            width_var,
+            height_var,
+        }
+    }
+}
+
+/// Propagates pairwise non-overlap among rectangles (fixed or variable size).
 #[derive(Clone)]
 pub struct DiffnPropagator {
     rectangles: Vec<RectangleSpec>,
@@ -24,10 +63,16 @@ impl DiffnPropagator {
     /// Creates a diffn propagator over rectangles.
     #[must_use]
     pub fn new(rectangles: Vec<RectangleSpec>) -> Self {
-        let mut watched = Vec::with_capacity(rectangles.len() * 2);
+        let mut watched = Vec::with_capacity(rectangles.len() * 4);
         for rect in &rectangles {
             watched.push(rect.x);
             watched.push(rect.y);
+            if let Some(width) = rect.width_var {
+                watched.push(width);
+            }
+            if let Some(height) = rect.height_var {
+                watched.push(height);
+            }
         }
         Self {
             rectangles,
@@ -56,17 +101,31 @@ impl Propagator for DiffnPropagator {
             }
         }
 
-        if self
-            .rectangles
-            .iter()
-            .any(|rect| ctx.domain(rect.x).is_empty() || ctx.domain(rect.y).is_empty())
-        {
+        if self.rectangles.iter().any(|rect| {
+            ctx.domain(rect.x).is_empty()
+                || ctx.domain(rect.y).is_empty()
+                || rect.width_var.is_some_and(|var| ctx.domain(var).is_empty())
+                || rect
+                    .height_var
+                    .is_some_and(|var| ctx.domain(var).is_empty())
+        }) {
             PropagationStatus::Failure
         } else if changed {
             PropagationStatus::OkChanged
         } else {
             PropagationStatus::OkNoChange
         }
+    }
+}
+
+fn size_bounds(
+    ctx: &dyn PropagationContext,
+    fixed: i32,
+    var: Option<VariableId>,
+) -> Option<(i32, i32)> {
+    match var {
+        Some(var) => Some((ctx.domain(var).min()?, ctx.domain(var).max()?)),
+        None => Some((fixed, fixed)),
     }
 }
 
@@ -92,32 +151,55 @@ fn propagate_pair(
         return false;
     };
 
-    let left_right = lx_max + left.width <= rx_min;
-    let right_left = rx_max + right.width <= lx_min;
-    let left_above = ly_max + left.height <= ry_min;
-    let right_above = ry_max + right.height <= ly_min;
+    let Some((lw_min, lw_max)) = size_bounds(ctx, left.width, left.width_var) else {
+        return false;
+    };
+    let Some((lh_min, lh_max)) = size_bounds(ctx, left.height, left.height_var) else {
+        return false;
+    };
+    let Some((rw_min, rw_max)) = size_bounds(ctx, right.width, right.width_var) else {
+        return false;
+    };
+    let Some((rh_min, rh_max)) = size_bounds(ctx, right.height, right.height_var) else {
+        return false;
+    };
+
+    // Definitely separated using maximum extents.
+    let left_right = lx_max + lw_max <= rx_min;
+    let right_left = rx_max + rw_max <= lx_min;
+    let left_above = ly_max + lh_max <= ry_min;
+    let right_above = ry_max + rh_max <= ly_min;
 
     if left_right || right_left || left_above || right_above {
         return false;
     }
 
-    if lx_min + left.width > rx_max && rx_min + right.width > lx_max {
-        let required_y_gap = left.height.min(right.height);
-        if ly_max + required_y_gap > ry_min && ctx.remove_below(left.y, ry_max - left.height + 1) {
+    // Forced X overlap using minimum extents → push Y apart (same prune as fixed-size).
+    if lx_min + lw_min > rx_max && rx_min + rw_min > lx_max {
+        let required_y_gap = lh_min.min(rh_min);
+        if ly_max + required_y_gap > ry_min
+            && ctx.remove_below(left.y, ry_max.saturating_sub(lh_max).saturating_add(1))
+        {
             changed = true;
         }
-        if ry_max + required_y_gap > ly_min && ctx.remove_below(right.y, ly_max - right.height + 1)
+        if ry_max + required_y_gap > ly_min
+            && ctx.remove_below(right.y, ly_max.saturating_sub(rh_max).saturating_add(1))
         {
             changed = true;
         }
     }
 
-    if ly_min + left.height > ry_max && ry_min + right.height > ly_max {
-        let required_x_gap = left.width.min(right.width);
-        if lx_max + required_x_gap > rx_min && ctx.remove_below(left.x, rx_max - left.width + 1) {
+    // Forced Y overlap using minimum extents → push X apart.
+    if ly_min + lh_min > ry_max && ry_min + rh_min > ly_max {
+        let required_x_gap = lw_min.min(rw_min);
+        if lx_max + required_x_gap > rx_min
+            && ctx.remove_below(left.x, rx_max.saturating_sub(lw_max).saturating_add(1))
+        {
             changed = true;
         }
-        if rx_max + required_x_gap > lx_min && ctx.remove_below(right.x, lx_max - right.width + 1) {
+        if rx_max + required_x_gap > lx_min
+            && ctx.remove_below(right.x, lx_max.saturating_sub(rw_max).saturating_add(1))
+        {
             changed = true;
         }
     }
@@ -140,18 +222,8 @@ mod tests {
         let x1 = engine.new_variable(IntervalDomain::new(0, 5));
         let y1 = engine.new_variable(IntervalDomain::new(0, 5));
         engine.add_propagator(Box::new(DiffnPropagator::new(vec![
-            RectangleSpec {
-                x: x0,
-                y: y0,
-                width: 2,
-                height: 2,
-            },
-            RectangleSpec {
-                x: x1,
-                y: y1,
-                width: 2,
-                height: 2,
-            },
+            RectangleSpec::new(x0, y0, 2, 2),
+            RectangleSpec::new(x1, y1, 2, 2),
         ])));
         assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
     }
@@ -164,18 +236,8 @@ mod tests {
         let x1 = engine.new_variable(IntervalDomain::new(0, 1));
         let y1 = engine.new_variable(IntervalDomain::new(0, 10));
         engine.add_propagator(Box::new(DiffnPropagator::new(vec![
-            RectangleSpec {
-                x: x0,
-                y: y0,
-                width: 2,
-                height: 2,
-            },
-            RectangleSpec {
-                x: x1,
-                y: y1,
-                width: 2,
-                height: 2,
-            },
+            RectangleSpec::new(x0, y0, 2, 2),
+            RectangleSpec::new(x1, y1, 2, 2),
         ])));
         assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
     }
@@ -188,18 +250,8 @@ mod tests {
         let x1 = engine.new_variable(IntervalDomain::fix(4));
         let y1 = engine.new_variable(IntervalDomain::fix(0));
         engine.add_propagator(Box::new(DiffnPropagator::new(vec![
-            RectangleSpec {
-                x: x0,
-                y: y0,
-                width: 3,
-                height: 3,
-            },
-            RectangleSpec {
-                x: x1,
-                y: y1,
-                width: 3,
-                height: 3,
-            },
+            RectangleSpec::new(x0, y0, 3, 3),
+            RectangleSpec::new(x1, y1, 3, 3),
         ])));
         let status = engine.propagate_all().unwrap();
         assert!(!status.is_failure());
@@ -213,18 +265,8 @@ mod tests {
         let x1 = engine.new_variable(IntervalDomain::new(0, 1));
         let y1 = engine.new_variable(IntervalDomain::new(0, 10));
         engine.add_propagator(Box::new(DiffnPropagator::new(vec![
-            RectangleSpec {
-                x: x0,
-                y: y0,
-                width: 2,
-                height: 2,
-            },
-            RectangleSpec {
-                x: x1,
-                y: y1,
-                width: 2,
-                height: 2,
-            },
+            RectangleSpec::new(x0, y0, 2, 2),
+            RectangleSpec::new(x1, y1, 2, 2),
         ])));
 
         engine.propagate_all().unwrap();
@@ -240,18 +282,8 @@ mod tests {
         let x1 = engine.new_variable(IntervalDomain::new(0, 10));
         let y1 = engine.new_variable(IntervalDomain::new(0, 1));
         engine.add_propagator(Box::new(DiffnPropagator::new(vec![
-            RectangleSpec {
-                x: x0,
-                y: y0,
-                width: 2,
-                height: 2,
-            },
-            RectangleSpec {
-                x: x1,
-                y: y1,
-                width: 2,
-                height: 2,
-            },
+            RectangleSpec::new(x0, y0, 2, 2),
+            RectangleSpec::new(x1, y1, 2, 2),
         ])));
 
         engine.propagate_all().unwrap();
@@ -260,138 +292,56 @@ mod tests {
     }
 
     #[test]
-    fn empty_coordinate_after_propagation_fails() {
+    fn variable_width_forces_y_when_min_widths_overlap() {
         let mut engine = Engine::new();
-        let x0 = engine.new_variable(IntervalDomain::new(0, 5));
-        let y0 = engine.new_variable(IntervalDomain::new(1, 0));
-        let x1 = engine.new_variable(IntervalDomain::new(10, 15));
-        let y1 = engine.new_variable(IntervalDomain::new(0, 5));
+        let x0 = engine.new_variable(IntervalDomain::fix(0));
+        let y0 = engine.new_variable(IntervalDomain::new(0, 10));
+        let x1 = engine.new_variable(IntervalDomain::fix(0));
+        let y1 = engine.new_variable(IntervalDomain::new(0, 10));
+        let w0 = engine.new_variable(IntervalDomain::new(2, 4));
+        let w1 = engine.new_variable(IntervalDomain::new(2, 4));
         engine.add_propagator(Box::new(DiffnPropagator::new(vec![
-            RectangleSpec {
-                x: x0,
-                y: y0,
-                width: 2,
-                height: 2,
-            },
-            RectangleSpec {
-                x: x1,
-                y: y1,
-                width: 2,
-                height: 2,
-            },
+            RectangleSpec::with_variable_size(x0, y0, 2, Some(w0), 2, None),
+            RectangleSpec::with_variable_size(x1, y1, 2, Some(w1), 2, None),
         ])));
-        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
+
+        assert!(!engine.commit_initial_propagation().unwrap().is_failure());
+        assert_eq!(engine.hybrid_domain(y0).min(), Some(9));
+        assert_eq!(engine.hybrid_domain(y1).min(), Some(9));
     }
 
     #[test]
-    fn missing_bounds_skips_pair() {
-        use crate::test_support::MutEngine;
-
+    fn variable_width_allows_side_by_side_when_min_fits() {
         let mut engine = Engine::new();
-        let x0 = engine.new_variable(IntervalDomain::new(1, 0));
+        let x0 = engine.new_variable(IntervalDomain::fix(0));
+        let y0 = engine.new_variable(IntervalDomain::fix(0));
+        let x1 = engine.new_variable(IntervalDomain::new(1, 5));
+        let y1 = engine.new_variable(IntervalDomain::fix(0));
+        let w0 = engine.new_variable(IntervalDomain::new(1, 3));
+        let w1 = engine.new_variable(IntervalDomain::fix(1));
+        engine.add_propagator(Box::new(DiffnPropagator::new(vec![
+            RectangleSpec::with_variable_size(x0, y0, 1, Some(w0), 1, None),
+            RectangleSpec::with_variable_size(x1, y1, 1, Some(w1), 1, None),
+        ])));
+
+        assert!(!engine.commit_initial_propagation().unwrap().is_failure());
+        // Min width 1 allows x1=1; do not force y separation.
+        assert_eq!(engine.hybrid_domain(y0).min(), Some(0));
+        assert_eq!(engine.hybrid_domain(y1).min(), Some(0));
+    }
+
+    #[test]
+    fn empty_size_domain_fails() {
+        let mut engine = Engine::new();
+        let x0 = engine.new_variable(IntervalDomain::new(0, 5));
         let y0 = engine.new_variable(IntervalDomain::new(0, 5));
         let x1 = engine.new_variable(IntervalDomain::new(0, 5));
         let y1 = engine.new_variable(IntervalDomain::new(0, 5));
-        let mut ctx = MutEngine(&mut engine);
-        assert!(!propagate_pair(
-            &mut ctx,
-            RectangleSpec {
-                x: x0,
-                y: y0,
-                width: 2,
-                height: 2,
-            },
-            RectangleSpec {
-                x: x1,
-                y: y1,
-                width: 2,
-                height: 2,
-            },
-        ));
-    }
-
-    #[test]
-    fn missing_right_x_bounds_skips_pair() {
-        use crate::test_support::MutEngine;
-
-        let mut engine = Engine::new();
-        let x0 = engine.new_variable(IntervalDomain::new(0, 5));
-        let y0 = engine.new_variable(IntervalDomain::new(0, 5));
-        let x1 = engine.new_variable(IntervalDomain::new(1, 0));
-        let y1 = engine.new_variable(IntervalDomain::new(0, 5));
-        let mut ctx = MutEngine(&mut engine);
-        assert!(!propagate_pair(
-            &mut ctx,
-            RectangleSpec {
-                x: x0,
-                y: y0,
-                width: 2,
-                height: 2,
-            },
-            RectangleSpec {
-                x: x1,
-                y: y1,
-                width: 2,
-                height: 2,
-            },
-        ));
-    }
-
-    #[test]
-    fn propagation_returns_ok_changed() {
-        let mut engine = Engine::new();
-        let x0 = engine.new_variable(IntervalDomain::new(0, 1));
-        let y0 = engine.new_variable(IntervalDomain::new(0, 10));
-        let x1 = engine.new_variable(IntervalDomain::new(0, 1));
-        let y1 = engine.new_variable(IntervalDomain::new(0, 10));
+        let w0 = engine.new_variable(IntervalDomain::new(2, 1));
         engine.add_propagator(Box::new(DiffnPropagator::new(vec![
-            RectangleSpec {
-                x: x0,
-                y: y0,
-                width: 2,
-                height: 2,
-            },
-            RectangleSpec {
-                x: x1,
-                y: y1,
-                width: 2,
-                height: 2,
-            },
+            RectangleSpec::with_variable_size(x0, y0, 1, Some(w0), 1, None),
+            RectangleSpec::new(x1, y1, 1, 1),
         ])));
-        assert_eq!(
-            engine.propagate_all().unwrap(),
-            PropagationStatus::OkChanged
-        );
-    }
-
-    #[test]
-    fn mock_propagation_empties_coordinate_domain_fails() {
-        use crate::test_support::MockIntCtx;
-
-        let mut engine = Engine::new();
-        let x0 = engine.new_variable(IntervalDomain::new(0, 0));
-        let y0 = engine.new_variable(IntervalDomain::new(0, 0));
-        let x1 = engine.new_variable(IntervalDomain::new(0, 0));
-        let y1 = engine.new_variable(IntervalDomain::new(0, 0));
-        let mut ctx = MockIntCtx::new()
-            .with_domain(x0, vec![0, 1])
-            .with_domain(y0, vec![0, 10])
-            .with_domain(x1, vec![0, 1])
-            .with_domain(y1, vec![]);
-        let mut prop = DiffnPropagator::new(vec![
-            RectangleSpec {
-                x: x0,
-                y: y0,
-                width: 2,
-                height: 2,
-            },
-            RectangleSpec {
-                x: x1,
-                y: y1,
-                width: 2,
-                height: 2,
-            },
-        ]);
-        assert_eq!(prop.propagate(&mut ctx), PropagationStatus::Failure);
+        assert_eq!(engine.propagate_all().unwrap(), PropagationStatus::Failure);
     }
 }

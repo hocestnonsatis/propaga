@@ -126,7 +126,7 @@ Holes are **sound over-approximations**: dropping a hole never removes a feasibl
 | `table` | Supported | Tuple table propagator |
 | `circuit` | Supported | Hamiltonian circuit |
 | `inverse` | Supported | Inverse array |
-| `diffn` | Supported | Non-overlap rectangles (fixed size) |
+| `diffn` | Supported | Non-overlap rectangles; fixed or variable width/height |
 | `regular`, `automaton` | Supported | DFA → table |
 | `count`, `among`, `at_least`, `at_most` | Supported | Global decomposition |
 | `distribute`, `nvalue` | Supported | Global decomposition |

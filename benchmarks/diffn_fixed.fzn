@@ -1,0 +1,9 @@
+% Fixed-size diffn smoke
+array [1..2] of var 0..5: x;
+array [1..2] of var 0..5: y;
+array [1..2] of int: w = [2, 2];
+array [1..2] of int: h = [2, 2];
+
+constraint diffn(x, y, w, h);
+
+solve satisfy;

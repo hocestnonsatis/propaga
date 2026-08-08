@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Warm-start: `OptimizationSearch::with_hint`, `Model::optimize_objective_with_hint`, CLI `solve --hint` (JSON int map).
 - Large-neighborhood search for single-objective optimize: `LargeNeighborhoodSearch` / `Model::optimize_objective_lns`, CLI `--lns-iterations` / `--lns-destroy` / `--lns-seed`.
 - Variable resource capacity for `cumulative` / `fzn_cumulative` (`Model::cumulative_var`, capacity as int param or `var int`).
+- Variable-size `diffn` rectangles (`RectangleSpec` width/height vars; FlatZinc width/height arrays may be `var`).
 - Portfolio `--workers` for single-objective BnB, lexicographic, and Pareto FlatZinc solves (diversified configs; best objective / merged front).
 - Typed conflict learning for set/float wipeouts: posts a `ForbiddenAssignmentPropagator` (float points via `encode_forbidden_float`) over fixed decision vars at conflict.
 - FlatZinc alias layer for MiniZinc solver-library predicates (`fzn_*`, `array_int_lt`, …) plus `fzn_cumulative` / `fzn_exactly_int` / 3-arg `fzn_global_cardinality` remaps.
@@ -28,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Float propagation remains interval-based (sound, not exact real arithmetic).
 - Typed set/float learning blocks fixed assignments only (no first-UIP backjump on the typed path yet).
-- Variable-size `diffn` rectangles and classical edge-finding for cumulative are still open.
+- Classical edge-finding for cumulative is still open (time-table + overload only).
 
 ## [1.1.0] - 2026-07-29
 

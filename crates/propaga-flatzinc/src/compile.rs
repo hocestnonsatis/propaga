@@ -1985,12 +1985,19 @@ fn post_diffn(
 ) -> Result<(), FlatZincError> {
     let x_vars = resolve_var_list(env, xs)?;
     let y_vars = resolve_var_list(env, ys)?;
-    let width_values = resolve_duration_values(env, widths)?;
-    let height_values = resolve_duration_values(env, heights)?;
-    if x_vars.len() != y_vars.len()
-        || x_vars.len() != width_values.len()
-        || x_vars.len() != height_values.len()
-    {
+    let width_binding = resolve_duration_binding(env, widths)?;
+    let height_binding = resolve_duration_binding(env, heights)?;
+
+    let width_len = match &width_binding {
+        DurationBinding::Fixed(values) => values.len(),
+        DurationBinding::Variables(vars) => vars.len(),
+    };
+    let height_len = match &height_binding {
+        DurationBinding::Fixed(values) => values.len(),
+        DurationBinding::Variables(vars) => vars.len(),
+    };
+
+    if x_vars.len() != y_vars.len() || x_vars.len() != width_len || x_vars.len() != height_len {
         return Err(FlatZincError::Unsupported(
             "diffn array length mismatch".to_string(),
         ));
@@ -1998,13 +2005,11 @@ fn post_diffn(
     let rectangles: Vec<RectangleSpec> = x_vars
         .into_iter()
         .zip(y_vars)
-        .zip(width_values)
-        .zip(height_values)
-        .map(|(((x, y), width), height)| RectangleSpec {
-            x,
-            y,
-            width,
-            height,
+        .enumerate()
+        .map(|(index, (x, y))| {
+            let (width, width_var) = duration_field(&width_binding, index);
+            let (height, height_var) = duration_field(&height_binding, index);
+            RectangleSpec::with_variable_size(x, y, width, width_var, height, height_var)
         })
         .collect();
     model.diffn(rectangles);

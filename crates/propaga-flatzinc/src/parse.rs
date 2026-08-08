@@ -338,9 +338,9 @@ pub enum Constraint {
         xs: Expr,
         /// Y coordinates.
         ys: Expr,
-        /// Widths (inline ints or param array).
+        /// Widths (inline ints, param array, or var array).
         widths: DurationSpec,
-        /// Heights (inline ints or param array).
+        /// Heights (inline ints, param array, or var array).
         heights: DurationSpec,
     },
     /// `count(xs, value, total)`
