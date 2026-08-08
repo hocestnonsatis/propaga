@@ -32,15 +32,14 @@ CI runs the same checks on every pull request.
 - Update [README.md](README.md) or [benchmarks/minizinc/COMPATIBILITY.md](benchmarks/minizinc/COMPATIBILITY.md) when user-facing behavior changes.
 - Note FlatZinc subset limitations when adding or changing parser/compiler behavior.
 
-## Versioning policy (0.x)
+## Versioning policy (1.x)
 
-Propaga is currently at **0.1.x**. During the 0.x series:
+Propaga is currently at **1.x** (latest published: **1.1.0**). Unreleased work may land on `main` before the next tag.
 
-- Minor releases may include API changes.
+- Minor releases (`1.N.0`) may add APIs and FlatZinc coverage; document breaking changes in [CHANGELOG.md](CHANGELOG.md).
 - Patch releases are bug fixes and non-breaking additions.
 - FlatZinc support remains an explicit subset; see [COMPATIBILITY.md](benchmarks/minizinc/COMPATIBILITY.md).
-
-Breaking changes should be documented in [CHANGELOG.md](CHANGELOG.md).
+- Releases are user-gated; follow [RELEASE.md](RELEASE.md) only when cutting a tag.
 
 ## License
 

@@ -87,6 +87,57 @@ pub fn lst(max_end: i32, duration: i32) -> i32 {
     max_end - duration
 }
 
+/// Ceiling division for positive `b`; used by energetic edge-finding updates.
+#[must_use]
+pub fn ceil_div_i64(numerator: i64, denominator: i64) -> i64 {
+    debug_assert!(denominator > 0);
+    (numerator + denominator - 1) / denominator
+}
+
+/// Task bounds and energy for classical cumulative edge-finding.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EdgeFindingTask {
+    /// Start variable.
+    pub start: propaga_core::VariableId,
+    /// End variable.
+    pub end: propaga_core::VariableId,
+    /// Earliest start time.
+    pub est: i32,
+    /// Latest completion time (exclusive end bound).
+    pub lct: i32,
+    /// Minimum duration.
+    pub duration: i32,
+    /// Minimum demand.
+    pub demand: i32,
+    /// `duration * demand` as [`i64`].
+    pub energy: i64,
+}
+
+/// Residual capacity energy in `[est, lct)` after placing `used` energy.
+#[must_use]
+pub fn residual_energy(capacity: i32, est: i32, lct: i32, used: i64) -> i64 {
+    let window = i64::from(lct) - i64::from(est);
+    if window <= 0 {
+        return -used;
+    }
+    i64::from(capacity) * window - used
+}
+
+/// New EST after an edge-finding detection that `diff` energy of the task must
+/// stick past `lct_theta` (at height `demand`).
+#[must_use]
+pub fn edge_finding_new_est(lct_theta: i32, duration: i32, demand: i32, diff: i64) -> i32 {
+    let after = ceil_div_i64(diff, i64::from(demand.max(1)));
+    lct_theta + (after as i32) - duration
+}
+
+/// New LCT after an edge-finding detection that `diff` energy must stick before `est_theta`.
+#[must_use]
+pub fn edge_finding_new_lct(est_theta: i32, duration: i32, demand: i32, diff: i64) -> i32 {
+    let before = ceil_div_i64(diff, i64::from(demand.max(1)));
+    est_theta - (before as i32) + duration
+}
+
 /// Returns earliest completion time.
 #[must_use]
 pub fn ect(min_start: i32, duration: i32) -> i32 {
@@ -345,5 +396,14 @@ mod tests {
         let intervals = vec![(MandatoryInterval { start: 0, end: 2 }, 1)];
         assert_eq!(find_overload_time(&intervals, 0, 3, 5), Some(3));
         assert_eq!(find_overload_time(&[], 0, 3, 5), None);
+    }
+
+    #[test]
+    fn ceil_div_and_edge_finding_bound_helpers() {
+        assert_eq!(ceil_div_i64(1, 2), 1);
+        assert_eq!(ceil_div_i64(4, 2), 2);
+        assert_eq!(residual_energy(2, 0, 4, 6), 2);
+        assert_eq!(edge_finding_new_est(4, 2, 2, 2), 3);
+        assert_eq!(edge_finding_new_lct(0, 2, 2, 2), 1);
     }
 }

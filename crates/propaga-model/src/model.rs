@@ -975,20 +975,26 @@ impl Model {
     }
 
     /// Portfolio branch-and-bound over diversified search configurations.
+    ///
+    /// When `hint` is `Some`, every worker warm-starts from that assignment when feasible.
     pub fn optimize_objective_portfolio(
         &mut self,
         variables: impl Into<Vec<VariableId>>,
         target: propaga_search::OptimizationTarget,
         direction: propaga_search::ObjectiveDirection,
         portfolio: PortfolioConfig,
+        hint: Option<Solution>,
     ) -> (
         Option<Solution>,
         Option<propaga_search::ObjectiveValue>,
         SearchStats,
         u32,
     ) {
-        let search = PortfolioSearch::new(variables, self.search_config, portfolio)
+        let mut search = PortfolioSearch::new(variables, self.search_config, portfolio)
             .with_search_phases(self.search_phases.clone());
+        if let Some(hint) = hint {
+            search = search.with_hint(hint);
+        }
         let result = search.optimize(&mut self.engine, target, direction);
         (
             result.solution,

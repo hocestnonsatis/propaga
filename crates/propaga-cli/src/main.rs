@@ -64,6 +64,8 @@ struct Cli {
     time_limit: Option<f64>,
 
     /// Portfolio worker count for search (`1` disables portfolio).
+    /// With `--hint` on single-objective BnB, every worker warm-starts from the same hint.
+    /// `--lns-iterations` stays single-threaded and ignores this flag.
     #[arg(long, global = true, default_value = "1")]
     workers: usize,
 
@@ -120,11 +122,13 @@ enum Commands {
         #[arg(long)]
         format: Option<String>,
 
-        /// JSON warm-start assignment (`{ "x": 1 }` or `{ "variables": { "x": 1 } }`).
+        /// JSON warm-start for single-objective BnB, portfolio BnB, or LNS
+        /// (`{ "x": 1 }` or `{ "variables": { "x": 1 } }`).
         #[arg(long, value_name = "PATH")]
         hint: Option<PathBuf>,
 
         /// Large-neighborhood search repair iterations (single-objective optimize only).
+        /// Incomplete: does not prove optimality. Overrides `--workers` (LNS is single-threaded).
         #[arg(long, value_name = "N")]
         lns_iterations: Option<u32>,
 

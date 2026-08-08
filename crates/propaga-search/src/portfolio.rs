@@ -40,6 +40,8 @@ pub struct PortfolioSearch {
     base_config: SearchConfig,
     portfolio: PortfolioConfig,
     search_phases: Vec<SearchPhase>,
+    /// Optional integer warm-start shared by every single-objective BnB worker.
+    hint: Option<Solution>,
 }
 
 impl PortfolioSearch {
@@ -55,6 +57,7 @@ impl PortfolioSearch {
             base_config,
             portfolio,
             search_phases: Vec::new(),
+            hint: None,
         }
     }
 
@@ -66,6 +69,28 @@ impl PortfolioSearch {
     pub fn with_search_phases(mut self, search_phases: impl Into<Vec<SearchPhase>>) -> Self {
         self.search_phases = search_phases.into();
         self
+    }
+
+    /// Seeds every single-objective BnB worker with the same warm-start hint when feasible.
+    #[must_use]
+    pub fn with_hint(mut self, hint: Solution) -> Self {
+        self.hint = Some(hint);
+        self
+    }
+
+    fn bnb_with_config(
+        &self,
+        target: OptimizationTarget,
+        direction: ObjectiveDirection,
+        config: SearchConfig,
+    ) -> OptimizationSearch {
+        let mut search =
+            OptimizationSearch::with_target(self.variables.clone(), target, direction, config)
+                .with_search_phases(self.search_phases.clone());
+        if let Some(hint) = &self.hint {
+            search = search.with_hint(hint.clone());
+        }
+        search
     }
 
     /// Searches for the first solution using the configured portfolio.
@@ -105,14 +130,9 @@ impl PortfolioSearch {
         let configs = self.worker_configs();
         if configs.len() <= 1 {
             engine.restore_checkpoint(&checkpoint);
-            return OptimizationSearch::with_target(
-                self.variables.clone(),
-                target,
-                direction,
-                configs[0],
-            )
-            .with_search_phases(self.search_phases.clone())
-            .optimize(engine);
+            return self
+                .bnb_with_config(target, direction, configs[0])
+                .optimize(engine);
         }
 
         let workers: Vec<_> = configs
@@ -124,8 +144,7 @@ impl PortfolioSearch {
             .into_par_iter()
             .zip(configs.par_iter())
             .map(|(mut worker_engine, config)| {
-                OptimizationSearch::with_target(self.variables.clone(), target, direction, *config)
-                    .with_search_phases(self.search_phases.clone())
+                self.bnb_with_config(target, direction, *config)
                     .optimize(&mut worker_engine)
             })
             .collect();
@@ -589,6 +608,37 @@ mod tests {
             OptimizationTarget::Int(x),
             ObjectiveDirection::Maximize,
         );
+        assert_eq!(result.objective_value, Some(ObjectiveValue::Int(10)));
+    }
+
+    #[test]
+    fn portfolio_optimize_honors_shared_hint() {
+        use crate::value::AssignmentValue;
+
+        let mut engine = Engine::new();
+        let x = engine.new_variable(IntervalDomain::new(0, 10));
+        let y = engine.new_variable(IntervalDomain::new(0, 10));
+        engine.add_propagator(Box::new(LinearScalarLePropagator::new(
+            vec![1, 1],
+            vec![x, y],
+            10,
+        )));
+        let hint = vec![(x, AssignmentValue::Int(7)), (y, AssignmentValue::Int(0))];
+        let search = PortfolioSearch::new(
+            vec![x, y],
+            SearchConfig::default(),
+            PortfolioConfig {
+                workers: 2,
+                deterministic: true,
+            },
+        )
+        .with_hint(hint);
+        let result = search.optimize(
+            &mut engine,
+            OptimizationTarget::Int(x),
+            ObjectiveDirection::Maximize,
+        );
+        assert!(result.solutions_found >= 1);
         assert_eq!(result.objective_value, Some(ObjectiveValue::Int(10)));
     }
 }

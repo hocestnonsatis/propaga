@@ -2,42 +2,52 @@
 
 Forward-looking ideas beyond v1.1.0. See [README.md](README.md) for what ships today and [COMPATIBILITY.md](benchmarks/minizinc/COMPATIBILITY.md) for FlatZinc coverage.
 
-Phased plan: [docs/superpowers/plans/2026-08-07-phased-v1.2-v1.4.md](docs/superpowers/plans/2026-08-07-phased-v1.2-v1.4.md).
+Phased plans:
+- [docs/superpowers/plans/2026-08-07-phased-v1.2-v1.4.md](docs/superpowers/plans/2026-08-07-phased-v1.2-v1.4.md) (v1.2–v1.4 feature backlog; releases user-gated)
+- [docs/superpowers/plans/2026-08-08-post-v14-dev.md](docs/superpowers/plans/2026-08-08-post-v14-dev.md) (post-v1.4 engineering: EF, typed decision-UIP, aliases, search polish)
 
-## Next (v1.2 — polish)
+## Next (post-v1.4 engineering — Unreleased)
 
-- ~~`ceil` / `floor` / `round`: hole-list-driven interior integer-image holes on wide spans (endpoint shrink already lands)~~ (landed: hole-list + unit-width gap checks)
-- ~~Typed conflict learning for set / float wipeouts (domain-reason nogoods; int path unchanged)~~ (landed: forbidden-assignment blocking of fixed typed decisions)
-- ~~Portfolio `--workers` on BnB / lex / Pareto (best-objective / front merge across diversified workers)~~
-- Doc parity: `restart_linear` / `restart_on_solution` in COMPATIBILITY; tighten Known limitations
-- Release v1.2.0 when polish backlog is closed
+- ~~Classical cumulative edge-finding (energetic overload + EST/LCT)~~
+- ~~Typed decision-UIP backjump on set/float wipeouts~~
+- ~~Broader `fzn_*` / `array_*` alias map~~
+- ~~Portfolio BnB shares `--hint`; LNS/workers CLI clarified; cumulative in perf manifest~~
+- ~~Process doc hygiene (CONTRIBUTING/SECURITY/RELEASE → 1.x)~~
+- Release v1.2.0 / v1.3.0 / v1.4.0 when the user requests a cut
 
-## Later (v1.3 — ecosystem)
+## Later (v1.2 — polish) — feature work landed
 
-- ~~Fresh MiniZinc FlatZinc aliases (`fzn_*`, `array_int_lt`, …) → stdlib primitive map~~
+- ~~`ceil` / `floor` / `round`: hole-list-driven interior integer-image holes on wide spans~~
+- ~~Typed conflict learning for set / float wipeouts~~ (forbidden-assignment + decision-UIP backjump)
+- ~~Portfolio `--workers` on BnB / lex / Pareto~~
+- Release v1.2.0 when polish backlog is closed (user-gated)
+
+## Later (v1.3 — ecosystem) — feature work landed
+
+- ~~Fresh MiniZinc FlatZinc aliases → stdlib primitive map~~
 - ~~CI MiniZinc install + `flatzinc-full-compat-report.sh` fail-closed gate~~ (`minizinc-fresh` job)
-- ~~Real `incomplete` search semantics (BnB stops after first feasible)~~
+- ~~Real `incomplete` search semantics~~
 - Release v1.3.0 when ecosystem backlog is closed (user-gated)
 
-## Later (v1.4+ — competitive)
+## Later (v1.4+ — competitive) — feature work landed
 
-- ~~Warm-start + LNS for int optimize~~ (`--hint` / `--lns-iterations`; Model APIs)
-- ~~Variable capacity for native `cumulative`~~ (`cumulative_var` / FlatZinc var capacity)
-- ~~Variable-size `diffn`~~ (width/height vars + FlatZinc var arrays)
-- Stronger edge-finding for cumulative (beyond time-table)
-- ~~Timed FlatZinc perf corpus / nightly Criterion~~ (`scripts/flatzinc-perf-report.sh`, `cargo bench -p propaga-flatzinc`, weekly Perf workflow)
-- Cumulative duration/demand mins feed time-table (classical edge-finding still open)
-- Release v1.4.0 when ready
+- ~~Warm-start + LNS for int optimize~~
+- ~~Variable capacity for native `cumulative`~~
+- ~~Variable-size `diffn`~~
+- ~~Stronger edge-finding for cumulative~~
+- ~~Timed FlatZinc perf corpus / Criterion~~
+- ~~Cumulative duration/demand mins feed time-table~~
+- Release v1.4.0 when ready (user-gated)
 
-- Float / set objectives in lexicographic and Pareto multi-objective search
-- Incremental Pareto front maintenance (streamed DFS, online filtering)
-- Typed Pareto dominance cuts (`DominanceCutPropagator` for int / float / set-cardinality)
-- Non-int assignment blocking (`ForbiddenAssignmentPropagator`); Pareto search uses cuts + blocking for all objective types
-- Continuous float point exclusion via `encode_forbidden_float` (reif OR) wired into Pareto assignment blocking
-- DFS float branching prefers splitting around registered blocked IEEE points (`with_float_holes` / Pareto hole tracking)
-- Stronger float `!=` / `<`: `FloatNePropagator` endpoint pruning, strengthened `FloatEqReif`, strict `float_lt` via `¬(b ≤ a)`
-- `FloatLinearNePropagator` + fixed `ReifiedFloatLinearEq(false)` (bound-touch / unit endpoint pruning; FlatZinc `float_lin_ne`)
-- Docs: COMPATIBILITY lex/Pareto notes cover float and set-cardinality objectives
+## Open research / deeper follow-ups
+
+- Typed first-UIP explanation graph / LCG (beyond decision-UIP)
+- Exact real float arithmetic (out of scope; intervals + holes remain)
+- Further `minizinc-fresh` alias triage as new solver profiles appear
+- Hint/LNS for multi-objective and richer LNS repair completeness controls
+
+## Historical shipped checklist (v1.1 and earlier)
+
 - DFS `solve_each` set in/out branching trail-correctness fix
 - `FloatDomain` interior holes + `exclude_float_point`; `FloatNe` / forbidden assignment / DFS use domain holes
 - Hole-aware float arithmetic: `affine` / fixed-operand `plus`/`times`/`divide`, equality hole sharing, binary plus/times/div propagators project holes

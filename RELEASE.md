@@ -13,8 +13,8 @@ This document describes how to cut a new release after CI is green on `main`.
 Push a version tag; the [release workflow](.github/workflows/release.yml) runs tests, builds binaries, creates a GitHub Release, and publishes crates.
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v1.2.0
+git push origin v1.2.0
 ```
 
 ## Manual release
@@ -49,7 +49,7 @@ cargo publish -p propaga-domains
 
 ### 3. GitHub Release
 
-Create a release for tag `v0.1.0` with notes from `CHANGELOG.md`.
+Create a release for tag `v1.2.0` with notes from `CHANGELOG.md`.
 Attach binary artifacts from the release workflow, or build locally:
 
 ```bash

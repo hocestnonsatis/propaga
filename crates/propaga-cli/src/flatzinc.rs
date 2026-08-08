@@ -272,7 +272,9 @@ fn solve_source(
             let objective = instance.objectives[0];
             let (solution, value, stats, solutions_found) = if let Some(lns) = lns {
                 if options.workers > 1 {
-                    eprintln!("warning: --lns-iterations ignores --workers for single-objective");
+                    eprintln!(
+                        "warning: --lns-iterations uses single-threaded LNS and ignores --workers"
+                    );
                 }
                 instance.model.optimize_objective_lns(
                     instance.solve_vars.clone(),
@@ -282,9 +284,6 @@ fn solve_source(
                     hint,
                 )
             } else if options.workers > 1 {
-                if hint.is_some() {
-                    eprintln!("warning: --hint is ignored with --workers > 1");
-                }
                 instance.model.optimize_objective_portfolio(
                     instance.solve_vars.clone(),
                     objective.optimization_target(),
@@ -293,6 +292,7 @@ fn solve_source(
                         workers: options.workers,
                         deterministic: options.deterministic,
                     },
+                    hint,
                 )
             } else if let Some(hint) = hint {
                 instance.model.optimize_objective_with_hint(

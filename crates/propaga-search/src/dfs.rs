@@ -729,7 +729,10 @@ impl DepthFirstSearch {
                 self.bump_variable_weight(conflict.variable);
                 self.bump_variable_activity(conflict.variable);
                 if self.config.learning {
-                    self.learn_typed_conflict(engine);
+                    let jumped = self.learn_typed_conflict(engine, level);
+                    if jumped {
+                        return true;
+                    }
                 }
             } else if self.config.learning {
                 self.bump_weights(&conflict.explanation.unique_branch_literals());
@@ -762,8 +765,9 @@ impl DepthFirstSearch {
         false
     }
 
-    /// Blocks rediscovery of the fixed typed assignment present at a set/float wipeout.
-    fn learn_typed_conflict(&mut self, engine: &mut Engine) {
+    /// Blocks rediscovery of the fixed typed assignment present at a set/float wipeout,
+    /// then decision-UIP backjumps using unique branch literals on the trail.
+    fn learn_typed_conflict(&mut self, engine: &mut Engine, level: usize) -> bool {
         let decision_vars = self.variables.clone();
         let mut forbidden = Vec::new();
         for var in decision_vars {
@@ -803,12 +807,18 @@ impl DepthFirstSearch {
             }
         }
 
-        if forbidden.is_empty() {
-            return;
+        if !forbidden.is_empty() {
+            engine.add_propagator(Box::new(ForbiddenAssignmentPropagator::new(forbidden)));
+            self.stats.record_nogood();
         }
 
-        engine.add_propagator(Box::new(ForbiddenAssignmentPropagator::new(forbidden)));
-        self.stats.record_nogood();
+        let branch_order: Vec<NogoodLiteral> = engine.explanation().unique_branch_literals();
+        let target = ConflictAnalyzer::typed_decision_backjump(&branch_order, level);
+        if target < level {
+            engine.trail_backtrack(target);
+            return true;
+        }
+        false
     }
 
     fn should_restart(&self) -> bool {
@@ -2137,5 +2147,45 @@ mod tests {
         ));
         let _ = search.handle_failure(&mut engine, level);
         assert!(search.stats().nogoods_learned > 0);
+    }
+
+    #[test]
+    fn typed_learning_decision_uip_backjumps_below_current_level() {
+        use propaga_domains::{AnyDomain, FloatDomain};
+        use propaga_propagators::FloatNePropagator;
+
+        let mut engine = Engine::new();
+        let prior = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 1.0)));
+        let x = engine.new_variable(AnyDomain::Float(FloatDomain::new(0.0, 1.0)));
+        let zero = engine.new_variable(AnyDomain::Float(FloatDomain::fix(0.0)));
+        engine.add_propagator(Box::new(FloatNePropagator::new(x, zero)));
+
+        let mut search = DepthFirstSearch::with_config(
+            vec![prior, x],
+            SearchConfig {
+                learning: true,
+                restart_policy: RestartPolicy::None,
+                ..SearchConfig::default()
+            },
+        );
+
+        let _level0 = engine.trail_mark();
+        assert!(!matches!(
+            engine.fix_float(prior, 0.5).unwrap(),
+            PropagationStatus::Failure
+        ));
+        let level1 = engine.trail_mark();
+        assert!(matches!(
+            engine.fix_float(x, 0.0),
+            Ok(PropagationStatus::Failure)
+        ));
+        let jumped = search.handle_failure(&mut engine, level1);
+        assert!(
+            jumped,
+            "typed decision-UIP should backjump below current level"
+        );
+        assert!(search.stats().nogoods_learned > 0);
+        // Backjump undoes the prior float decision as well when it is on the trail.
+        assert!(!engine.domain(prior).as_float().unwrap().is_fixed());
     }
 }

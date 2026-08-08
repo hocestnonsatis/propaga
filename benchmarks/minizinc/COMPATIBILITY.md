@@ -120,7 +120,7 @@ Holes are **sound over-approximations**: dropping a hole never removes a feasibl
 | Constraint | Status | Propaga mapping |
 |------------|--------|-----------------|
 | `all_different` | Supported | GAC all-different |
-| `cumulative` | Supported | Overload + time-table; fixed or variable capacity (raises cap LB from mandatory peak) |
+| `cumulative` | Supported | Overload + time-table + classical energetic edge-finding (EST/LCT); fixed or variable capacity (raises cap LB from mandatory peak) |
 | `disjunctive` | Supported | Disjunctive propagator |
 | `global_cardinality` | Supported | 2-arg and 4-arg forms |
 | `table` | Supported | Tuple table propagator |
@@ -140,15 +140,18 @@ MiniZinc solver profiles that declare native `fzn_*` predicates emit those names
 
 | Alias | Canonical |
 |-------|-----------|
-| `fzn_all_different_int` / `fzn_all_different_set` | `all_different` |
+| `fzn_all_different_*` / `fzn_alldifferent(_int)` | `all_different` |
 | `array_int_lt` / `array_bool_lt` / `fzn_lex_less_*` | `lex_less` |
 | `array_int_le(q)` / `fzn_lex_lesseq_*` | `lex_lesseq` |
-| `fzn_count_eq` | `count` |
-| `fzn_at_least_int` / `fzn_at_most_int` | `at_least` / `at_most` |
-| `fzn_exactly_int` | `count` (argument reorder) |
-| `fzn_nvalue`, `fzn_circuit`, `fzn_inverse`, `fzn_diffn`, `fzn_disjunctive`, `fzn_sort`, `fzn_table_*`, `fzn_regular` | same-named builtin |
+| `array_int_gt` / `fzn_lex_greater_*` | `lex_greater` |
+| `array_int_ge(q)` / `fzn_lex_greatereq_*` | `lex_greatereq` |
+| `fzn_count` / `fzn_count_eq` | `count` |
+| `fzn_at_least(_int)` / `fzn_at_most(_int)` | `at_least` / `at_most` |
+| `fzn_exactly_int` | `count` (argument reorder in parse) |
+| `fzn_nvalue`, `fzn_among`, `fzn_distribute`, `fzn_circuit`, `fzn_inverse`, `fzn_diffn`, `fzn_disjunctive`, `fzn_sort`, `fzn_table*`, `fzn_regular`, `fzn_increasing`, `fzn_decreasing` | same-named builtin |
 | `fzn_global_cardinality(xs, cover, counts)` | `global_cardinality` with `lbound=ubound=counts` |
 | `fzn_cumulative(start, duration, resource, capacity)` | `cumulative` with synthesized end auxiliaries; capacity may be int or `var int` |
+| `array_int_maximum` / `array_float_maximum` (and `*_minimum`) | identity (already canonical) |
 
 See [`aliases.rs`](../../crates/propaga-flatzinc/src/aliases.rs).
 
@@ -209,7 +212,7 @@ Supported value selectors: `indomain_min`, `indomain_max`, `indomain_middle`, `i
 | `--lns-destroy FRAC` | Supported | Destroy fraction per LNS iteration (default `0.3`) |
 | `--lns-seed N` | Supported | Deterministic LNS destroy seed |
 
-BnB, lexicographic, and Pareto optimize paths inherit `seq_search` phases and honor `--workers` (independent diversified workers; best objective or merged Pareto front). `--hint` / LNS apply to single-objective optimize only.
+BnB, lexicographic, and Pareto optimize paths inherit `seq_search` phases and honor `--workers` (independent diversified workers; best objective or merged Pareto front). `--hint` warm-starts every single-objective BnB worker (including portfolio). `--lns-iterations` is incomplete single-threaded repair and overrides `--workers`.
 
 ## MiniZinc workflow
 

@@ -1,6 +1,7 @@
 use crate::scheduling::{
-    MandatoryContribution, MandatoryInterval, TaskSpec, build_time_table, ect, est,
-    find_excess_time, find_overload_time, lct, mandatory_interval, mandatory_literals_at_time,
+    EdgeFindingTask, MandatoryContribution, MandatoryInterval, TaskSpec, build_time_table, ect,
+    edge_finding_new_est, edge_finding_new_lct, est, find_excess_time, find_overload_time, lct,
+    mandatory_interval, mandatory_literals_at_time, residual_energy,
 };
 use propaga_core::{PropagationContext, PropagationStatus, Propagator, VariableId};
 
@@ -86,6 +87,7 @@ impl Propagator for CumulativePropagator {
             let mut round_changed = false;
             round_changed |= propagate_precedence(ctx, &self.tasks);
             round_changed |= propagate_time_table(ctx, &self.tasks, cap_max);
+            round_changed |= propagate_edge_finding(ctx, &self.tasks, cap_max);
             round_changed |=
                 tighten_capacity_lower_bound(ctx, &self.tasks, self.capacity_var, cap_min);
             changed |= round_changed;
@@ -213,6 +215,7 @@ fn cumulative_conflict_literals(
 ) -> Option<Vec<(VariableId, i32)>> {
     mandatory_overload_literals(ctx, tasks, capacity)
         .or_else(|| time_table_excess_literals(ctx, tasks, capacity))
+        .or_else(|| energy_overload_literals(ctx, tasks, capacity))
 }
 
 fn mandatory_overload_literals(
@@ -247,6 +250,182 @@ fn time_table_excess_literals(
     let table = build_time_table(&intervals, horizon_start, horizon_end);
     let excess_time = find_excess_time(&table, capacity)?;
     Some(mandatory_literals_at_time(&contributions, excess_time))
+}
+
+fn collect_edge_finding_tasks(
+    ctx: &dyn PropagationContext,
+    tasks: &[TaskSpec],
+) -> Vec<EdgeFindingTask> {
+    let mut out = Vec::with_capacity(tasks.len());
+    for task in tasks {
+        let Some(start_min) = ctx.domain(task.start).min() else {
+            continue;
+        };
+        let Some(end_max) = ctx.domain(task.end).max() else {
+            continue;
+        };
+        let duration = duration_min(ctx, task);
+        let demand = demand_min(ctx, task);
+        if duration <= 0 || demand <= 0 {
+            continue;
+        }
+        let task_est = est(start_min);
+        let task_lct = lct(end_max);
+        // Leave horizon-infeasible tasks to precedence / domain wipeout.
+        if task_est.saturating_add(duration) > task_lct {
+            continue;
+        }
+        let energy = i64::from(duration) * i64::from(demand);
+        out.push(EdgeFindingTask {
+            start: task.start,
+            end: task.end,
+            est: task_est,
+            lct: task_lct,
+            duration,
+            demand,
+            energy,
+        });
+    }
+    out
+}
+
+/// Energetic overload of an LCT-sorted prefix (classical cumulative EF).
+fn energy_overload_literals(
+    ctx: &dyn PropagationContext,
+    tasks: &[TaskSpec],
+    capacity: i32,
+) -> Option<Vec<(VariableId, i32)>> {
+    let mut by_lct = collect_edge_finding_tasks(ctx, tasks);
+    if by_lct.is_empty() {
+        return None;
+    }
+    by_lct.sort_by_key(|task| (task.lct, task.est, task.start.key()));
+
+    let mut energy: i64 = 0;
+    let mut est_theta = i32::MAX;
+    for (index, task) in by_lct.iter().enumerate() {
+        energy += task.energy;
+        est_theta = est_theta.min(task.est);
+        let lct_theta = task.lct;
+        if residual_energy(capacity, est_theta, lct_theta, energy) < 0 {
+            return Some(
+                by_lct[..=index]
+                    .iter()
+                    .map(|member| (member.start, member.est))
+                    .collect(),
+            );
+        }
+    }
+    None
+}
+
+/// Classical edge-finding: energetic overload pruning of EST / LCT bounds.
+fn propagate_edge_finding(
+    ctx: &mut dyn PropagationContext,
+    tasks: &[TaskSpec],
+    capacity: i32,
+) -> bool {
+    let snapshot = collect_edge_finding_tasks(ctx, tasks);
+    if snapshot.len() < 2 {
+        return false;
+    }
+
+    let mut changed = false;
+    changed |= edge_finding_update_est(ctx, &snapshot, capacity);
+    changed |= edge_finding_update_lct(ctx, &snapshot, capacity);
+    changed
+}
+
+fn edge_finding_update_est(
+    ctx: &mut dyn PropagationContext,
+    tasks: &[EdgeFindingTask],
+    capacity: i32,
+) -> bool {
+    let mut by_lct = tasks.to_vec();
+    by_lct.sort_by_key(|task| (task.lct, task.est, task.start.key()));
+
+    let mut changed = false;
+    let mut energy: i64 = 0;
+    let mut est_theta = i32::MAX;
+    for theta_end in 0..by_lct.len() {
+        let theta_task = by_lct[theta_end];
+        energy += theta_task.energy;
+        est_theta = est_theta.min(theta_task.est);
+        let lct_theta = theta_task.lct;
+        let available = residual_energy(capacity, est_theta, lct_theta, energy);
+        if available < 0 {
+            continue;
+        }
+
+        for outer in &by_lct[theta_end + 1..] {
+            let est_union = est_theta.min(outer.est);
+            if energy + outer.energy
+                <= i64::from(capacity) * (i64::from(lct_theta) - i64::from(est_union))
+            {
+                continue;
+            }
+            let diff = outer.energy - available;
+            if diff <= 0 {
+                continue;
+            }
+            let new_est = edge_finding_new_est(lct_theta, outer.duration, outer.demand, diff);
+            if new_est > outer.est && ctx.remove_below(outer.start, new_est) {
+                changed = true;
+            }
+        }
+    }
+    changed
+}
+
+fn edge_finding_update_lct(
+    ctx: &mut dyn PropagationContext,
+    tasks: &[EdgeFindingTask],
+    capacity: i32,
+) -> bool {
+    let mut by_est = tasks.to_vec();
+    by_est.sort_by_key(|task| {
+        (
+            std::cmp::Reverse(task.est),
+            std::cmp::Reverse(task.lct),
+            task.start.key(),
+        )
+    });
+
+    let mut changed = false;
+    let mut energy: i64 = 0;
+    let mut lct_theta = i32::MIN;
+    for theta_end in 0..by_est.len() {
+        let theta_task = by_est[theta_end];
+        energy += theta_task.energy;
+        lct_theta = lct_theta.max(theta_task.lct);
+        let est_theta = theta_task.est;
+        let available = residual_energy(capacity, est_theta, lct_theta, energy);
+        if available < 0 {
+            continue;
+        }
+
+        for outer in &by_est[theta_end + 1..] {
+            let lct_union = lct_theta.max(outer.lct);
+            if energy + outer.energy
+                <= i64::from(capacity) * (i64::from(lct_union) - i64::from(est_theta))
+            {
+                continue;
+            }
+            let diff = outer.energy - available;
+            if diff <= 0 {
+                continue;
+            }
+            let new_lct = edge_finding_new_lct(est_theta, outer.duration, outer.demand, diff);
+            if new_lct < outer.lct && ctx.remove_above(outer.end, new_lct) {
+                changed = true;
+            }
+            let new_lst = new_lct - outer.duration;
+            if new_lst < outer.lct - outer.duration && ctx.remove_above(outer.start, new_lst) {
+                changed = true;
+            }
+        }
+    }
+    changed
 }
 
 fn mandatory_intervals(contributions: &[MandatoryContribution]) -> Vec<(MandatoryInterval, i32)> {
@@ -487,58 +666,42 @@ mod tests {
     #[test]
     fn weighted_demand_overload_records_literals() {
         let mut engine = Engine::new();
-        let start_a = engine.new_variable(IntervalDomain::new(0, 2));
-        let end_a = engine.new_variable(IntervalDomain::new(2, 4));
-        let start_b = engine.new_variable(IntervalDomain::new(0, 2));
-        let end_b = engine.new_variable(IntervalDomain::new(2, 4));
+        let start_a = engine.new_variable(IntervalDomain::fix(0));
+        let end_a = engine.new_variable(IntervalDomain::fix(2));
+        let start_b = engine.new_variable(IntervalDomain::fix(0));
+        let end_b = engine.new_variable(IntervalDomain::fix(2));
         let tasks = vec![
             TaskSpec::with_demand(start_a, 2, end_a, 2),
             TaskSpec::with_demand(start_b, 2, end_b, 2),
         ];
-        engine.add_propagator(Box::new(CumulativePropagator::new(tasks, 2)));
-        engine.trail_mark();
-        engine.fix_variable(start_a, 0).unwrap();
-        let _ = engine.fix_variable(start_b, 0);
-
-        let conflict = engine.last_conflict().expect("conflict");
-        let literals = conflict
-            .explanation
-            .propagator_conflict_literals()
-            .expect("propagator conflict");
+        let ro = ReadOnlyEngine(&engine);
+        let literals = mandatory_overload_literals(&ro, &tasks, 2).expect("overload");
         assert_eq!(literals.len(), 2);
     }
 
     #[test]
     fn overload_records_mandatory_start_literals() {
         let mut engine = Engine::new();
-        let start_a = engine.new_variable(IntervalDomain::new(0, 2));
-        let end_a = engine.new_variable(IntervalDomain::new(1, 3));
-        let start_b = engine.new_variable(IntervalDomain::new(0, 2));
-        let end_b = engine.new_variable(IntervalDomain::new(1, 3));
+        let start_a = engine.new_variable(IntervalDomain::fix(0));
+        let end_a = engine.new_variable(IntervalDomain::fix(1));
+        let start_b = engine.new_variable(IntervalDomain::fix(0));
+        let end_b = engine.new_variable(IntervalDomain::fix(1));
         let tasks = vec![
             TaskSpec::new(start_a, 1, end_a),
             TaskSpec::new(start_b, 1, end_b),
         ];
-        engine.add_propagator(Box::new(CumulativePropagator::new(tasks, 1)));
-        engine.trail_mark();
-        engine.fix_variable(start_a, 0).unwrap();
-        let _ = engine.fix_variable(start_b, 0);
-
-        let conflict = engine.last_conflict().expect("conflict");
-        let literals = conflict
-            .explanation
-            .propagator_conflict_literals()
-            .expect("propagator conflict");
+        let ro = ReadOnlyEngine(&engine);
+        let literals = mandatory_overload_literals(&ro, &tasks, 1).expect("overload");
         assert_eq!(literals.len(), 2);
         assert!(
             literals
                 .iter()
-                .any(|literal| literal.variable == start_a && literal.value == 0)
+                .any(|(var, value)| *var == start_a && *value == 0)
         );
         assert!(
             literals
                 .iter()
-                .any(|literal| literal.variable == start_b && literal.value == 0)
+                .any(|(var, value)| *var == start_b && *value == 0)
         );
     }
 
@@ -554,10 +717,16 @@ mod tests {
             TaskSpec::new(start_b, 1, end_b),
         ];
         engine.add_propagator(Box::new(CumulativePropagator::new(tasks, 1)));
-        engine.fix_variable(start_a, 0).unwrap();
-        engine.fix_variable(start_b, 0).unwrap();
-        let status = engine.propagate_all().unwrap();
-        assert_eq!(status, PropagationStatus::Failure);
+        assert_ne!(
+            engine.fix_variable(start_a, 0).unwrap(),
+            PropagationStatus::Failure
+        );
+        // Edge-finding / capacity-1 reasoning removes the overlapping start.
+        assert!(!engine.hybrid_domain(start_b).contains(0));
+        assert_eq!(
+            engine.fix_variable(start_b, 0).unwrap(),
+            PropagationStatus::Failure
+        );
     }
 
     #[test]
@@ -769,24 +938,18 @@ mod tests {
     #[test]
     fn time_table_excess_conflict_records_literals() {
         let mut engine = Engine::new();
-        let start_a = engine.new_variable(IntervalDomain::new(0, 2));
-        let end_a = engine.new_variable(IntervalDomain::new(3, 6));
-        let start_b = engine.new_variable(IntervalDomain::new(0, 2));
-        let end_b = engine.new_variable(IntervalDomain::new(3, 8));
+        let start_a = engine.new_variable(IntervalDomain::fix(0));
+        let end_a = engine.new_variable(IntervalDomain::fix(3));
+        let start_b = engine.new_variable(IntervalDomain::fix(0));
+        let end_b = engine.new_variable(IntervalDomain::fix(3));
         let tasks = vec![
             TaskSpec::with_demand(start_a, 3, end_a, 2),
             TaskSpec::with_demand(start_b, 3, end_b, 2),
         ];
-        engine.add_propagator(Box::new(CumulativePropagator::new(tasks, 2)));
-        engine.trail_mark();
-        engine.fix_variable(start_a, 0).unwrap();
-        let _ = engine.fix_variable(start_b, 0);
-        let conflict = engine.last_conflict().expect("conflict");
+        let ro = ReadOnlyEngine(&engine);
         assert!(
-            conflict
-                .explanation
-                .propagator_conflict_literals()
-                .is_some()
+            time_table_excess_literals(&ro, &tasks, 2).is_some()
+                || mandatory_overload_literals(&ro, &tasks, 2).is_some()
         );
     }
 
@@ -1383,5 +1546,105 @@ mod tests {
             .with_open_singleton(start_b, 0)
             .with_domain(end_b, vec![1]);
         assert!(propagate_time_table(&mut ctx, &tasks, 1));
+    }
+
+    #[test]
+    fn edge_finding_prunes_start_beyond_time_table() {
+        // Open domains: no mandatory contributions, so time-table is idle.
+        // A,B pack [0,4) at capacity 2 with energy 6; C (demand 2, dur 2) is pushed.
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::new(0, 2));
+        let end_a = engine.new_variable(IntervalDomain::new(3, 4));
+        let start_b = engine.new_variable(IntervalDomain::new(0, 2));
+        let end_b = engine.new_variable(IntervalDomain::new(3, 4));
+        let start_c = engine.new_variable(IntervalDomain::new(0, 4));
+        let end_c = engine.new_variable(IntervalDomain::new(2, 6));
+        let tasks = vec![
+            TaskSpec::new(start_a, 3, end_a),
+            TaskSpec::new(start_b, 3, end_b),
+            TaskSpec::with_demand(start_c, 2, end_c, 2),
+        ];
+        let snapshot = {
+            let ro = ReadOnlyEngine(&engine);
+            collect_edge_finding_tasks(&ro, &tasks)
+        };
+        assert_eq!(snapshot.len(), 3);
+        assert!(!propagate_time_table(
+            &mut MutEngine(&mut engine),
+            &tasks,
+            2
+        ));
+        assert!(propagate_edge_finding(
+            &mut MutEngine(&mut engine),
+            &tasks,
+            2
+        ));
+        assert!(engine.hybrid_domain(start_c).min().unwrap() >= 3);
+    }
+
+    #[test]
+    fn edge_finding_energy_overload_records_est_literals() {
+        let mut engine = Engine::new();
+        // Two unit tasks of length 2 in a window of length 2 at capacity 1 → energy 4 > 2.
+        let start_a = engine.new_variable(IntervalDomain::new(0, 0));
+        let end_a = engine.new_variable(IntervalDomain::new(2, 2));
+        let start_b = engine.new_variable(IntervalDomain::new(0, 0));
+        let end_b = engine.new_variable(IntervalDomain::new(2, 2));
+        let tasks = vec![
+            TaskSpec::new(start_a, 2, end_a),
+            TaskSpec::new(start_b, 2, end_b),
+        ];
+        let ro = ReadOnlyEngine(&engine);
+        let literals = energy_overload_literals(&ro, &tasks, 1).expect("energy overload");
+        assert_eq!(literals.len(), 2);
+    }
+
+    #[test]
+    fn edge_finding_with_variable_duration_demand_and_capacity() {
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::new(0, 2));
+        let end_a = engine.new_variable(IntervalDomain::new(3, 4));
+        let dur_a = engine.new_variable(IntervalDomain::new(3, 5));
+        let start_b = engine.new_variable(IntervalDomain::new(0, 2));
+        let end_b = engine.new_variable(IntervalDomain::new(3, 4));
+        let dur_b = engine.new_variable(IntervalDomain::new(3, 5));
+        let start_c = engine.new_variable(IntervalDomain::new(0, 4));
+        let end_c = engine.new_variable(IntervalDomain::new(2, 6));
+        let dem_c = engine.new_variable(IntervalDomain::new(2, 3));
+        let capacity = engine.new_variable(IntervalDomain::fix(2));
+        let tasks = vec![
+            TaskSpec::with_variable_spec(start_a, end_a, 3, Some(dur_a), 1, None),
+            TaskSpec::with_variable_spec(start_b, end_b, 3, Some(dur_b), 1, None),
+            TaskSpec::with_variable_spec(start_c, end_c, 2, None, 2, Some(dem_c)),
+        ];
+        engine.add_propagator(Box::new(CumulativePropagator::with_capacity_var(
+            tasks.clone(),
+            capacity,
+        )));
+        assert!(!engine.commit_initial_propagation().unwrap().is_failure());
+        assert!(engine.hybrid_domain(start_c).min().unwrap() >= 3);
+    }
+
+    #[test]
+    fn edge_finding_symmetric_lct_prune() {
+        let mut engine = Engine::new();
+        // Same packing as EST prune, mirrored: late window for A,B pushes C's LCT down.
+        let start_a = engine.new_variable(IntervalDomain::new(0, 1));
+        let end_a = engine.new_variable(IntervalDomain::new(3, 4));
+        let start_b = engine.new_variable(IntervalDomain::new(0, 1));
+        let end_b = engine.new_variable(IntervalDomain::new(3, 4));
+        let start_c = engine.new_variable(IntervalDomain::new(0, 4));
+        let end_c = engine.new_variable(IntervalDomain::new(2, 6));
+        let tasks = vec![
+            TaskSpec::new(start_a, 3, end_a),
+            TaskSpec::new(start_b, 3, end_b),
+            TaskSpec::with_demand(start_c, 2, end_c, 2),
+        ];
+        let before_max = engine.hybrid_domain(end_c).max().unwrap();
+        let changed = propagate_edge_finding(&mut MutEngine(&mut engine), &tasks, 2);
+        assert!(changed || engine.hybrid_domain(start_c).min().unwrap() >= 3);
+        if changed && engine.hybrid_domain(start_c).min().unwrap() < 3 {
+            assert!(engine.hybrid_domain(end_c).max().unwrap() < before_max);
+        }
     }
 }

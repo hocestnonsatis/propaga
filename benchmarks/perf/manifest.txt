@@ -4,6 +4,7 @@ benchmarks/magic_square.fzn
 benchmarks/all_different_only.fzn
 benchmarks/cumulative.fzn
 benchmarks/cumulative_var_capacity.fzn
+benchmarks/cumulative_demand.fzn
 benchmarks/diffn_fixed.fzn
 benchmarks/diffn_var_size.fzn
 benchmarks/gcc_exact.fzn
