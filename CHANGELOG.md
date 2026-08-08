@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Variable resource capacity for `cumulative` / `fzn_cumulative` (`Model::cumulative_var`, capacity as int param or `var int`).
 - Variable-size `diffn` rectangles (`RectangleSpec` width/height vars; FlatZinc width/height arrays may be `var`).
 - Timed FlatZinc perf corpus (`benchmarks/perf/manifest.txt`, `scripts/flatzinc-perf-report.sh`) plus Criterion bench `propaga-flatzinc`/`flatzinc_solve` and weekly `Perf` workflow.
+- Cumulative time-table / overload use duration and demand mins (and watch those vars), not only fixed fields.
 - Portfolio `--workers` for single-objective BnB, lexicographic, and Pareto FlatZinc solves (diversified configs; best objective / merged front).
 - Typed conflict learning for set/float wipeouts: posts a `ForbiddenAssignmentPropagator` (float points via `encode_forbidden_float`) over fixed decision vars at conflict.
 - FlatZinc alias layer for MiniZinc solver-library predicates (`fzn_*`, `array_int_lt`, …) plus `fzn_cumulative` / `fzn_exactly_int` / 3-arg `fzn_global_cardinality` remaps.
@@ -30,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Float propagation remains interval-based (sound, not exact real arithmetic).
 - Typed set/float learning blocks fixed assignments only (no first-UIP backjump on the typed path yet).
-- Classical edge-finding for cumulative is still open (time-table + overload only).
+- Classical edge-finding for cumulative is still open (time-table + overload; duration/demand mins now feed the table).
 
 ## [1.1.0] - 2026-07-29
 

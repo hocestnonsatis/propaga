@@ -26,6 +26,7 @@ Phased plan: [docs/superpowers/plans/2026-08-07-phased-v1.2-v1.4.md](docs/superp
 - ~~Variable-size `diffn`~~ (width/height vars + FlatZinc var arrays)
 - Stronger edge-finding for cumulative (beyond time-table)
 - ~~Timed FlatZinc perf corpus / nightly Criterion~~ (`scripts/flatzinc-perf-report.sh`, `cargo bench -p propaga-flatzinc`, weekly Perf workflow)
+- Cumulative duration/demand mins feed time-table (classical edge-finding still open)
 - Release v1.4.0 when ready
 
 - Float / set objectives in lexicographic and Pareto multi-objective search

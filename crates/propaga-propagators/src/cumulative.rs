@@ -20,11 +20,7 @@ impl CumulativePropagator {
     #[must_use]
     pub fn new(tasks: impl Into<Vec<TaskSpec>>, capacity: i32) -> Self {
         let tasks = tasks.into();
-        let mut watched = Vec::with_capacity(tasks.len() * 2);
-        for task in &tasks {
-            watched.push(task.start);
-            watched.push(task.end);
-        }
+        let watched = watch_list(&tasks, None);
         Self {
             watched,
             tasks,
@@ -37,12 +33,7 @@ impl CumulativePropagator {
     #[must_use]
     pub fn with_capacity_var(tasks: impl Into<Vec<TaskSpec>>, capacity: VariableId) -> Self {
         let tasks = tasks.into();
-        let mut watched = Vec::with_capacity(tasks.len() * 2 + 1);
-        for task in &tasks {
-            watched.push(task.start);
-            watched.push(task.end);
-        }
-        watched.push(capacity);
+        let watched = watch_list(&tasks, Some(capacity));
         Self {
             watched,
             tasks,
@@ -50,6 +41,24 @@ impl CumulativePropagator {
             capacity_var: Some(capacity),
         }
     }
+}
+
+fn watch_list(tasks: &[TaskSpec], capacity_var: Option<VariableId>) -> Vec<VariableId> {
+    let mut watched = Vec::with_capacity(tasks.len() * 4 + usize::from(capacity_var.is_some()));
+    for task in tasks {
+        watched.push(task.start);
+        watched.push(task.end);
+        if let Some(duration) = task.duration_var {
+            watched.push(duration);
+        }
+        if let Some(demand) = task.demand_var {
+            watched.push(demand);
+        }
+    }
+    if let Some(capacity) = capacity_var {
+        watched.push(capacity);
+    }
+    watched
 }
 
 impl Propagator for CumulativePropagator {
@@ -180,15 +189,21 @@ fn propagate_precedence(ctx: &mut dyn PropagationContext, tasks: &[TaskSpec]) ->
 }
 
 fn effective_duration(ctx: &dyn PropagationContext, task: &TaskSpec) -> i32 {
-    task.duration_var
-        .and_then(|var| ctx.fixed_value(var))
-        .unwrap_or(task.duration)
+    duration_min(ctx, task)
 }
 
-fn effective_demand(ctx: &dyn PropagationContext, task: &TaskSpec) -> i32 {
-    task.demand_var
-        .and_then(|var| ctx.fixed_value(var))
-        .unwrap_or(task.demand)
+fn duration_min(ctx: &dyn PropagationContext, task: &TaskSpec) -> i32 {
+    match task.duration_var {
+        Some(var) => ctx.domain(var).min().unwrap_or(task.duration),
+        None => task.duration,
+    }
+}
+
+fn demand_min(ctx: &dyn PropagationContext, task: &TaskSpec) -> i32 {
+    match task.demand_var {
+        Some(var) => ctx.domain(var).min().unwrap_or(task.demand),
+        None => task.demand,
+    }
 }
 
 fn cumulative_conflict_literals(
@@ -261,13 +276,15 @@ fn collect_mandatory_contributions(
 ) -> Vec<MandatoryContribution> {
     let mut contributions = Vec::new();
     for task in tasks {
+        let duration = duration_min(ctx, task);
+        let demand = demand_min(ctx, task);
         if let Some(start) = ctx.fixed_value(task.start) {
             contributions.push(MandatoryContribution {
                 interval: MandatoryInterval {
                     start,
-                    end: start + task.duration,
+                    end: start + duration,
                 },
-                demand: effective_demand(ctx, task),
+                demand,
                 start_var: task.start,
                 start_value: start,
             });
@@ -275,10 +292,10 @@ fn collect_mandatory_contributions(
         }
 
         if let Some(end) = ctx.fixed_value(task.end) {
-            let start = end - task.duration;
+            let start = end - duration;
             contributions.push(MandatoryContribution {
                 interval: MandatoryInterval { start, end },
-                demand: effective_demand(ctx, task),
+                demand,
                 start_var: task.start,
                 start_value: start,
             });
@@ -290,9 +307,9 @@ fn collect_mandatory_contributions(
             contributions.push(MandatoryContribution {
                 interval: MandatoryInterval {
                     start,
-                    end: start + task.duration,
+                    end: start + duration,
                 },
-                demand: effective_demand(ctx, task),
+                demand,
                 start_var: task.start,
                 start_value: start,
             });
@@ -301,10 +318,10 @@ fn collect_mandatory_contributions(
 
         if ctx.domain(task.end).size() == 1 {
             let end = ctx.domain(task.end).max().expect("singleton");
-            let start = end - task.duration;
+            let start = end - duration;
             contributions.push(MandatoryContribution {
                 interval: MandatoryInterval { start, end },
-                demand: effective_demand(ctx, task),
+                demand,
                 start_var: task.start,
                 start_value: start,
             });
@@ -329,8 +346,10 @@ fn propagate_time_table(
     let mut changed = false;
 
     for task in tasks {
+        let duration = duration_min(ctx, task);
         for point in &table {
-            if point.usage > capacity && forbid_task_during(ctx, *task, point.time, point.time + 1)
+            if point.usage > capacity
+                && forbid_task_during(ctx, *task, duration, point.time, point.time + 1)
             {
                 changed = true;
             }
@@ -353,11 +372,11 @@ fn propagate_time_table(
         }
 
         if let Some(mandatory) =
-            mandatory_interval(est(start_min), ect(start_min, task.duration), lct(end_max))
-            && mandatory.end - mandatory.start >= task.duration
+            mandatory_interval(est(start_min), ect(start_min, duration), lct(end_max))
+            && mandatory.end - mandatory.start >= duration
         {
             let fixed_start = mandatory.start;
-            let fixed_end = mandatory.start + task.duration;
+            let fixed_end = mandatory.start + duration;
             changed |= tighten_to_point(ctx, task.start, fixed_start);
             changed |= tighten_to_point(ctx, task.end, fixed_end);
         }
@@ -376,12 +395,13 @@ fn tighten_to_point(ctx: &mut dyn PropagationContext, var: VariableId, value: i3
 fn forbid_task_during(
     ctx: &mut dyn PropagationContext,
     task: TaskSpec,
+    duration: i32,
     start: i32,
     end: i32,
 ) -> bool {
     let mut changed = false;
     for value in domain_values(ctx, task.start) {
-        let task_end = value + task.duration;
+        let task_end = value + duration;
         if value < end && task_end > start && ctx.remove_value(task.start, value) {
             changed = true;
         }
@@ -444,6 +464,23 @@ mod tests {
         engine.add_propagator(Box::new(CumulativePropagator::with_capacity_var(
             tasks, capacity,
         )));
+        assert!(engine.commit_initial_propagation().unwrap().is_failure());
+    }
+
+    #[test]
+    fn variable_duration_min_counts_in_mandatory_overload() {
+        let mut engine = Engine::new();
+        let start_a = engine.new_variable(IntervalDomain::fix(0));
+        let end_a = engine.new_variable(IntervalDomain::new(2, 5));
+        let dur_a = engine.new_variable(IntervalDomain::new(2, 4));
+        let start_b = engine.new_variable(IntervalDomain::fix(0));
+        let end_b = engine.new_variable(IntervalDomain::new(2, 5));
+        let dur_b = engine.new_variable(IntervalDomain::new(2, 4));
+        let tasks = vec![
+            TaskSpec::with_variable_spec(start_a, end_a, 2, Some(dur_a), 1, None),
+            TaskSpec::with_variable_spec(start_b, end_b, 2, Some(dur_b), 1, None),
+        ];
+        engine.add_propagator(Box::new(CumulativePropagator::new(tasks, 1)));
         assert!(engine.commit_initial_propagation().unwrap().is_failure());
     }
 
@@ -798,7 +835,7 @@ mod tests {
         let end = engine.new_variable(IntervalDomain::new(2, 10));
         let task = TaskSpec::new(start, 2, end);
         let mut ctx = MutEngine(&mut engine);
-        assert!(forbid_task_during(&mut ctx, task, 1, 3));
+        assert!(forbid_task_during(&mut ctx, task, 2, 1, 3));
         assert!(!engine.hybrid_domain(start).contains(0));
         assert!(!engine.hybrid_domain(start).contains(1));
         assert!(engine.hybrid_domain(start).contains(3));
