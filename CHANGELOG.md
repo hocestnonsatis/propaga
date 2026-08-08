@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Large-neighborhood search for single-objective optimize: `LargeNeighborhoodSearch` / `Model::optimize_objective_lns`, CLI `--lns-iterations` / `--lns-destroy` / `--lns-seed`.
 - Variable resource capacity for `cumulative` / `fzn_cumulative` (`Model::cumulative_var`, capacity as int param or `var int`).
 - Variable-size `diffn` rectangles (`RectangleSpec` width/height vars; FlatZinc width/height arrays may be `var`).
+- Timed FlatZinc perf corpus (`benchmarks/perf/manifest.txt`, `scripts/flatzinc-perf-report.sh`) plus Criterion bench `propaga-flatzinc`/`flatzinc_solve` and weekly `Perf` workflow.
 - Portfolio `--workers` for single-objective BnB, lexicographic, and Pareto FlatZinc solves (diversified configs; best objective / merged front).
 - Typed conflict learning for set/float wipeouts: posts a `ForbiddenAssignmentPropagator` (float points via `encode_forbidden_float`) over fixed decision vars at conflict.
 - FlatZinc alias layer for MiniZinc solver-library predicates (`fzn_*`, `array_int_lt`, …) plus `fzn_cumulative` / `fzn_exactly_int` / 3-arg `fzn_global_cardinality` remaps.

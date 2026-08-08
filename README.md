@@ -110,7 +110,7 @@ cargo run -p propaga-cli -- schedule --file benchmarks/schedule_cumulative.json 
 bash benchmarks/run.sh
 ```
 
-Examples in `examples/`. Micro-benchmarks: `cargo bench -p propaga-propagators`.
+Micro-benchmarks: `cargo bench -p propaga-propagators`. FlatZinc timed corpus: `scripts/flatzinc-perf-report.sh [--release] [--budget-ms N]`; Criterion: `cargo bench -p propaga-flatzinc --bench flatzinc_solve`.
 
 ## Roadmap
 

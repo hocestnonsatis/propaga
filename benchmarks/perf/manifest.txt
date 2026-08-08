@@ -1,0 +1,12 @@
+# Curated FlatZinc instances for timed performance tracking.
+# Paths are relative to the repository root.
+benchmarks/magic_square.fzn
+benchmarks/all_different_only.fzn
+benchmarks/cumulative.fzn
+benchmarks/cumulative_var_capacity.fzn
+benchmarks/diffn_fixed.fzn
+benchmarks/diffn_var_size.fzn
+benchmarks/gcc_exact.fzn
+benchmarks/maximize_x.fzn
+benchmarks/minimize_cost.fzn
+benchmarks/fzn_aliases.fzn

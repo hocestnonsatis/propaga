@@ -19,6 +19,13 @@ propaga-propagators.workspace = true
 propaga-search.workspace = true
 thiserror.workspace = true
 
+[dev-dependencies]
+criterion = "0.5"
+
 [[example]]
 name = "flatzinc_solve"
 path = "../../examples/flatzinc_solve.rs"
+
+[[bench]]
+name = "flatzinc_solve"
+harness = false

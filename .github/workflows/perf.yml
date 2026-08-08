@@ -1,0 +1,20 @@
+name: Perf
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * 1"
+
+jobs:
+  flatzinc-perf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Timed FlatZinc corpus
+        run: |
+          chmod +x scripts/flatzinc-perf-report.sh
+          scripts/flatzinc-perf-report.sh --release --budget-ms 5000
+      - name: Criterion FlatZinc benches (quick)
+        run: cargo bench -p propaga-flatzinc --bench flatzinc_solve -- --quick
